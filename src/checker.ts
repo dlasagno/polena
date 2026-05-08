@@ -18,6 +18,7 @@ import type {
   WhileExpression,
 } from "./ast";
 import { error, type Diagnostic } from "./diagnostic";
+import { preludeFunctions } from "./prelude";
 import type { Span } from "./span";
 
 export type CheckResult = {
@@ -82,6 +83,7 @@ class Checker {
 
   public check(program: Program): CheckResult {
     const scope = new Scope();
+    this.declarePrelude(scope, program.span);
 
     for (const declaration of program.declarations) {
       if (declaration.kind !== "FunctionDeclaration") {
@@ -118,6 +120,21 @@ class Checker {
     }
 
     return { diagnostics: this.diagnostics };
+  }
+
+  private declarePrelude(scope: Scope, span: Span): void {
+    for (const fn of preludeFunctions) {
+      scope.declare({
+        name: fn.name,
+        type: {
+          kind: "function",
+          params: fn.params,
+          returnType: fn.returnType,
+        },
+        span,
+        assignability: "immutable-binding",
+      });
+    }
   }
 
   private declareFunction(scope: Scope, declaration: FunctionDeclaration): void {

@@ -17,6 +17,7 @@ programs end-to-end. It supports:
 - Function declarations with typed parameters and explicit return types
 - Final-expression function returns and explicit `return expr;`
 - Function calls
+- A provisional prelude with `println(message: string): void`
 - Unary `!` and `-`
 - Binary arithmetic, comparison, `and`, and `or` expressions
 - `if` expressions and statement-position `if` without `else`
@@ -88,6 +89,9 @@ error[PLN102]: Unknown name 'missing'.
   |
 help: declare it before using it, or check for a spelling mistake
 ```
+
+See [docs/prelude.md](docs/prelude.md) for the currently available prelude
+functions.
 
 ## Development
 

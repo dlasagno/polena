@@ -12,6 +12,7 @@ import type {
   VariableDeclaration,
   WhileExpression,
 } from "./ast";
+import { getPreludeFunction } from "./prelude";
 
 export function generateJavaScript(program: Program): string {
   return new JavaScriptEmitter().emitProgram(program);
@@ -235,10 +236,22 @@ class JavaScriptEmitter {
       case "WhileExpression":
         return this.emitWhileExpression(expression, indent, loopContext);
       case "CallExpression":
-        return `${this.emitExpression(expression.callee, indent, loopContext)}(${expression.args
+        return `${this.emitCallCallee(expression.callee, indent, loopContext)}(${expression.args
           .map((arg) => this.emitExpression(arg, indent, loopContext))
           .join(", ")})`;
     }
+  }
+
+  private emitCallCallee(
+    callee: Expression,
+    indent: string,
+    loopContext?: LoopEmitContext,
+  ): string {
+    if (callee.kind === "NameExpression") {
+      return getPreludeFunction(callee.name)?.jsEmitName ?? callee.name;
+    }
+
+    return this.emitExpression(callee, indent, loopContext);
   }
 
   private emitIfStatement(

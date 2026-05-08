@@ -84,4 +84,6 @@ const report =
   \\${escaped}
 ;
 
+println(report);
+
 const result = report != "" and (label == "passing" or firstLargeStep > 0);

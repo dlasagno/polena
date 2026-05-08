@@ -214,6 +214,23 @@ const value = add(20, 22);
     expect(executeValue(result.js)).toBe(42);
   });
 
+  test("supports println from the prelude", () => {
+    const result = expectCompileOk(`
+println("Hello");
+`);
+
+    expect(result.js).toContain('console.log("Hello");');
+  });
+
+  test("supports interpolation in println calls", () => {
+    const result = expectCompileOk(`
+const value = 42;
+println("value ${"$"}{value}");
+`);
+
+    expect(result.js).toContain(["console.log(`value ", "$", "{value}`);"].join(""));
+  });
+
   test("supports explicit return statements", () => {
     const result = expectCompileOk(`
 fn identity(value: string): string {
@@ -713,6 +730,24 @@ const value = add(1);
     expect(result.ok).toBe(false);
     expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
       "Expected 2 argument(s), got 1.",
+    );
+  });
+
+  test("rejects wrong println argument types", () => {
+    const result = compile("println(1);");
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Expected 'string', got 'number'.",
+    );
+  });
+
+  test("rejects wrong println arity", () => {
+    const result = compile("println();");
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Expected 1 argument(s), got 0.",
     );
   });
 });
