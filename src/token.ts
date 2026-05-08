@@ -3,6 +3,7 @@ import type { Span } from "./span";
 export type TokenKind =
   | "Identifier"
   | "Number"
+  | "BigInt"
   | "String"
   | "MultilineString"
   | "Const"
@@ -19,6 +20,7 @@ export type TokenKind =
   | "And"
   | "Or"
   | "NumberType"
+  | "BigIntType"
   | "StringType"
   | "BooleanType"
   | "VoidType"

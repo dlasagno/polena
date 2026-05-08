@@ -305,7 +305,7 @@ class Parser {
       this.diagnostics.push(
         error("Expected a primitive type.", token.span, {
           code: "PLN010",
-          label: "expected 'number', 'string', 'boolean', or 'void'",
+          label: "expected 'number', 'bigint', 'string', 'boolean', or 'void'",
         }),
       );
       this.advance();
@@ -405,6 +405,15 @@ class Parser {
       return {
         kind: "NumberLiteral",
         value: Number(token.text.replaceAll("_", "")),
+        text: token.text,
+        span: token.span,
+      };
+    }
+
+    if (this.match("BigInt")) {
+      const token = this.previous();
+      return {
+        kind: "BigIntLiteral",
         text: token.text,
         span: token.span,
       };
@@ -629,6 +638,8 @@ function primitiveTypeFromToken(kind: TokenKind): PrimitiveType | undefined {
   switch (kind) {
     case "NumberType":
       return "number";
+    case "BigIntType":
+      return "bigint";
     case "StringType":
       return "string";
     case "BooleanType":

@@ -17,6 +17,7 @@ const keywords = new Map<string, TokenKind>([
   ["and", "And"],
   ["or", "Or"],
   ["number", "NumberType"],
+  ["bigint", "BigIntType"],
   ["string", "StringType"],
   ["boolean", "BooleanType"],
   ["void", "VoidType"],
@@ -156,11 +157,32 @@ class Lexer {
       this.advance();
     }
 
+    let sawFraction = false;
     if (this.peek() === "." && isDigit(this.peekNext())) {
+      sawFraction = true;
       this.advance();
       while (isDigit(this.peek()) || this.peek() === "_") {
         this.advance();
       }
+    }
+
+    if (this.match("n")) {
+      const span = spanFrom(start, this.location());
+      const text = this.source.slice(start.offset, this.offset);
+
+      if (sawFraction) {
+        this.tokens.push({ kind: "Invalid", text, span });
+        this.diagnostics.push(
+          error("Bigint literals cannot have a fractional part.", span, {
+            code: "PLN003",
+            label: "remove the decimal point or use a 'number' literal instead",
+          }),
+        );
+        return;
+      }
+
+      this.tokens.push({ kind: "BigInt", text, span });
+      return;
     }
 
     this.addToken("Number", start);

@@ -24,6 +24,7 @@ const studentName: string = "Ada";
 const enabled = true;
 const base: number = 40 + 2;
 const offset = abs(-8);
+const reviewBonus: bigint = 12n;
 
 let adjusted = base + offset;
 adjusted += 10;
@@ -31,6 +32,9 @@ adjusted -= 5;
 adjusted *= 2;
 adjusted /= 2;
 adjusted %= 19;
+
+let totalCredits = reviewBonus + 8n;
+totalCredits += 5n;
 
 let reviewCount = 0;
 let index = 0;
@@ -69,12 +73,14 @@ const label = if ready {
 
 const greeting = "Hello ${studentName}!";
 const summary = "Score ${adjusted}, reviews ${reviewCount}, next step ${firstLargeStep}";
+const credits = "Credits ${totalCredits}";
 const escaped = "Ready:\n\t${ready}";
 const report =
   \\Student: ${studentName}
   \\Greeting: ${greeting}
   \\Label: ${label}
   \\Summary: ${summary}
+  \\${credits}
   \\${escaped}
 ;
 

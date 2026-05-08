@@ -218,6 +218,8 @@ class JavaScriptEmitter {
     switch (expression.kind) {
       case "NumberLiteral":
         return expression.text;
+      case "BigIntLiteral":
+        return expression.text;
       case "StringLiteral":
         return this.emitStringLiteral(expression, indent, loopContext);
       case "BooleanLiteral":

@@ -1,6 +1,6 @@
 import type { Span } from "./span";
 
-export type PrimitiveType = "number" | "string" | "boolean" | "void";
+export type PrimitiveType = "number" | "bigint" | "string" | "boolean" | "void";
 
 export type TypeNode = {
   readonly kind: "PrimitiveType";
@@ -112,6 +112,11 @@ export type LiteralExpression =
   | {
       readonly kind: "NumberLiteral";
       readonly value: number;
+      readonly text: string;
+      readonly span: Span;
+    }
+  | {
+      readonly kind: "BigIntLiteral";
       readonly text: string;
       readonly span: Span;
     }

@@ -328,6 +328,11 @@ class Checker {
     }
 
     if (isCompoundAssignmentOperator(statement.operator)) {
+      if (symbol.type.kind === "primitive" && isNumericPrimitiveType(symbol.type.name)) {
+        this.expectType(valueType, symbol.type, statement.value.span);
+        return;
+      }
+
       this.expectType(symbol.type, primitiveType("number"), statement.nameSpan);
       this.expectType(valueType, primitiveType("number"), statement.value.span);
       return;
@@ -441,6 +446,8 @@ class Checker {
     switch (expression.kind) {
       case "NumberLiteral":
         return primitiveType("number");
+      case "BigIntLiteral":
+        return primitiveType("bigint");
       case "StringLiteral":
         return this.inferStringLiteral(expression, scope, options);
       case "BooleanLiteral":
@@ -504,6 +511,10 @@ class Checker {
         this.expectType(operandType, primitiveType("boolean"), span);
         return primitiveType("boolean");
       case "-":
+        if (operandType.kind === "primitive" && isNumericPrimitiveType(operandType.name)) {
+          return operandType;
+        }
+
         this.expectType(operandType, primitiveType("number"), span);
         return primitiveType("number");
     }
@@ -535,9 +546,31 @@ class Checker {
     const rightType = this.inferExpression(right, scope, options);
 
     if (isArithmeticOperator(operator)) {
-      this.expectType(leftType, primitiveType("number"), left.span);
-      this.expectType(rightType, primitiveType("number"), right.span);
-      return primitiveType("number");
+      const arithmeticType = inferArithmeticType(leftType, rightType);
+      if (arithmeticType !== undefined) {
+        return primitiveType(arithmeticType);
+      }
+
+      if (isNumericValueType(leftType) && isNumericValueType(rightType)) {
+        this.diagnostics.push(
+          error(
+            `Operator '${operator}' requires compatible operands, got '${formatType(leftType)}' and '${formatType(
+              rightType,
+            )}'.`,
+            span,
+            {
+              code: "PLN204",
+              label: "these operands do not have compatible types",
+            },
+          ),
+        );
+        return unknownType();
+      }
+
+      const expectedNumericType = preferredArithmeticType(leftType, rightType);
+      this.expectType(leftType, primitiveType(expectedNumericType), left.span);
+      this.expectType(rightType, primitiveType(expectedNumericType), right.span);
+      return primitiveType(expectedNumericType);
     }
 
     if (operator === "and" || operator === "or") {
@@ -847,6 +880,39 @@ function isArithmeticOperator(operator: BinaryOperator): boolean {
   return (
     operator === "+" || operator === "-" || operator === "*" || operator === "/" || operator === "%"
   );
+}
+
+function inferArithmeticType(left: ValueType, right: ValueType): PrimitiveType | undefined {
+  if (
+    left.kind === "primitive" &&
+    right.kind === "primitive" &&
+    left.name === right.name &&
+    isNumericPrimitiveType(left.name)
+  ) {
+    return left.name;
+  }
+
+  return undefined;
+}
+
+function preferredArithmeticType(left: ValueType, right: ValueType): "number" | "bigint" {
+  if (left.kind === "primitive" && isNumericPrimitiveType(left.name)) {
+    return left.name;
+  }
+
+  if (right.kind === "primitive" && isNumericPrimitiveType(right.name)) {
+    return right.name;
+  }
+
+  return "number";
+}
+
+function isNumericValueType(type: ValueType): type is Extract<ValueType, { kind: "primitive" }> {
+  return type.kind === "primitive" && isNumericPrimitiveType(type.name);
+}
+
+function isNumericPrimitiveType(name: PrimitiveType): name is "number" | "bigint" {
+  return name === "number" || name === "bigint";
 }
 
 function isCompoundAssignmentOperator(operator: AssignmentOperator): boolean {

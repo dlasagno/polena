@@ -19,6 +19,22 @@ describe("lexer", () => {
     ]);
   });
 
+  test("tokenizes bigint literals and bigint types", () => {
+    const result = lex("const answer: bigint = 42n;");
+
+    expect(result.diagnostics).toHaveLength(0);
+    expect(result.tokens.map((token) => token.kind)).toEqual([
+      "Const",
+      "Identifier",
+      "Colon",
+      "BigIntType",
+      "Equal",
+      "BigInt",
+      "Semicolon",
+      "Eof",
+    ]);
+  });
+
   test("tokenizes if and else keywords", () => {
     const result = lex("if enabled { 1 } else { 0 }");
 
@@ -109,6 +125,18 @@ describe("parser", () => {
 
     expect(parseResult.diagnostics).toHaveLength(0);
     expect(parseResult.program.declarations[0]?.kind).toBe("VariableDeclaration");
+  });
+
+  test("parses bigint literals", () => {
+    const lexResult = lex("const value: bigint = 42n;");
+    const parseResult = parse(lexResult.tokens);
+
+    expect(parseResult.diagnostics).toHaveLength(0);
+    expect(parseResult.program.declarations[0]).toMatchObject({
+      kind: "VariableDeclaration",
+      typeAnnotation: { kind: "PrimitiveType", name: "bigint" },
+      initializer: { kind: "BigIntLiteral", text: "42n" },
+    });
   });
 
   test("parses interpolated strings into text and expression parts", () => {
@@ -401,6 +429,23 @@ const value = count;
     expect(executeValue(result.js)).toBe(2);
   });
 
+  test("supports bigint arithmetic and compound assignment", () => {
+    const result = expectCompileOk(`
+fn double(value: bigint): bigint {
+  value + value
+}
+
+let total: bigint = 40n;
+total += 2n;
+
+const value = double(total);
+`);
+
+    expect(result.js).toContain("40n");
+    expect(result.js).toContain("total += 2n;");
+    expect(executeValue(result.js)).toBe(84n);
+  });
+
   test("rejects non-boolean if conditions", () => {
     const result = compile("const value = if 1 { 1 } else { 0 };");
 
@@ -554,6 +599,15 @@ const value = while i < 3 : (i += 1) {
     );
   });
 
+  test("rejects mixing number and bigint in arithmetic", () => {
+    const result = compile("const value = 1 + 2n;");
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Operator '+' requires compatible operands, got 'number' and 'bigint'.",
+    );
+  });
+
   test("rejects assigning the wrong type to a let binding", () => {
     const result = compile(`
 let count = 1;
@@ -635,6 +689,15 @@ count += "Ada";
     expect(result.ok).toBe(false);
     expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
       "Expected 'number', got 'string'.",
+    );
+  });
+
+  test("rejects bigint literals with fractional parts", () => {
+    const result = compile("const value = 1.5n;");
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Bigint literals cannot have a fractional part.",
     );
   });
 
