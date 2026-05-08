@@ -39,6 +39,19 @@ value += 1;
 Polena source files use `.plna` as the standard extension. The CLI also accepts
 the longer `.polena` extension for now.
 
+## VS Code extension
+
+A local VS Code syntax-highlighting extension lives in `vscode-polena`.
+
+To try it:
+
+```sh
+code vscode-polena
+```
+
+Then press `F5` in VS Code to launch an Extension Development Host and open any
+`.plna` or `.polena` file in that window.
+
 Compile a file to JavaScript:
 
 ```sh

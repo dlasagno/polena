@@ -1,0 +1,316 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Polena",
+  "scopeName": "source.polena",
+  "patterns": [
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#multiline-string"
+    },
+    {
+      "include": "#double-quoted-string"
+    },
+    {
+      "include": "#function-declaration"
+    },
+    {
+      "include": "#variable-declaration"
+    },
+    {
+      "include": "#reserved-keywords"
+    },
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#types"
+    },
+    {
+      "include": "#booleans"
+    },
+    {
+      "include": "#numbers"
+    },
+    {
+      "include": "#operators"
+    },
+    {
+      "include": "#function-call"
+    },
+    {
+      "include": "#punctuation"
+    }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.polena",
+          "match": "//.*$"
+        }
+      ]
+    },
+    "double-quoted-string": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.polena",
+          "begin": "\"",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.begin.polena"
+            }
+          },
+          "end": "\"",
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.end.polena"
+            }
+          },
+          "patterns": [
+            {
+              "name": "constant.character.escape.polena",
+              "match": "\\\\(?:0|t|n|r|\"|\\\\)"
+            },
+            {
+              "include": "#interpolation"
+            }
+          ]
+        }
+      ]
+    },
+    "multiline-string": {
+      "patterns": [
+        {
+          "name": "string.quoted.other.multiline.polena",
+          "begin": "^(\\s*)(\\\\\\\\)",
+          "beginCaptures": {
+            "2": {
+              "name": "punctuation.definition.string.begin.polena"
+            }
+          },
+          "end": "$",
+          "patterns": [
+            {
+              "name": "constant.character.escape.polena",
+              "match": "\\\\(?:0|t|n|r|\"|\\\\)"
+            },
+            {
+              "include": "#interpolation"
+            }
+          ]
+        }
+      ]
+    },
+    "interpolation": {
+      "patterns": [
+        {
+          "name": "meta.interpolation.polena",
+          "begin": "\\$\\{",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.section.embedded.begin.polena"
+            }
+          },
+          "end": "\\}",
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.section.embedded.end.polena"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#expression"
+            }
+          ]
+        }
+      ]
+    },
+    "expression": {
+      "patterns": [
+        {
+          "include": "#double-quoted-string"
+        },
+        {
+          "include": "#reserved-keywords"
+        },
+        {
+          "include": "#keywords"
+        },
+        {
+          "include": "#types"
+        },
+        {
+          "include": "#booleans"
+        },
+        {
+          "include": "#numbers"
+        },
+        {
+          "include": "#operators"
+        },
+        {
+          "include": "#function-call"
+        },
+        {
+          "include": "#punctuation"
+        }
+      ]
+    },
+    "function-declaration": {
+      "patterns": [
+        {
+          "name": "meta.function.declaration.polena",
+          "begin": "\\b(fn)\\b\\s+([A-Za-z_$][A-Za-z0-9_$]*)\\s*(\\()",
+          "beginCaptures": {
+            "1": {
+              "name": "keyword.declaration.function.polena"
+            },
+            "2": {
+              "name": "entity.name.function.polena"
+            },
+            "3": {
+              "name": "punctuation.section.parameters.begin.polena"
+            }
+          },
+          "end": "\\)",
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.section.parameters.end.polena"
+            }
+          },
+          "patterns": [
+            {
+              "name": "variable.parameter.polena",
+              "match": "\\b[A-Za-z_$][A-Za-z0-9_$]*\\b(?=\\s*:)"
+            },
+            {
+              "name": "punctuation.separator.type.polena",
+              "match": ":"
+            },
+            {
+              "name": "punctuation.separator.parameter.polena",
+              "match": ","
+            },
+            {
+              "include": "#types"
+            }
+          ]
+        }
+      ]
+    },
+    "variable-declaration": {
+      "patterns": [
+        {
+          "name": "meta.variable.declaration.polena",
+          "match": "\\b(const|let)\\b\\s+([A-Za-z_$][A-Za-z0-9_$]*)",
+          "captures": {
+            "1": {
+              "name": "storage.modifier.polena"
+            },
+            "2": {
+              "name": "variable.other.readwrite.polena"
+            }
+          }
+        }
+      ]
+    },
+    "reserved-keywords": {
+      "patterns": [
+        {
+          "name": "keyword.other.reserved.polena",
+          "match": "\\b(?:as|comptime|enum|impl|match|trait|type|unknown)\\b"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.polena",
+          "match": "\\b(?:break|continue|else|if|return|while)\\b"
+        },
+        {
+          "name": "keyword.operator.word.polena",
+          "match": "\\b(?:and|or)\\b"
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "storage.type.polena",
+          "match": "\\b(?:bigint|boolean|number|string|void)\\b"
+        }
+      ]
+    },
+    "booleans": {
+      "patterns": [
+        {
+          "name": "constant.language.boolean.polena",
+          "match": "\\b(?:false|true)\\b"
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.integer.bigint.polena",
+          "match": "\\b\\d[\\d_]*n\\b"
+        },
+        {
+          "name": "constant.numeric.number.polena",
+          "match": "\\b\\d[\\d_]*(?:\\.\\d[\\d_]*)?\\b"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.polena",
+          "match": "==|!=|<=|>=|\\+=|-=|\\*=|/=|%=|=|<|>|\\+|-|\\*|/|%|!"
+        }
+      ]
+    },
+    "function-call": {
+      "patterns": [
+        {
+          "name": "entity.name.function.call.polena",
+          "match": "\\b[A-Za-z_$][A-Za-z0-9_$]*\\b(?=\\s*\\()"
+        }
+      ]
+    },
+    "punctuation": {
+      "patterns": [
+        {
+          "name": "punctuation.separator.colon.polena",
+          "match": ":"
+        },
+        {
+          "name": "punctuation.separator.comma.polena",
+          "match": ","
+        },
+        {
+          "name": "punctuation.terminator.statement.polena",
+          "match": ";"
+        },
+        {
+          "name": "punctuation.section.block.begin.polena",
+          "match": "\\{"
+        },
+        {
+          "name": "punctuation.section.block.end.polena",
+          "match": "\\}"
+        },
+        {
+          "name": "punctuation.section.group.begin.polena",
+          "match": "\\("
+        },
+        {
+          "name": "punctuation.section.group.end.polena",
+          "match": "\\)"
+        }
+      ]
+    }
+  }
+}

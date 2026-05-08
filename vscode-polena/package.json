@@ -1,0 +1,48 @@
+{
+  "name": "polena-syntax",
+  "displayName": "Polena Syntax",
+  "description": "Syntax highlighting and language configuration for the Polena language.",
+  "version": "0.0.1",
+  "publisher": "polena",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "scripts": {
+    "check": "echo Grammar-only VS Code extension; no build step required."
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "polena",
+    "syntax-highlighting",
+    "language"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "polena",
+        "aliases": [
+          "Polena",
+          "polena"
+        ],
+        "extensions": [
+          ".plna",
+          ".polena"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "polena",
+        "scopeName": "source.polena",
+        "path": "./syntaxes/polena.tmLanguage.json"
+      }
+    ]
+  },
+  "devDependencies": {
+    "@vscode/vsce": "^3.9.1"
+  }
+}
