@@ -1,4 +1,5 @@
 import type {
+  AssignmentStatement,
   BinaryOperator,
   Block,
   Expression,
@@ -61,6 +62,10 @@ class Parser {
 
     if (this.check("Const") || this.check("Let")) {
       return this.parseVariableDeclaration(true);
+    }
+
+    if (this.isAssignmentStatementStart()) {
+      return this.parseAssignmentStatement();
     }
 
     const expression = this.parseExpression();
@@ -135,6 +140,11 @@ class Parser {
 
       if (this.check("Return")) {
         statements.push(this.parseReturnStatement());
+        continue;
+      }
+
+      if (this.isAssignmentStatementStart()) {
+        statements.push(this.parseAssignmentStatement());
         continue;
       }
 
@@ -216,6 +226,21 @@ class Parser {
       kind: "ReturnStatement",
       expression,
       span: mergeSpans(returnToken.span, semicolon.span),
+    };
+  }
+
+  private parseAssignmentStatement(): AssignmentStatement {
+    const name = this.expect("Identifier", "Expected assignment target.");
+    this.expect("Equal", "Expected '=' in assignment statement.");
+    const value = this.parseExpression();
+    const semicolon = this.expect("Semicolon", "Expected ';' after assignment statement.");
+
+    return {
+      kind: "AssignmentStatement",
+      name: name.text,
+      nameSpan: name.span,
+      value,
+      span: mergeSpans(name.span, semicolon.span),
     };
   }
 
@@ -432,6 +457,10 @@ class Parser {
     return this.current().kind === kind;
   }
 
+  private isAssignmentStatementStart(): boolean {
+    return this.check("Identifier") && this.peek().kind === "Equal";
+  }
+
   private advance(): Token {
     const token = this.current();
     if (!this.check("Eof")) {
@@ -446,6 +475,10 @@ class Parser {
 
   private current(): Token {
     return this.tokens[this.index] ?? this.tokens[this.tokens.length - 1] ?? syntheticEof();
+  }
+
+  private peek(): Token {
+    return this.tokens[this.index + 1] ?? this.current();
   }
 }
 

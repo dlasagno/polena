@@ -62,6 +62,14 @@ describe("parser", () => {
     expect(parseResult.diagnostics).toHaveLength(0);
     expect(parseResult.program.declarations[0]?.kind).toBe("VariableDeclaration");
   });
+
+  test("parses assignment statements", () => {
+    const lexResult = lex("let count = 0;\ncount = count + 1;");
+    const parseResult = parse(lexResult.tokens);
+
+    expect(parseResult.diagnostics).toHaveLength(0);
+    expect(parseResult.program.declarations[1]?.kind).toBe("AssignmentStatement");
+  });
 });
 
 describe("compiler", () => {
@@ -174,6 +182,18 @@ const value = add(answer, 1);
     expect(executeValue(result.js)).toBe(43);
   });
 
+  test("supports reassigning let bindings", () => {
+    const result = expectCompileOk(`
+let count = 40;
+count = count + 2;
+
+const value = count;
+`);
+
+    expect(result.js).toContain("count = (count + 2);");
+    expect(executeValue(result.js)).toBe(42);
+  });
+
   test("rejects non-boolean if conditions", () => {
     const result = compile("const value = if 1 { 1 } else { 0 };");
 
@@ -216,6 +236,54 @@ const value = add(answer, 1);
     expect(result.ok).toBe(false);
     expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
       "Expected 'number', got 'string'.",
+    );
+  });
+
+  test("rejects assigning the wrong type to a let binding", () => {
+    const result = compile(`
+let count = 1;
+count = "Ada";
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Expected 'number', got 'string'.",
+    );
+  });
+
+  test("rejects assigning to const bindings", () => {
+    const result = compile(`
+const count = 1;
+count = 2;
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Cannot assign to 'count'.",
+    );
+  });
+
+  test("rejects assigning to unknown names", () => {
+    const result = compile("missing = 1;");
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Unknown name 'missing'.",
+    );
+  });
+
+  test("rejects assigning to function names", () => {
+    const result = compile(`
+fn add(a: number, b: number): number {
+  a + b
+}
+
+add = add;
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Cannot assign to 'add'.",
     );
   });
 

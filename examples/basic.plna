@@ -25,8 +25,12 @@ fn describeScore(score: number): string {
 }
 
 const base: number = 40 + 2;
-const adjusted = add(base, abs(-8));
+let adjusted = add(base, abs(-8));
+adjusted = adjusted + 20;
+adjusted = adjusted - 2;
+
 let studentName: string = "Ada";
+studentName = "Ada Lovelace";
 
 const isPassing = adjusted >= 70 and !(studentName == "");
 const label = if isPassing {
@@ -35,8 +39,9 @@ const label = if isPassing {
   "incomplete"
 };
 
+let review = "needs manual review";
 if isPassing {
-  const checkedLabel = label;
+  review = "ready";
 }
 
 const result = adjusted;

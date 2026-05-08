@@ -1,4 +1,5 @@
 import type {
+  AssignmentStatement,
   BinaryOperator,
   Block,
   Expression,
@@ -26,6 +27,8 @@ function emitTopLevelDeclaration(declaration: TopLevelDeclaration): string[] {
       return emitFunctionDeclaration(declaration);
     case "VariableDeclaration":
       return [emitVariableDeclaration(declaration, "")];
+    case "AssignmentStatement":
+      return [emitAssignmentStatement(declaration, "")];
     case "ExpressionStatement":
       return emitExpressionStatement(declaration.expression, "");
   }
@@ -54,6 +57,8 @@ function emitStatement(statement: Statement, indent: string): string[] {
   switch (statement.kind) {
     case "VariableDeclaration":
       return [emitVariableDeclaration(statement, indent)];
+    case "AssignmentStatement":
+      return [emitAssignmentStatement(statement, indent)];
     case "ReturnStatement":
       return [`${indent}return ${emitExpression(statement.expression, indent)};`];
     case "ExpressionStatement":
@@ -74,6 +79,10 @@ function emitVariableDeclaration(declaration: VariableDeclaration, indent: strin
     declaration.initializer,
     indent,
   )};`;
+}
+
+function emitAssignmentStatement(statement: AssignmentStatement, indent: string): string {
+  return `${indent}${statement.name} = ${emitExpression(statement.value, indent)};`;
 }
 
 function emitExpression(expression: Expression, indent = ""): string {

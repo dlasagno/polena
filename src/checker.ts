@@ -1,4 +1,5 @@
 import type {
+  AssignmentStatement,
   BinaryOperator,
   Block,
   Expression,
@@ -30,6 +31,7 @@ type SymbolInfo = {
   readonly name: string;
   readonly type: ValueType;
   readonly span: Span;
+  readonly assignability: "mutable-variable" | "immutable-binding";
 };
 
 export function check(program: Program): CheckResult {
@@ -78,6 +80,9 @@ class Checker {
         case "VariableDeclaration":
           this.checkVariableDeclaration(declaration, scope);
           break;
+        case "AssignmentStatement":
+          this.checkAssignmentStatement(declaration, scope);
+          break;
         case "ExpressionStatement":
           this.inferExpression(declaration.expression, scope, { ifAsValue: false });
           break;
@@ -94,7 +99,14 @@ class Checker {
       returnType: declaration.returnType.name,
     };
 
-    if (!scope.declare({ name: declaration.name, type, span: declaration.nameSpan })) {
+    if (
+      !scope.declare({
+        name: declaration.name,
+        type,
+        span: declaration.nameSpan,
+        assignability: "immutable-binding",
+      })
+    ) {
       this.diagnostics.push(
         error(`Duplicate top-level name '${declaration.name}'.`, declaration.nameSpan, {
           code: "PLN100",
@@ -156,6 +168,9 @@ class Checker {
       case "VariableDeclaration":
         this.checkVariableDeclaration(statement, scope, returnType);
         return false;
+      case "AssignmentStatement":
+        this.checkAssignmentStatement(statement, scope, returnType);
+        return false;
       case "ExpressionStatement":
         this.inferExpression(statement.expression, scope, {
           ifAsValue: false,
@@ -174,6 +189,7 @@ class Checker {
         name: param.name,
         type: primitiveType(param.type.name),
         span: param.nameSpan,
+        assignability: "immutable-binding",
       })
     ) {
       this.diagnostics.push(
@@ -204,7 +220,12 @@ class Checker {
     }
 
     if (
-      !scope.declare({ name: declaration.name, type: declaredType, span: declaration.nameSpan })
+      !scope.declare({
+        name: declaration.name,
+        type: declaredType,
+        span: declaration.nameSpan,
+        assignability: declaration.mutability === "let" ? "mutable-variable" : "immutable-binding",
+      })
     ) {
       this.diagnostics.push(
         error(`Duplicate name '${declaration.name}'.`, declaration.nameSpan, {
@@ -213,6 +234,47 @@ class Checker {
         }),
       );
     }
+  }
+
+  private checkAssignmentStatement(
+    statement: AssignmentStatement,
+    scope: Scope,
+    returnType?: PrimitiveType,
+  ): void {
+    const symbol = scope.lookup(statement.name);
+    const valueType = this.inferExpression(statement.value, scope, {
+      ifAsValue: true,
+      ...(returnType === undefined ? {} : { returnType }),
+    });
+
+    if (symbol === undefined) {
+      this.diagnostics.push(
+        error(`Unknown name '${statement.name}'.`, statement.nameSpan, {
+          code: "PLN102",
+          label: "no value with this name is in scope",
+          notes: [
+            {
+              kind: "help",
+              message: "declare it before assigning to it, or check for a spelling mistake",
+            },
+          ],
+        }),
+      );
+      return;
+    }
+
+    if (symbol.assignability !== "mutable-variable") {
+      this.diagnostics.push(
+        error(`Cannot assign to '${statement.name}'.`, statement.nameSpan, {
+          code: "PLN206",
+          label: "this binding is not mutable",
+          notes: [{ kind: "help", message: "only 'let' bindings may be reassigned" }],
+        }),
+      );
+      return;
+    }
+
+    this.expectType(valueType, symbol.type, statement.value.span);
   }
 
   private checkReturnStatement(

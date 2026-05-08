@@ -14,7 +14,11 @@ export type Program = {
   readonly span: Span;
 };
 
-export type TopLevelDeclaration = FunctionDeclaration | VariableDeclaration | ExpressionStatement;
+export type TopLevelDeclaration =
+  | FunctionDeclaration
+  | VariableDeclaration
+  | AssignmentStatement
+  | ExpressionStatement;
 
 export type FunctionDeclaration = {
   readonly kind: "FunctionDeclaration";
@@ -41,7 +45,11 @@ export type Block = {
   readonly span: Span;
 };
 
-export type Statement = VariableDeclaration | ReturnStatement | ExpressionStatement;
+export type Statement =
+  | VariableDeclaration
+  | AssignmentStatement
+  | ReturnStatement
+  | ExpressionStatement;
 
 export type VariableDeclaration = {
   readonly kind: "VariableDeclaration";
@@ -56,6 +64,14 @@ export type VariableDeclaration = {
 export type ReturnStatement = {
   readonly kind: "ReturnStatement";
   readonly expression: Expression;
+  readonly span: Span;
+};
+
+export type AssignmentStatement = {
+  readonly kind: "AssignmentStatement";
+  readonly name: string;
+  readonly nameSpan: Span;
+  readonly value: Expression;
   readonly span: Span;
 };
 
