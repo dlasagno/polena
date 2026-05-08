@@ -1,8 +1,4 @@
-// A small tour of the current compiler MVP.
-
-fn add(a: number, b: number): number {
-  a + b
-}
+// A broader tour of the current compiler MVP.
 
 fn abs(value: number): number {
   if value < 0 {
@@ -12,36 +8,63 @@ fn abs(value: number): number {
   value
 }
 
-fn describeScore(score: number): string {
-  if score >= 90 {
+fn describeScore(score: number, passed: boolean): string {
+  if passed and score >= 90 {
     "excellent"
   } else {
-    if score >= 70 {
+    if passed {
       "passing"
     } else {
-      "needs work"
+      "retry"
     }
   }
 }
 
+const studentName: string = "Ada";
+const enabled = true;
 const base: number = 40 + 2;
-let adjusted = add(base, abs(-8));
-adjusted += 20;
-adjusted -= 2;
+const offset = abs(-8);
 
-let studentName: string = "Ada";
-studentName = "Ada Lovelace";
+let adjusted = base + offset;
+adjusted += 10;
+adjusted -= 5;
+adjusted *= 2;
+adjusted /= 2;
+adjusted %= 19;
 
-const isPassing = adjusted >= 70 and !(studentName == "");
-const label = if isPassing {
-  describeScore(adjusted)
+let reviewCount = 0;
+let index = 0;
+
+while index < 6 : (index += 1) {
+  if index == 1 {
+    continue;
+  }
+
+  reviewCount += index;
+
+  if reviewCount > 7 {
+    break;
+  }
+}
+
+const firstLargeStep = while index < 10 : (index += 1) {
+  if index >= 8 {
+    break index;
+  }
+} else {
+  -1
+};
+
+let ready = false;
+if enabled and !(studentName == "") {
+  ready = true;
+}
+
+const passed = ready and reviewCount >= 8;
+const label = if ready {
+  describeScore(adjusted, passed)
 } else {
   "incomplete"
 };
 
-let review = "needs manual review";
-if isPassing {
-  review = "ready";
-}
-
-const result = adjusted;
+const result = label == "passing" or firstLargeStep > 0;

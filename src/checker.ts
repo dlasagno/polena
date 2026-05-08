@@ -3,14 +3,19 @@ import type {
   AssignmentStatement,
   BinaryOperator,
   Block,
+  BreakStatement,
+  ContinueStatement,
   Expression,
   FunctionDeclaration,
+  IfExpression,
+  LoopContinuation,
   Parameter,
   PrimitiveType,
   Program,
   ReturnStatement,
   Statement,
   VariableDeclaration,
+  WhileExpression,
 } from "./ast";
 import { error, type Diagnostic } from "./diagnostic";
 import type { Span } from "./span";
@@ -33,6 +38,19 @@ type SymbolInfo = {
   readonly type: ValueType;
   readonly span: Span;
   readonly assignability: "mutable-variable" | "immutable-binding";
+};
+
+type LoopContext = {
+  readonly expectsValue: boolean;
+  breakType?: ValueType;
+  sawValueBreak: boolean;
+};
+
+type InferOptions = {
+  readonly ifAsValue: boolean;
+  readonly whileAsValue: boolean;
+  readonly returnType?: PrimitiveType;
+  readonly loopContext?: LoopContext;
 };
 
 export function check(program: Program): CheckResult {
@@ -84,8 +102,17 @@ class Checker {
         case "AssignmentStatement":
           this.checkAssignmentStatement(declaration, scope);
           break;
+        case "BreakStatement":
+          this.checkBreakStatement(declaration, scope);
+          break;
+        case "ContinueStatement":
+          this.checkContinueStatement(declaration, scope);
+          break;
         case "ExpressionStatement":
-          this.inferExpression(declaration.expression, scope, { ifAsValue: false });
+          this.inferExpression(declaration.expression, scope, {
+            ifAsValue: false,
+            whileAsValue: false,
+          });
           break;
       }
     }
@@ -128,6 +155,7 @@ class Checker {
     if (declaration.body.finalExpression !== undefined) {
       const finalType = this.inferExpression(declaration.body.finalExpression, scope, {
         ifAsValue: declaration.returnType.name !== "void",
+        whileAsValue: declaration.returnType.name !== "void",
         returnType: declaration.returnType.name,
       });
       this.expectType(
@@ -153,10 +181,19 @@ class Checker {
   }
 
   private checkBlock(block: Block, scope: Scope, returnType: PrimitiveType): number {
+    return this.checkBlockInLoop(block, scope, returnType);
+  }
+
+  private checkBlockInLoop(
+    block: Block,
+    scope: Scope,
+    returnType: PrimitiveType,
+    loopContext?: LoopContext,
+  ): number {
     let explicitReturns = 0;
 
     for (const statement of block.statements) {
-      if (this.checkStatement(statement, scope, returnType)) {
+      if (this.checkStatement(statement, scope, returnType, loopContext)) {
         explicitReturns += 1;
       }
     }
@@ -164,7 +201,12 @@ class Checker {
     return explicitReturns;
   }
 
-  private checkStatement(statement: Statement, scope: Scope, returnType: PrimitiveType): boolean {
+  private checkStatement(
+    statement: Statement,
+    scope: Scope,
+    returnType: PrimitiveType,
+    loopContext?: LoopContext,
+  ): boolean {
     switch (statement.kind) {
       case "VariableDeclaration":
         this.checkVariableDeclaration(statement, scope, returnType);
@@ -175,12 +217,20 @@ class Checker {
       case "ExpressionStatement":
         this.inferExpression(statement.expression, scope, {
           ifAsValue: false,
+          whileAsValue: false,
           returnType,
+          ...(loopContext === undefined ? {} : { loopContext }),
         });
         return false;
       case "ReturnStatement":
         this.checkReturnStatement(statement, scope, returnType);
         return true;
+      case "BreakStatement":
+        this.checkBreakStatement(statement, scope, returnType, loopContext);
+        return false;
+      case "ContinueStatement":
+        this.checkContinueStatement(statement, scope, loopContext);
+        return false;
     }
   }
 
@@ -209,6 +259,7 @@ class Checker {
   ): void {
     const initializerType = this.inferExpression(declaration.initializer, scope, {
       ifAsValue: true,
+      whileAsValue: true,
       ...(returnType === undefined ? {} : { returnType }),
     });
     const declaredType =
@@ -245,6 +296,7 @@ class Checker {
     const symbol = scope.lookup(statement.name);
     const valueType = this.inferExpression(statement.value, scope, {
       ifAsValue: true,
+      whileAsValue: true,
       ...(returnType === undefined ? {} : { returnType }),
     });
 
@@ -291,18 +343,100 @@ class Checker {
   ): void {
     const actualType = this.inferExpression(statement.expression, scope, {
       ifAsValue: true,
+      whileAsValue: true,
       returnType,
     });
     this.expectType(actualType, primitiveType(returnType), statement.expression.span);
   }
 
+  private checkBreakStatement(
+    statement: BreakStatement,
+    scope: Scope,
+    returnType?: PrimitiveType,
+    loopContext?: LoopContext,
+  ): void {
+    if (loopContext === undefined) {
+      this.diagnostics.push(
+        error("Break statement must be inside a loop.", statement.span, {
+          code: "PLN207",
+          label: "this break does not have a loop to exit",
+        }),
+      );
+      return;
+    }
+
+    if (statement.expression === undefined) {
+      if (loopContext.expectsValue) {
+        this.diagnostics.push(
+          error("Value-producing while expressions must use 'break value;'.", statement.span, {
+            code: "PLN209",
+            label: "this loop needs a value when it breaks early",
+            notes: [
+              {
+                kind: "help",
+                message:
+                  "supply a value to break with, or remove the while expression's value context",
+              },
+            ],
+          }),
+        );
+      }
+      return;
+    }
+
+    const valueType = this.inferExpression(statement.expression, scope, {
+      ifAsValue: true,
+      whileAsValue: true,
+      ...(returnType === undefined ? {} : { returnType }),
+    });
+
+    if (!loopContext.expectsValue) {
+      this.diagnostics.push(
+        error(
+          "Break with a value is only allowed inside value-producing while expressions.",
+          statement.span,
+          {
+            code: "PLN210",
+            label: "this loop does not produce a value",
+            notes: [
+              {
+                kind: "help",
+                message:
+                  "use plain 'break;' here, or use the while loop in a value position with an else branch",
+              },
+            ],
+          },
+        ),
+      );
+      return;
+    }
+
+    this.recordLoopBreakType(loopContext, valueType, statement.expression.span);
+  }
+
+  private checkContinueStatement(
+    statement: ContinueStatement,
+    scope: Scope,
+    loopContext?: LoopContext,
+  ): void {
+    void scope;
+
+    if (loopContext !== undefined) {
+      return;
+    }
+
+    this.diagnostics.push(
+      error("Continue statement must be inside a loop.", statement.span, {
+        code: "PLN208",
+        label: "this continue does not have a loop to continue",
+      }),
+    );
+  }
+
   private inferExpression(
     expression: Expression,
     scope: Scope,
-    options: {
-      readonly ifAsValue: boolean;
-      readonly returnType?: PrimitiveType;
-    } = { ifAsValue: true },
+    options: InferOptions = { ifAsValue: true, whileAsValue: true },
   ): ValueType {
     switch (expression.kind) {
       case "NumberLiteral":
@@ -349,6 +483,8 @@ class Checker {
         );
       case "IfExpression":
         return this.inferIfExpression(expression, scope, options);
+      case "WhileExpression":
+        return this.inferWhileExpression(expression, scope, options);
       case "CallExpression":
         return this.inferCallExpression(expression, scope, options);
     }
@@ -359,10 +495,7 @@ class Checker {
     operand: Expression,
     span: Span,
     scope: Scope,
-    options: {
-      readonly ifAsValue: boolean;
-      readonly returnType?: PrimitiveType;
-    },
+    options: InferOptions,
   ): ValueType {
     const operandType = this.inferExpression(operand, scope, options);
 
@@ -382,10 +515,7 @@ class Checker {
     right: Expression,
     span: Span,
     scope: Scope,
-    options: {
-      readonly ifAsValue: boolean;
-      readonly returnType?: PrimitiveType;
-    },
+    options: InferOptions,
   ): ValueType {
     const leftType = this.inferExpression(left, scope, options);
     const rightType = this.inferExpression(right, scope, options);
@@ -425,16 +555,15 @@ class Checker {
   }
 
   private inferIfExpression(
-    expression: Extract<Expression, { kind: "IfExpression" }>,
+    expression: IfExpression,
     scope: Scope,
-    options: {
-      readonly ifAsValue: boolean;
-      readonly returnType?: PrimitiveType;
-    },
+    options: InferOptions,
   ): ValueType {
     const conditionType = this.inferExpression(expression.condition, scope, {
       ifAsValue: true,
+      whileAsValue: true,
       ...(options.returnType === undefined ? {} : { returnType: options.returnType }),
+      ...(options.loopContext === undefined ? {} : { loopContext: options.loopContext }),
     });
     this.expectType(conditionType, primitiveType("boolean"), expression.condition.span);
 
@@ -466,18 +595,72 @@ class Checker {
     return thenType.kind === "unknown" ? elseType : thenType;
   }
 
-  private inferBlockType(
-    block: Block,
-    parentScope: Scope,
-    options: {
-      readonly ifAsValue: boolean;
-      readonly returnType?: PrimitiveType;
-    },
+  private inferWhileExpression(
+    expression: WhileExpression,
+    scope: Scope,
+    options: InferOptions,
   ): ValueType {
+    const conditionType = this.inferExpression(expression.condition, scope, {
+      ifAsValue: true,
+      whileAsValue: true,
+      ...(options.returnType === undefined ? {} : { returnType: options.returnType }),
+      ...(options.loopContext === undefined ? {} : { loopContext: options.loopContext }),
+    });
+    this.expectType(conditionType, primitiveType("boolean"), expression.condition.span);
+
+    if (expression.continuation !== undefined) {
+      this.checkLoopContinuation(expression.continuation, scope, options);
+    }
+
+    const loopContext: LoopContext = {
+      expectsValue: options.whileAsValue,
+      sawValueBreak: false,
+    };
+    this.checkIgnoredBlock(expression.body, scope, {
+      ifAsValue: false,
+      whileAsValue: false,
+      ...(options.returnType === undefined ? {} : { returnType: options.returnType }),
+      loopContext,
+    });
+
+    if (!options.whileAsValue) {
+      if (expression.elseBlock !== undefined) {
+        this.checkIgnoredBlock(expression.elseBlock, scope, {
+          ifAsValue: false,
+          whileAsValue: false,
+          ...(options.returnType === undefined ? {} : { returnType: options.returnType }),
+          ...(options.loopContext === undefined ? {} : { loopContext: options.loopContext }),
+        });
+      }
+
+      return primitiveType("void");
+    }
+
+    if (expression.elseBlock === undefined) {
+      this.diagnostics.push(
+        error("While expression used as a value must have an else branch.", expression.span, {
+          code: "PLN211",
+          label: "this while expression can finish without producing a value",
+          notes: [{ kind: "help", message: "add an else branch that produces a compatible value" }],
+        }),
+      );
+      return loopContext.breakType ?? primitiveType("void");
+    }
+
+    const elseType = this.inferBlockType(expression.elseBlock, scope, options);
+    if (!loopContext.sawValueBreak || loopContext.breakType === undefined) {
+      return elseType;
+    }
+
+    this.expectType(elseType, loopContext.breakType, expression.elseBlock.span);
+    return loopContext.breakType.kind === "unknown" ? elseType : loopContext.breakType;
+  }
+
+  private inferBlockType(block: Block, parentScope: Scope, options: InferOptions): ValueType {
     const scope = new Scope(parentScope);
     const returnType = options.returnType ?? "void";
 
-    this.checkBlock(block, scope, returnType);
+    this.checkBlockInLoop(block, scope, returnType, options.loopContext);
 
     if (block.finalExpression === undefined) {
       return primitiveType("void");
@@ -489,12 +672,9 @@ class Checker {
   private inferCallExpression(
     expression: Extract<Expression, { kind: "CallExpression" }>,
     scope: Scope,
-    options: {
-      readonly ifAsValue: boolean;
-      readonly returnType?: PrimitiveType;
-    },
+    options: InferOptions,
   ): ValueType {
-    const calleeType = this.inferExpression(expression.callee, scope);
+    const calleeType = this.inferExpression(expression.callee, scope, options);
 
     if (calleeType.kind === "unknown") {
       for (const arg of expression.args) {
@@ -546,6 +726,53 @@ class Checker {
     }
 
     return primitiveType(calleeType.returnType);
+  }
+
+  private checkIgnoredBlock(block: Block, parentScope: Scope, options: InferOptions): void {
+    const scope = new Scope(parentScope);
+    const returnType = options.returnType ?? "void";
+    this.checkBlockInLoop(block, scope, returnType, options.loopContext);
+
+    if (block.finalExpression !== undefined) {
+      this.inferExpression(block.finalExpression, scope, {
+        ifAsValue: false,
+        whileAsValue: false,
+        ...(options.returnType === undefined ? {} : { returnType: options.returnType }),
+        ...(options.loopContext === undefined ? {} : { loopContext: options.loopContext }),
+      });
+    }
+  }
+
+  private checkLoopContinuation(
+    continuation: LoopContinuation,
+    scope: Scope,
+    options: InferOptions,
+  ): void {
+    if (continuation.kind === "AssignmentStatement") {
+      this.checkAssignmentStatement(continuation, scope, options.returnType);
+      return;
+    }
+
+    this.inferExpression(continuation, scope, {
+      ifAsValue: false,
+      whileAsValue: false,
+      ...(options.returnType === undefined ? {} : { returnType: options.returnType }),
+      ...(options.loopContext === undefined ? {} : { loopContext: options.loopContext }),
+    });
+  }
+
+  private recordLoopBreakType(loopContext: LoopContext, actualType: ValueType, span: Span): void {
+    if (loopContext.breakType === undefined) {
+      loopContext.breakType = actualType;
+      loopContext.sawValueBreak = true;
+      return;
+    }
+
+    loopContext.sawValueBreak = true;
+    this.expectType(actualType, loopContext.breakType, span);
+    if (loopContext.breakType.kind === "unknown" && actualType.kind !== "unknown") {
+      loopContext.breakType = actualType;
+    }
   }
 
   private expectType(actual: ValueType, expected: ValueType, span: Span): void {

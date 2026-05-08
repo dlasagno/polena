@@ -37,6 +37,23 @@ describe("lexer", () => {
     ]);
   });
 
+  test("tokenizes while, break, and continue keywords", () => {
+    const result = lex("while ready { continue; break; }");
+
+    expect(result.diagnostics).toHaveLength(0);
+    expect(result.tokens.map((token) => token.kind)).toEqual([
+      "While",
+      "Identifier",
+      "LeftBrace",
+      "Continue",
+      "Semicolon",
+      "Break",
+      "Semicolon",
+      "RightBrace",
+      "Eof",
+    ]);
+  });
+
   test("tokenizes compound assignment operators", () => {
     const result = lex("value += 1; value %= 2;");
 
@@ -78,6 +95,26 @@ describe("parser", () => {
 
     expect(parseResult.diagnostics).toHaveLength(0);
     expect(parseResult.program.declarations[0]?.kind).toBe("VariableDeclaration");
+  });
+
+  test("parses while expressions with continuations", () => {
+    const lexResult = lex("const value = while ready : (count += 1) { break 1; } else { 0 };");
+    const parseResult = parse(lexResult.tokens);
+
+    expect(parseResult.diagnostics).toHaveLength(0);
+    expect(parseResult.program.declarations[0]).toMatchObject({
+      kind: "VariableDeclaration",
+      initializer: {
+        kind: "WhileExpression",
+        continuation: {
+          kind: "AssignmentStatement",
+          operator: "+=",
+        },
+        elseBlock: {
+          kind: "Block",
+        },
+      },
+    });
   });
 
   test("parses assignment statements", () => {
@@ -153,6 +190,58 @@ const value = choose(true);
 `);
 
     expect(executeValue(result.js)).toBe(1);
+  });
+
+  test("supports statement while loops", () => {
+    const result = expectCompileOk(`
+let total = 0;
+let i = 0;
+
+while i < 4 : (i += 1) {
+  total += i;
+}
+
+const value = total;
+`);
+
+    expect(result.js).toContain("while ((i < 4))");
+    expect(executeValue(result.js)).toBe(6);
+  });
+
+  test("runs while continuation expressions before continue", () => {
+    const result = expectCompileOk(`
+let total = 0;
+let i = 0;
+
+while i < 5 : (i += 1) {
+  if i == 2 {
+    continue;
+  }
+
+  total += i;
+}
+
+const value = total;
+`);
+
+    expect(executeValue(result.js)).toBe(8);
+  });
+
+  test("supports value-producing while expressions", () => {
+    const result = expectCompileOk(`
+let i = 0;
+
+const value = while i < 6 : (i += 1) {
+  if i == 4 {
+    break i * 10;
+  }
+} else {
+  -1
+};
+`);
+
+    expect(result.js).toContain("let __whileResult");
+    expect(executeValue(result.js)).toBe(40);
   });
 
   test("indents nested if expression output", () => {
@@ -257,6 +346,15 @@ const value = count;
     );
   });
 
+  test("rejects non-boolean while conditions", () => {
+    const result = compile("while 1 { break; }");
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Expected 'boolean', got 'number'.",
+    );
+  });
+
   test("rejects incompatible if branch types", () => {
     const result = compile('const value = if true { 1 } else { "no" };');
 
@@ -272,6 +370,87 @@ const value = count;
     expect(result.ok).toBe(false);
     expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
       "If expression used as a value must have an else branch.",
+    );
+  });
+
+  test("rejects value-producing while expressions without else branches", () => {
+    const result = compile(`
+let i = 0;
+const value = while i < 3 : (i += 1) {
+  break i;
+};
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "While expression used as a value must have an else branch.",
+    );
+  });
+
+  test("rejects break outside loops", () => {
+    const result = compile("break;");
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Break statement must be inside a loop.",
+    );
+  });
+
+  test("rejects continue outside loops", () => {
+    const result = compile("continue;");
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Continue statement must be inside a loop.",
+    );
+  });
+
+  test("rejects break values in statement while loops", () => {
+    const result = compile(`
+while true {
+  break 1;
+}
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Break with a value is only allowed inside value-producing while expressions.",
+    );
+  });
+
+  test("rejects plain break in value-producing while expressions", () => {
+    const result = compile(`
+let i = 0;
+const value = while i < 3 : (i += 1) {
+  if i == 1 {
+    break;
+  }
+} else {
+  0
+};
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Value-producing while expressions must use 'break value;'.",
+    );
+  });
+
+  test("rejects incompatible while exit value types", () => {
+    const result = compile(`
+let i = 0;
+const value = while i < 3 : (i += 1) {
+  if i == 1 {
+    break 1;
+  }
+} else {
+  "no"
+};
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Expected 'number', got 'string'.",
     );
   });
 

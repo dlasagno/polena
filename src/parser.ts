@@ -3,9 +3,12 @@ import type {
   AssignmentStatement,
   BinaryOperator,
   Block,
+  BreakStatement,
+  ContinueStatement,
   Expression,
   FunctionDeclaration,
   IfExpression,
+  LoopContinuation,
   Parameter,
   PrimitiveType,
   Program,
@@ -15,6 +18,7 @@ import type {
   TypeNode,
   UnaryOperator,
   VariableDeclaration,
+  WhileExpression,
 } from "./ast";
 import { error, type Diagnostic } from "./diagnostic";
 import { makeLocation, mergeSpans, spanFrom } from "./span";
@@ -69,8 +73,16 @@ class Parser {
       return this.parseAssignmentStatement();
     }
 
+    if (this.check("Break")) {
+      return this.parseBreakStatement();
+    }
+
+    if (this.check("Continue")) {
+      return this.parseContinueStatement();
+    }
+
     const expression = this.parseExpression();
-    if (expression.kind === "IfExpression" && !this.check("Semicolon")) {
+    if (this.shouldTreatExpressionAsStatement(expression, false)) {
       return {
         kind: "ExpressionStatement",
         expression,
@@ -144,17 +156,23 @@ class Parser {
         continue;
       }
 
+      if (this.check("Break")) {
+        statements.push(this.parseBreakStatement());
+        continue;
+      }
+
+      if (this.check("Continue")) {
+        statements.push(this.parseContinueStatement());
+        continue;
+      }
+
       if (this.isAssignmentStatementStart()) {
         statements.push(this.parseAssignmentStatement());
         continue;
       }
 
       const expression = this.parseExpression();
-      if (
-        expression.kind === "IfExpression" &&
-        !this.check("Semicolon") &&
-        !this.check("RightBrace")
-      ) {
+      if (this.shouldTreatExpressionAsStatement(expression, true)) {
         statements.push({
           kind: "ExpressionStatement",
           expression,
@@ -230,12 +248,42 @@ class Parser {
     };
   }
 
-  private parseAssignmentStatement(): AssignmentStatement {
+  private parseBreakStatement(): BreakStatement {
+    const breakToken = this.expect("Break", "Expected 'break'.");
+
+    if (this.match("Semicolon")) {
+      return {
+        kind: "BreakStatement",
+        span: mergeSpans(breakToken.span, this.previous().span),
+      };
+    }
+
+    const expression = this.parseExpression();
+    const semicolon = this.expect("Semicolon", "Expected ';' after break statement.");
+    return {
+      kind: "BreakStatement",
+      expression,
+      span: mergeSpans(breakToken.span, semicolon.span),
+    };
+  }
+
+  private parseContinueStatement(): ContinueStatement {
+    const continueToken = this.expect("Continue", "Expected 'continue'.");
+    const semicolon = this.expect("Semicolon", "Expected ';' after continue statement.");
+    return {
+      kind: "ContinueStatement",
+      span: mergeSpans(continueToken.span, semicolon.span),
+    };
+  }
+
+  private parseAssignmentStatement(requireSemicolon = true): AssignmentStatement {
     const name = this.expect("Identifier", "Expected assignment target.");
     const operatorToken = this.advanceAssignmentOperator();
     const operator = assignmentOperatorFromToken(operatorToken.kind) ?? "=";
     const value = this.parseExpression();
-    const semicolon = this.expect("Semicolon", "Expected ';' after assignment statement.");
+    const semicolon = requireSemicolon
+      ? this.expect("Semicolon", "Expected ';' after assignment statement.")
+      : undefined;
 
     return {
       kind: "AssignmentStatement",
@@ -243,7 +291,7 @@ class Parser {
       name: name.text,
       nameSpan: name.span,
       value,
-      span: mergeSpans(name.span, semicolon.span),
+      span: mergeSpans(name.span, semicolon?.span ?? value.span),
     };
   }
 
@@ -346,6 +394,10 @@ class Parser {
       return this.parseIfExpression();
     }
 
+    if (this.check("While")) {
+      return this.parseWhileExpression();
+    }
+
     if (this.match("Number")) {
       const token = this.previous();
       return {
@@ -405,7 +457,7 @@ class Parser {
 
   private parseIfExpression(): IfExpression {
     const ifToken = this.expect("If", "Expected 'if'.");
-    const condition = this.parseIfCondition();
+    const condition = this.parseCondition("if");
     const thenBlock = this.parseBlock();
     let elseBlock: Block | undefined;
 
@@ -422,14 +474,72 @@ class Parser {
     };
   }
 
-  private parseIfCondition(): Expression {
+  private parseWhileExpression(): WhileExpression {
+    const whileToken = this.expect("While", "Expected 'while'.");
+    const condition = this.parseCondition("while");
+    let continuation: LoopContinuation | undefined;
+
+    if (this.match("Colon")) {
+      this.expect("LeftParen", "Expected '(' before while continuation.");
+      continuation = this.parseLoopContinuation();
+      this.expect("RightParen", "Expected ')' after while continuation.");
+    }
+
+    const body = this.parseBlock();
+    let elseBlock: Block | undefined;
+
+    if (this.match("Else")) {
+      elseBlock = this.parseBlock();
+    }
+
+    return {
+      kind: "WhileExpression",
+      condition,
+      ...(continuation === undefined ? {} : { continuation }),
+      body,
+      ...(elseBlock === undefined ? {} : { elseBlock }),
+      span: mergeSpans(whileToken.span, elseBlock?.span ?? body.span),
+    };
+  }
+
+  private parseLoopContinuation(): LoopContinuation {
+    if (this.isAssignmentStatementStart()) {
+      return this.parseAssignmentStatement(false);
+    }
+
+    return this.parseExpression();
+  }
+
+  private parseCondition(keyword: "if" | "while"): Expression {
     if (!this.match("LeftParen")) {
       return this.parseExpression();
     }
 
     const condition = this.parseExpression();
-    this.expect("RightParen", "Expected ')' after if condition.");
+    this.expect("RightParen", `Expected ')' after ${keyword} condition.`);
     return condition;
+  }
+
+  private shouldTreatExpressionAsStatement(
+    expression: Expression,
+    canBecomeFinalExpression: boolean,
+  ): boolean {
+    if (this.check("Semicolon")) {
+      return false;
+    }
+
+    switch (expression.kind) {
+      case "IfExpression":
+        return !canBecomeFinalExpression || !this.check("RightBrace");
+      case "WhileExpression":
+        return (
+          expression.elseBlock === undefined ||
+          !canBecomeFinalExpression ||
+          !this.check("RightBrace")
+        );
+      default:
+        return false;
+    }
   }
 
   private expect(kind: TokenKind, message: string): Token {

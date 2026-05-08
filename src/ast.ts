@@ -18,6 +18,8 @@ export type TopLevelDeclaration =
   | FunctionDeclaration
   | VariableDeclaration
   | AssignmentStatement
+  | BreakStatement
+  | ContinueStatement
   | ExpressionStatement;
 
 export type FunctionDeclaration = {
@@ -49,6 +51,8 @@ export type Statement =
   | VariableDeclaration
   | AssignmentStatement
   | ReturnStatement
+  | BreakStatement
+  | ContinueStatement
   | ExpressionStatement;
 
 export type VariableDeclaration = {
@@ -64,6 +68,17 @@ export type VariableDeclaration = {
 export type ReturnStatement = {
   readonly kind: "ReturnStatement";
   readonly expression: Expression;
+  readonly span: Span;
+};
+
+export type BreakStatement = {
+  readonly kind: "BreakStatement";
+  readonly expression?: Expression;
+  readonly span: Span;
+};
+
+export type ContinueStatement = {
+  readonly kind: "ContinueStatement";
   readonly span: Span;
 };
 
@@ -90,6 +105,7 @@ export type Expression =
   | UnaryExpression
   | BinaryExpression
   | IfExpression
+  | WhileExpression
   | CallExpression;
 
 export type LiteralExpression =
@@ -153,6 +169,17 @@ export type IfExpression = {
   readonly kind: "IfExpression";
   readonly condition: Expression;
   readonly thenBlock: Block;
+  readonly elseBlock?: Block;
+  readonly span: Span;
+};
+
+export type LoopContinuation = Expression | AssignmentStatement;
+
+export type WhileExpression = {
+  readonly kind: "WhileExpression";
+  readonly condition: Expression;
+  readonly continuation?: LoopContinuation;
+  readonly body: Block;
   readonly elseBlock?: Block;
   readonly span: Span;
 };

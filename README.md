@@ -19,10 +19,11 @@ programs end-to-end. It supports:
 - Unary `!` and `-`
 - Binary arithmetic, comparison, `and`, and `or` expressions
 - `if` expressions and statement-position `if` without `else`
+- `while` loops, `break`/`continue`, and expression-valued `while ... else ...`
 
 It intentionally does not yet support arrays, objects, enums, match expressions,
-modules/imports, string interpolation, loops, or the full type system from the
-language draft.
+modules/imports, string interpolation, or the full type system from the language
+draft.
 
 Example:
 
