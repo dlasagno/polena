@@ -96,7 +96,10 @@ class Checker {
 
     if (!scope.declare({ name: declaration.name, type, span: declaration.nameSpan })) {
       this.diagnostics.push(
-        error(`Duplicate top-level name '${declaration.name}'.`, declaration.nameSpan),
+        error(`Duplicate top-level name '${declaration.name}'.`, declaration.nameSpan, {
+          code: "PLN100",
+          label: "this name is already defined",
+        }),
       );
     }
   }
@@ -124,6 +127,10 @@ class Checker {
         error(
           `Function '${declaration.name}' must return '${declaration.returnType.name}'.`,
           declaration.nameSpan,
+          {
+            code: "PLN203",
+            label: "this function can finish without returning a value",
+          },
         ),
       );
     }
@@ -163,7 +170,12 @@ class Checker {
         span: param.nameSpan,
       })
     ) {
-      this.diagnostics.push(error(`Duplicate parameter '${param.name}'.`, param.nameSpan));
+      this.diagnostics.push(
+        error(`Duplicate parameter '${param.name}'.`, param.nameSpan, {
+          code: "PLN101",
+          label: "this parameter name is already used",
+        }),
+      );
     }
   }
 
@@ -181,7 +193,12 @@ class Checker {
     if (
       !scope.declare({ name: declaration.name, type: declaredType, span: declaration.nameSpan })
     ) {
-      this.diagnostics.push(error(`Duplicate name '${declaration.name}'.`, declaration.nameSpan));
+      this.diagnostics.push(
+        error(`Duplicate name '${declaration.name}'.`, declaration.nameSpan, {
+          code: "PLN100",
+          label: "this name is already defined in this scope",
+        }),
+      );
     }
   }
 
@@ -205,7 +222,18 @@ class Checker {
       case "NameExpression": {
         const symbol = scope.lookup(expression.name);
         if (symbol === undefined) {
-          this.diagnostics.push(error(`Unknown name '${expression.name}'.`, expression.span));
+          this.diagnostics.push(
+            error(`Unknown name '${expression.name}'.`, expression.span, {
+              code: "PLN102",
+              label: "no value with this name is in scope",
+              notes: [
+                {
+                  kind: "help",
+                  message: "declare it before using it, or check for a spelling mistake",
+                },
+              ],
+            }),
+          );
           return unknownType();
         }
         return symbol.type;
@@ -281,6 +309,10 @@ class Checker {
             rightType,
           )}'.`,
           span,
+          {
+            code: "PLN204",
+            label: "these operands do not have compatible types",
+          },
         ),
       );
     }
@@ -303,7 +335,10 @@ class Checker {
 
     if (calleeType.kind !== "function") {
       this.diagnostics.push(
-        error(`Cannot call value of type '${formatType(calleeType)}'.`, expression.callee.span),
+        error(`Cannot call value of type '${formatType(calleeType)}'.`, expression.callee.span, {
+          code: "PLN200",
+          label: "this value is not callable",
+        }),
       );
       return unknownType();
     }
@@ -313,6 +348,10 @@ class Checker {
         error(
           `Expected ${calleeType.params.length} argument(s), got ${expression.args.length}.`,
           expression.span,
+          {
+            code: "PLN201",
+            label: "wrong number of arguments in this call",
+          },
         ),
       );
     }
@@ -345,7 +384,16 @@ class Checker {
     }
 
     this.diagnostics.push(
-      error(`Expected '${formatType(expected)}', got '${formatType(actual)}'.`, span),
+      error(`Expected '${formatType(expected)}', got '${formatType(actual)}'.`, span, {
+        code: "PLN202",
+        label: `expected '${formatType(expected)}' here`,
+        notes: [
+          {
+            kind: "help",
+            message: "make this expression produce the expected type explicitly",
+          },
+        ],
+      }),
     );
   }
 }

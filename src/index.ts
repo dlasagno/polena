@@ -1,45 +1,35 @@
-import { compile, type Diagnostic } from "./compiler";
+#!/usr/bin/env bun
 
+import { runCli, type CliIo } from "./cli";
+
+export { formatHelp, isSupportedSourceFile, runCli } from "./cli";
 export { compile } from "./compiler";
 export type { CompileResult, Diagnostic } from "./compiler";
-
-const supportedSourceExtensions = [".plna", ".polena"] as const;
+export { renderDiagnostic, renderDiagnostics } from "./diagnostic-renderer";
+export type { RenderDiagnosticOptions } from "./diagnostic-renderer";
 
 if (import.meta.main) {
-  const inputPath = Bun.argv[2];
+  const io: CliIo = {
+    readTextFile: async (path) => Bun.file(path).text(),
+    writeTextFile: async (path, contents) => {
+      await Bun.write(path, contents);
+    },
+    stdout: (text) => console.log(text),
+    stderr: (text) => console.error(text),
+  };
 
-  if (inputPath === undefined) {
-    console.error("Usage: bun run src/index.ts <file.plna>");
-    process.exit(1);
-  }
+  const exitCode = await runCli({
+    args: Bun.argv.slice(2),
+    version: await readPackageVersion(),
+    io,
+  });
 
-  if (!isSupportedSourceFile(inputPath)) {
-    console.error("Expected a Polena source file ending in .plna or .polena.");
-    process.exit(1);
-  }
-
-  const source = await Bun.file(inputPath).text();
-  const result = compile(source);
-
-  if (!result.ok) {
-    for (const diagnostic of result.diagnostics) {
-      console.error(formatDiagnostic(diagnostic, inputPath));
-    }
-    process.exit(1);
-  }
-
-  console.log(result.js);
+  process.exit(exitCode);
 }
 
-export function isSupportedSourceFile(path: string): boolean {
-  return supportedSourceExtensions.some((extension) => path.endsWith(extension));
-}
+async function readPackageVersion(): Promise<string> {
+  const text = await Bun.file(new URL("../package.json", import.meta.url)).text();
+  const packageJson = JSON.parse(text) as { readonly version?: unknown };
 
-function formatDiagnostic(diagnostic: Diagnostic, fileName: string): string {
-  if (diagnostic.span === undefined) {
-    return `${diagnostic.severity}: ${diagnostic.message}`;
-  }
-
-  const { line, column } = diagnostic.span.start;
-  return `${fileName}:${line}:${column}: ${diagnostic.severity}: ${diagnostic.message}`;
+  return typeof packageJson.version === "string" ? packageJson.version : "unknown";
 }

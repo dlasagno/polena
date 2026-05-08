@@ -132,7 +132,12 @@ class Lexer {
 
     const span = spanFrom(start, this.location());
     this.tokens.push({ kind: "Invalid", text: char, span });
-    this.diagnostics.push(error(`Unexpected character '${char}'.`, span));
+    this.diagnostics.push(
+      error(`Unexpected character '${char}'.`, span, {
+        code: "PLN001",
+        label: "this character is not part of Polena syntax",
+      }),
+    );
   }
 
   private scanNumber(start: SourceLocation): void {
@@ -171,7 +176,13 @@ class Lexer {
 
       if (char === "\n") {
         const span = spanFrom(start, this.location());
-        this.diagnostics.push(error("Unterminated string literal.", span));
+        this.diagnostics.push(
+          error("Unterminated string literal.", span, {
+            code: "PLN002",
+            label: "string literal starts here but is not closed",
+            notes: [{ kind: "help", message: 'add a closing `"` before the end of the line' }],
+          }),
+        );
         this.tokens.push({
           kind: "Invalid",
           text: this.source.slice(start.offset, this.offset),
@@ -211,7 +222,12 @@ class Lexer {
           break;
         default: {
           const span = spanFrom(start, this.location());
-          this.diagnostics.push(error(`Unsupported escape sequence '\\${escaped}'.`, span));
+          this.diagnostics.push(
+            error(`Unsupported escape sequence '\\${escaped}'.`, span, {
+              code: "PLN003",
+              label: "this escape sequence is not supported",
+            }),
+          );
           value += escaped;
           break;
         }
@@ -220,7 +236,13 @@ class Lexer {
 
     if (this.isAtEnd()) {
       const span = spanFrom(start, this.location());
-      this.diagnostics.push(error("Unterminated string literal.", span));
+      this.diagnostics.push(
+        error("Unterminated string literal.", span, {
+          code: "PLN002",
+          label: "string literal starts here but is not closed",
+          notes: [{ kind: "help", message: 'add a closing `"` before the end of the file' }],
+        }),
+      );
       this.tokens.push({
         kind: "Invalid",
         text: this.source.slice(start.offset, this.offset),

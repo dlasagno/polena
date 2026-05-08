@@ -202,7 +202,12 @@ class Parser {
     const type = primitiveTypeFromToken(token.kind);
 
     if (type === undefined) {
-      this.diagnostics.push(error("Expected a primitive type.", token.span));
+      this.diagnostics.push(
+        error("Expected a primitive type.", token.span, {
+          code: "PLN010",
+          label: "expected 'number', 'string', 'boolean', or 'void'",
+        }),
+      );
       this.advance();
       return { kind: "PrimitiveType", name: "void", span: token.span };
     }
@@ -329,7 +334,12 @@ class Parser {
     }
 
     const token = this.current();
-    this.diagnostics.push(error("Expected an expression.", token.span));
+    this.diagnostics.push(
+      error("Expected an expression.", token.span, {
+        code: "PLN011",
+        label: "expected an expression here",
+      }),
+    );
     this.advance();
     return {
       kind: "NumberLiteral",
@@ -345,7 +355,12 @@ class Parser {
     }
 
     const token = this.current();
-    this.diagnostics.push(error(message, token.span));
+    this.diagnostics.push(
+      error(message, token.span, {
+        code: "PLN012",
+        label: "parser was looking here",
+      }),
+    );
     return token;
   }
 

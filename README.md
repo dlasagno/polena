@@ -40,6 +40,27 @@ Compile a file to JavaScript:
 bun run compile example.plna
 ```
 
+The CLI also supports explicit commands and standard help/version flags:
+
+```sh
+bun run src/index.ts --help
+bun run src/index.ts --version
+bun run src/index.ts compile example.plna --out example.js
+```
+
+When compilation fails, diagnostics include the source location and a small code
+snippet:
+
+```text
+error[PLN102]: Unknown name 'missing'.
+  --> example.plna:1:15
+  |
+1 | const value = missing;
+  |               ^^^^^^^ no value with this name is in scope
+  |
+help: declare it before using it, or check for a spelling mistake
+```
+
 ## Development
 
 Install dependencies:
