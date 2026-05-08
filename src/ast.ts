@@ -70,6 +70,7 @@ export type Expression =
   | NameExpression
   | UnaryExpression
   | BinaryExpression
+  | IfExpression
   | CallExpression;
 
 export type LiteralExpression =
@@ -126,6 +127,14 @@ export type BinaryExpression = {
   readonly operator: BinaryOperator;
   readonly left: Expression;
   readonly right: Expression;
+  readonly span: Span;
+};
+
+export type IfExpression = {
+  readonly kind: "IfExpression";
+  readonly condition: Expression;
+  readonly thenBlock: Block;
+  readonly elseBlock?: Block;
   readonly span: Span;
 };
 

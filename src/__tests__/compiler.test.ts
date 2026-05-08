@@ -19,6 +19,24 @@ describe("lexer", () => {
     ]);
   });
 
+  test("tokenizes if and else keywords", () => {
+    const result = lex("if enabled { 1 } else { 0 }");
+
+    expect(result.diagnostics).toHaveLength(0);
+    expect(result.tokens.map((token) => token.kind)).toEqual([
+      "If",
+      "Identifier",
+      "LeftBrace",
+      "Number",
+      "RightBrace",
+      "Else",
+      "LeftBrace",
+      "Number",
+      "RightBrace",
+      "Eof",
+    ]);
+  });
+
   test("reports invalid characters", () => {
     const result = lex("const value = @;");
 
@@ -35,6 +53,14 @@ describe("parser", () => {
 
     expect(parseResult.diagnostics).toHaveLength(0);
     expect(parseResult.program.declarations[0]?.kind).toBe("FunctionDeclaration");
+  });
+
+  test("parses if expressions", () => {
+    const lexResult = lex("const value = if enabled { 1 } else { 0 };");
+    const parseResult = parse(lexResult.tokens);
+
+    expect(parseResult.diagnostics).toHaveLength(0);
+    expect(parseResult.program.declarations[0]?.kind).toBe("VariableDeclaration");
   });
 });
 
@@ -64,6 +90,74 @@ const value = identity("Ada");
     expect(executeValue(result.js)).toBe("Ada");
   });
 
+  test("supports value-producing if expressions", () => {
+    const result = expectCompileOk(`
+const enabled = true;
+const value = if enabled {
+  "yes"
+} else {
+  "no"
+};
+`);
+
+    expect(executeValue(result.js)).toBe("yes");
+  });
+
+  test("supports if statements without else branches", () => {
+    const result = expectCompileOk(`
+fn choose(enabled: boolean): number {
+  if enabled {
+    return 1;
+  }
+
+  0
+}
+
+const value = choose(true);
+`);
+
+    expect(executeValue(result.js)).toBe(1);
+  });
+
+  test("indents nested if expression output", () => {
+    const result = expectCompileOk(`
+fn describeScore(score: number): string {
+  if score >= 90 {
+    "excellent"
+  } else {
+    if score >= 70 {
+      "passing"
+    } else {
+      "needs work"
+    }
+  }
+}
+
+const value = describeScore(72);
+`);
+
+    expect(result.js).toContain(
+      [
+        "function describeScore(score) {",
+        "  return (() => {",
+        "    if ((score >= 90)) {",
+        '      return "excellent";',
+        "    } else {",
+        "      return (() => {",
+        "        if ((score >= 70)) {",
+        '          return "passing";',
+        "        } else {",
+        '          return "needs work";',
+        "        }",
+        "      })();",
+        "    }",
+        "  })();",
+        "}",
+      ].join("\n"),
+    );
+    expect(executeValue(result.js)).toBe("passing");
+  });
+
   test("compiles the README MVP example shape", () => {
     const result = expectCompileOk(`
 const answer: number = 40 + 2;
@@ -78,6 +172,33 @@ const value = add(answer, 1);
 
     expect(result.js).toContain('let name = "Ada";');
     expect(executeValue(result.js)).toBe(43);
+  });
+
+  test("rejects non-boolean if conditions", () => {
+    const result = compile("const value = if 1 { 1 } else { 0 };");
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Expected 'boolean', got 'number'.",
+    );
+  });
+
+  test("rejects incompatible if branch types", () => {
+    const result = compile('const value = if true { 1 } else { "no" };');
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Expected 'number', got 'string'.",
+    );
+  });
+
+  test("rejects value-producing if expressions without else branches", () => {
+    const result = compile("const value = if true { 1 };");
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "If expression used as a value must have an else branch.",
+    );
   });
 
   test("rejects unknown names", () => {

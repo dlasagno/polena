@@ -8,6 +8,8 @@ export type TokenKind =
   | "Let"
   | "Fn"
   | "Return"
+  | "If"
+  | "Else"
   | "True"
   | "False"
   | "And"

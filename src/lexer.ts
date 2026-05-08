@@ -7,6 +7,8 @@ const keywords = new Map<string, TokenKind>([
   ["let", "Let"],
   ["fn", "Fn"],
   ["return", "Return"],
+  ["if", "If"],
+  ["else", "Else"],
   ["true", "True"],
   ["false", "False"],
   ["and", "And"],

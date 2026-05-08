@@ -3,6 +3,7 @@ import type {
   Block,
   Expression,
   FunctionDeclaration,
+  IfExpression,
   Parameter,
   PrimitiveType,
   Program,
@@ -63,6 +64,14 @@ class Parser {
     }
 
     const expression = this.parseExpression();
+    if (expression.kind === "IfExpression" && !this.check("Semicolon")) {
+      return {
+        kind: "ExpressionStatement",
+        expression,
+        span: expression.span,
+      };
+    }
+
     const semicolon = this.expect("Semicolon", "Expected ';' after expression.");
     return {
       kind: "ExpressionStatement",
@@ -130,6 +139,19 @@ class Parser {
       }
 
       const expression = this.parseExpression();
+      if (
+        expression.kind === "IfExpression" &&
+        !this.check("Semicolon") &&
+        !this.check("RightBrace")
+      ) {
+        statements.push({
+          kind: "ExpressionStatement",
+          expression,
+          span: expression.span,
+        });
+        continue;
+      }
+
       if (this.match("Semicolon")) {
         const semicolon = this.previous();
         statements.push({
@@ -292,6 +314,10 @@ class Parser {
   }
 
   private parsePrimaryExpression(): Expression {
+    if (this.check("If")) {
+      return this.parseIfExpression();
+    }
+
     if (this.match("Number")) {
       const token = this.previous();
       return {
@@ -347,6 +373,35 @@ class Parser {
       text: "0",
       span: token.span,
     };
+  }
+
+  private parseIfExpression(): IfExpression {
+    const ifToken = this.expect("If", "Expected 'if'.");
+    const condition = this.parseIfCondition();
+    const thenBlock = this.parseBlock();
+    let elseBlock: Block | undefined;
+
+    if (this.match("Else")) {
+      elseBlock = this.parseBlock();
+    }
+
+    return {
+      kind: "IfExpression",
+      condition,
+      thenBlock,
+      ...(elseBlock === undefined ? {} : { elseBlock }),
+      span: mergeSpans(ifToken.span, elseBlock?.span ?? thenBlock.span),
+    };
+  }
+
+  private parseIfCondition(): Expression {
+    if (!this.match("LeftParen")) {
+      return this.parseExpression();
+    }
+
+    const condition = this.parseExpression();
+    this.expect("RightParen", "Expected ')' after if condition.");
+    return condition;
   }
 
   private expect(kind: TokenKind, message: string): Token {

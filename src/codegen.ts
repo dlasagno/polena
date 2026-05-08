@@ -3,6 +3,7 @@ import type {
   Block,
   Expression,
   FunctionDeclaration,
+  IfExpression,
   Program,
   Statement,
   TopLevelDeclaration,
@@ -26,47 +27,56 @@ function emitTopLevelDeclaration(declaration: TopLevelDeclaration): string[] {
     case "VariableDeclaration":
       return [emitVariableDeclaration(declaration, "")];
     case "ExpressionStatement":
-      return [`${emitExpression(declaration.expression)};`];
+      return emitExpressionStatement(declaration.expression, "");
   }
 }
 
 function emitFunctionDeclaration(declaration: FunctionDeclaration): string[] {
   const params = declaration.params.map((param) => param.name).join(", ");
-  return [`function ${declaration.name}(${params}) {`, ...emitBlock(declaration.body), "}"];
+  return [`function ${declaration.name}(${params}) {`, ...emitBlock(declaration.body, "  "), "}"];
 }
 
-function emitBlock(block: Block): string[] {
+function emitBlock(block: Block, indent: string): string[] {
   const lines: string[] = [];
 
   for (const statement of block.statements) {
-    lines.push(emitStatement(statement, "  "));
+    lines.push(...emitStatement(statement, indent));
   }
 
   if (block.finalExpression !== undefined) {
-    lines.push(`  return ${emitExpression(block.finalExpression)};`);
+    lines.push(`${indent}return ${emitExpression(block.finalExpression, indent)};`);
   }
 
   return lines;
 }
 
-function emitStatement(statement: Statement, indent: string): string {
+function emitStatement(statement: Statement, indent: string): string[] {
   switch (statement.kind) {
     case "VariableDeclaration":
-      return emitVariableDeclaration(statement, indent);
+      return [emitVariableDeclaration(statement, indent)];
     case "ReturnStatement":
-      return `${indent}return ${emitExpression(statement.expression)};`;
+      return [`${indent}return ${emitExpression(statement.expression, indent)};`];
     case "ExpressionStatement":
-      return `${indent}${emitExpression(statement.expression)};`;
+      return emitExpressionStatement(statement.expression, indent);
   }
+}
+
+function emitExpressionStatement(expression: Expression, indent: string): string[] {
+  if (expression.kind === "IfExpression") {
+    return emitIfStatement(expression, indent);
+  }
+
+  return [`${indent}${emitExpression(expression, indent)};`];
 }
 
 function emitVariableDeclaration(declaration: VariableDeclaration, indent: string): string {
   return `${indent}${declaration.mutability} ${declaration.name} = ${emitExpression(
     declaration.initializer,
+    indent,
   )};`;
 }
 
-function emitExpression(expression: Expression): string {
+function emitExpression(expression: Expression, indent = ""): string {
   switch (expression.kind) {
     case "NumberLiteral":
       return expression.text;
@@ -77,14 +87,49 @@ function emitExpression(expression: Expression): string {
     case "NameExpression":
       return expression.name;
     case "UnaryExpression":
-      return `(${expression.operator}${emitExpression(expression.operand)})`;
+      return `(${expression.operator}${emitExpression(expression.operand, indent)})`;
     case "BinaryExpression":
-      return `(${emitExpression(expression.left)} ${emitBinaryOperator(expression.operator)} ${emitExpression(
+      return `(${emitExpression(expression.left, indent)} ${emitBinaryOperator(expression.operator)} ${emitExpression(
         expression.right,
+        indent,
       )})`;
+    case "IfExpression":
+      return emitIfExpression(expression, indent);
     case "CallExpression":
-      return `${emitExpression(expression.callee)}(${expression.args.map(emitExpression).join(", ")})`;
+      return `${emitExpression(expression.callee, indent)}(${expression.args
+        .map((arg) => emitExpression(arg, indent))
+        .join(", ")})`;
   }
+}
+
+function emitIfStatement(expression: IfExpression, indent: string): string[] {
+  const lines = [
+    `${indent}if (${emitExpression(expression.condition, indent)}) {`,
+    ...emitBlock(expression.thenBlock, `${indent}  `),
+  ];
+
+  if (expression.elseBlock === undefined) {
+    lines.push(`${indent}}`);
+    return lines;
+  }
+
+  lines.push(`${indent}} else {`, ...emitBlock(expression.elseBlock, `${indent}  `), `${indent}}`);
+  return lines;
+}
+
+function emitIfExpression(expression: IfExpression, indent: string): string {
+  const lines = [
+    "(() => {",
+    `${indent}  if (${emitExpression(expression.condition, indent)}) {`,
+    ...emitBlock(expression.thenBlock, `${indent}    `),
+  ];
+
+  if (expression.elseBlock !== undefined) {
+    lines.push(`${indent}  } else {`, ...emitBlock(expression.elseBlock, `${indent}    `));
+  }
+
+  lines.push(`${indent}  }`, `${indent}})()`);
+  return lines.join("\n");
 }
 
 function emitBinaryOperator(operator: BinaryOperator): string {

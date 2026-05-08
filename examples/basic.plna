@@ -1,8 +1,42 @@
-const answer: number = 40 + 2;
-let name: string = "Ada";
+// A small tour of the current compiler MVP.
 
 fn add(a: number, b: number): number {
   a + b
 }
 
-const result = add(answer, 1);
+fn abs(value: number): number {
+  if value < 0 {
+    return -value;
+  }
+
+  value
+}
+
+fn describeScore(score: number): string {
+  if score >= 90 {
+    "excellent"
+  } else {
+    if score >= 70 {
+      "passing"
+    } else {
+      "needs work"
+    }
+  }
+}
+
+const base: number = 40 + 2;
+const adjusted = add(base, abs(-8));
+let studentName: string = "Ada";
+
+const isPassing = adjusted >= 70 and !(studentName == "");
+const label = if isPassing {
+  describeScore(adjusted)
+} else {
+  "incomplete"
+};
+
+if isPassing {
+  const checkedLabel = label;
+}
+
+const result = adjusted;

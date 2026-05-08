@@ -16,6 +16,7 @@ programs end-to-end. It supports:
 - Function calls
 - Unary `!` and `-`
 - Binary arithmetic, comparison, `and`, and `or` expressions
+- `if` expressions and statement-position `if` without `else`
 
 It intentionally does not yet support arrays, objects, enums, match expressions,
 modules/imports, string interpolation, loops, reassignment, or the full type
