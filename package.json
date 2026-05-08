@@ -11,6 +11,7 @@
   },
   "scripts": {
     "check": "bun run typecheck && bun run lint && bun run format:check && bun run test",
+    "compile": "bun run src/index.ts",
     "format": "biome format --write .",
     "format:check": "biome format .",
     "lint": "biome lint .",

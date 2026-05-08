@@ -1,0 +1,8 @@
+const answer: number = 40 + 2;
+let name: string = "Ada";
+
+fn add(a: number, b: number): number {
+  a + b
+}
+
+const result = add(answer, 1);
