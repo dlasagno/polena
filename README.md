@@ -58,12 +58,22 @@ Compile a file to JavaScript:
 bun run compile example.plna
 ```
 
+Build a standalone executable for the current platform:
+
+```sh
+bun run build:binary
+```
+
+That writes the compiler to `dist/polena` on Unix-like systems and
+`dist/polena.exe` on Windows.
+
 The CLI also supports explicit commands and standard help/version flags:
 
 ```sh
 bun run src/index.ts --help
 bun run src/index.ts --version
 bun run src/index.ts compile example.plna --out example.js
+./dist/polena --version
 ```
 
 When compilation fails, diagnostics include the source location and a small code

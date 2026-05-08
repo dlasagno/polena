@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 
+import packageJson from "../package.json";
 import { runCli, type CliIo } from "./cli";
 
 export { formatHelp, isSupportedSourceFile, runCli } from "./cli";
@@ -20,16 +21,13 @@ if (import.meta.main) {
 
   const exitCode = await runCli({
     args: Bun.argv.slice(2),
-    version: await readPackageVersion(),
+    version: getPackageVersion(),
     io,
   });
 
   process.exit(exitCode);
 }
 
-async function readPackageVersion(): Promise<string> {
-  const text = await Bun.file(new URL("../package.json", import.meta.url)).text();
-  const packageJson = JSON.parse(text) as { readonly version?: unknown };
-
+function getPackageVersion(): string {
   return typeof packageJson.version === "string" ? packageJson.version : "unknown";
 }
