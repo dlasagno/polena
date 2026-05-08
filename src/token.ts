@@ -4,6 +4,7 @@ export type TokenKind =
   | "Identifier"
   | "Number"
   | "String"
+  | "MultilineString"
   | "Const"
   | "Let"
   | "Fn"

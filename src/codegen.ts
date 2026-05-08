@@ -219,7 +219,7 @@ class JavaScriptEmitter {
       case "NumberLiteral":
         return expression.text;
       case "StringLiteral":
-        return JSON.stringify(expression.value);
+        return this.emitStringLiteral(expression, indent, loopContext);
       case "BooleanLiteral":
         return expression.value ? "true" : "false";
       case "NameExpression":
@@ -372,6 +372,24 @@ class JavaScriptEmitter {
     this.tempCounter += 1;
     return `__${prefix}${id}`;
   }
+
+  private emitStringLiteral(
+    expression: Extract<Expression, { kind: "StringLiteral" }>,
+    indent: string,
+    loopContext?: LoopEmitContext,
+  ): string {
+    if (expression.parts.every((part) => part.kind === "StringText")) {
+      return JSON.stringify(expression.parts.map((part) => part.value).join(""));
+    }
+
+    return `\`${expression.parts
+      .map((part) =>
+        part.kind === "StringText"
+          ? escapeTemplateText(part.value)
+          : `\${${this.emitExpression(part.expression, indent, loopContext)}}`,
+      )
+      .join("")}\``;
+  }
 }
 
 function emitBinaryOperator(operator: BinaryOperator): string {
@@ -387,4 +405,8 @@ function emitBinaryOperator(operator: BinaryOperator): string {
     default:
       return operator;
   }
+}
+
+function escapeTemplateText(value: string): string {
+  return value.replaceAll("\\", "\\\\").replaceAll("`", "\\`").replaceAll("${", "\\${");
 }

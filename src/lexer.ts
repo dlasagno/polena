@@ -121,6 +121,12 @@ class Lexer {
       case '"':
         this.scanString(start);
         return;
+      case "\\":
+        if (this.match("\\")) {
+          this.scanMultilineString(start);
+          return;
+        }
+        break;
       default:
         break;
     }
@@ -174,8 +180,6 @@ class Lexer {
   }
 
   private scanString(start: SourceLocation): void {
-    let value = "";
-
     while (!this.isAtEnd() && this.peek() !== '"') {
       const char = this.advance();
 
@@ -196,46 +200,8 @@ class Lexer {
         return;
       }
 
-      if (char !== "\\") {
-        value += char;
-        continue;
-      }
-
-      if (this.isAtEnd()) {
-        break;
-      }
-
-      const escaped = this.advance();
-      switch (escaped) {
-        case "0":
-          value += "\0";
-          break;
-        case "t":
-          value += "\t";
-          break;
-        case "n":
-          value += "\n";
-          break;
-        case "r":
-          value += "\r";
-          break;
-        case '"':
-          value += '"';
-          break;
-        case "\\":
-          value += "\\";
-          break;
-        default: {
-          const span = spanFrom(start, this.location());
-          this.diagnostics.push(
-            error(`Unsupported escape sequence '\\${escaped}'.`, span, {
-              code: "PLN003",
-              label: "this escape sequence is not supported",
-            }),
-          );
-          value += escaped;
-          break;
-        }
+      if (char === "\\" && !this.isAtEnd()) {
+        this.advance();
       }
     }
 
@@ -257,7 +223,53 @@ class Lexer {
     }
 
     this.advance();
-    this.tokens.push({ kind: "String", text: value, span: spanFrom(start, this.location()) });
+    this.tokens.push({
+      kind: "String",
+      text: this.source.slice(start.offset + 1, this.offset - 1),
+      span: spanFrom(start, this.location()),
+    });
+  }
+
+  private scanMultilineString(start: SourceLocation): void {
+    let value = this.scanMultilineStringLine();
+
+    while (true) {
+      const checkpoint = this.location();
+      const lineStartOffset = this.offset;
+
+      if (!this.match("\n")) {
+        break;
+      }
+
+      while (this.peek() === " " || this.peek() === "\t") {
+        this.advance();
+      }
+
+      if (!this.match("\\") || !this.match("\\")) {
+        this.offset = lineStartOffset;
+        this.line = checkpoint.line;
+        this.column = checkpoint.column;
+        break;
+      }
+
+      value += `\n${this.scanMultilineStringLine()}`;
+    }
+
+    this.tokens.push({
+      kind: "MultilineString",
+      text: value,
+      span: spanFrom(start, this.location()),
+    });
+  }
+
+  private scanMultilineStringLine(): string {
+    const lineStart = this.offset;
+
+    while (!this.isAtEnd() && this.peek() !== "\n") {
+      this.advance();
+    }
+
+    return this.source.slice(lineStart, this.offset);
   }
 
   private skipLineComment(): void {

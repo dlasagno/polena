@@ -442,7 +442,7 @@ class Checker {
       case "NumberLiteral":
         return primitiveType("number");
       case "StringLiteral":
-        return primitiveType("string");
+        return this.inferStringLiteral(expression, scope, options);
       case "BooleanLiteral":
         return primitiveType("boolean");
       case "NameExpression": {
@@ -507,6 +507,20 @@ class Checker {
         this.expectType(operandType, primitiveType("number"), span);
         return primitiveType("number");
     }
+  }
+
+  private inferStringLiteral(
+    expression: Extract<Expression, { kind: "StringLiteral" }>,
+    scope: Scope,
+    options: InferOptions,
+  ): ValueType {
+    for (const part of expression.parts) {
+      if (part.kind === "StringInterpolation") {
+        this.inferExpression(part.expression, scope, options);
+      }
+    }
+
+    return primitiveType("string");
   }
 
   private inferBinaryExpression(

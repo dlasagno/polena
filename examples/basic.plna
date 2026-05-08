@@ -67,4 +67,15 @@ const label = if ready {
   "incomplete"
 };
 
-const result = label == "passing" or firstLargeStep > 0;
+const greeting = "Hello ${studentName}!";
+const summary = "Score ${adjusted}, reviews ${reviewCount}, next step ${firstLargeStep}";
+const escaped = "Ready:\n\t${ready}";
+const report =
+  \\Student: ${studentName}
+  \\Greeting: ${greeting}
+  \\Label: ${label}
+  \\Summary: ${summary}
+  \\${escaped}
+;
+
+const result = report != "" and (label == "passing" or firstLargeStep > 0);

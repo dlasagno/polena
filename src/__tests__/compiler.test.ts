@@ -71,6 +71,20 @@ describe("lexer", () => {
     ]);
   });
 
+  test("tokenizes multiline strings", () => {
+    const result = lex("const value = \\\\hello\n  \\\\world\n;");
+
+    expect(result.diagnostics).toHaveLength(0);
+    expect(result.tokens.map((token) => token.kind)).toEqual([
+      "Const",
+      "Identifier",
+      "Equal",
+      "MultilineString",
+      "Semicolon",
+      "Eof",
+    ]);
+  });
+
   test("reports invalid characters", () => {
     const result = lex("const value = @;");
 
@@ -95,6 +109,27 @@ describe("parser", () => {
 
     expect(parseResult.diagnostics).toHaveLength(0);
     expect(parseResult.program.declarations[0]?.kind).toBe("VariableDeclaration");
+  });
+
+  test("parses interpolated strings into text and expression parts", () => {
+    const lexResult = lex(['const value = "Hello ', "$", "{name}", '!";'].join(""));
+    const parseResult = parse(lexResult.tokens);
+
+    expect(parseResult.diagnostics).toHaveLength(0);
+    expect(parseResult.program.declarations[0]).toMatchObject({
+      kind: "VariableDeclaration",
+      initializer: {
+        kind: "StringLiteral",
+        parts: [
+          { kind: "StringText", value: "Hello " },
+          {
+            kind: "StringInterpolation",
+            expression: { kind: "NameExpression", name: "name" },
+          },
+          { kind: "StringText", value: "!" },
+        ],
+      },
+    });
   });
 
   test("parses while expressions with continuations", () => {
@@ -174,6 +209,35 @@ const value = if enabled {
 `);
 
     expect(executeValue(result.js)).toBe("yes");
+  });
+
+  test("supports interpolated strings", () => {
+    const result = expectCompileOk(`
+let name = "Ada";
+const value = "Hello ${"$"}{name}!";
+`);
+
+    expect(result.js).toContain(["`Hello ", "$", "{name}", "!`"].join(""));
+    expect(executeValue(result.js)).toBe("Hello Ada!");
+  });
+
+  test("supports multiline strings with interpolation", () => {
+    const result = expectCompileOk(`
+let name = "Ada";
+const value = \\\\Hello
+  \\\\\${name}
+;
+`);
+
+    expect(executeValue(result.js)).toBe("Hello\nAda");
+  });
+
+  test("preserves supported string escape sequences", () => {
+    const result = expectCompileOk(String.raw`
+const value = "line\nnext\tindent";
+`);
+
+    expect(executeValue(result.js)).toBe("line\nnext\tindent");
   });
 
   test("supports if statements without else branches", () => {
@@ -343,6 +407,24 @@ const value = count;
     expect(result.ok).toBe(false);
     expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
       "Expected 'boolean', got 'number'.",
+    );
+  });
+
+  test("rejects unterminated string interpolation", () => {
+    const result = compile('const value = "Hello ${name";');
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Unterminated string interpolation.",
+    );
+  });
+
+  test("rejects invalid interpolation expressions", () => {
+    const result = compile(['const value = "Hello ', "$", "{if}", '";'].join(""));
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Invalid interpolation expression.",
     );
   });
 

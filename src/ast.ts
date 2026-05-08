@@ -117,14 +117,23 @@ export type LiteralExpression =
     }
   | {
       readonly kind: "StringLiteral";
-      readonly value: string;
-      readonly text: string;
+      readonly parts: readonly StringPart[];
       readonly span: Span;
     }
   | {
       readonly kind: "BooleanLiteral";
       readonly value: boolean;
       readonly span: Span;
+    };
+
+export type StringPart =
+  | {
+      readonly kind: "StringText";
+      readonly value: string;
+    }
+  | {
+      readonly kind: "StringInterpolation";
+      readonly expression: Expression;
     };
 
 export type NameExpression = {

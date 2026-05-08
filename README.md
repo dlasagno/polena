@@ -9,6 +9,7 @@ programs end-to-end. It supports:
 
 - Line comments with `//`
 - `number`, `string`, and `boolean` literals
+- String interpolation and multiline strings
 - `const` and `let` declarations with required initializers
 - Basic reassignment for `let` bindings
 - Numeric compound assignment: `+=`, `-=`, `*=`, `/=`, `%=` for `let` bindings
@@ -22,8 +23,7 @@ programs end-to-end. It supports:
 - `while` loops, `break`/`continue`, and expression-valued `while ... else ...`
 
 It intentionally does not yet support arrays, objects, enums, match expressions,
-modules/imports, string interpolation, or the full type system from the language
-draft.
+modules/imports, or the full type system from the language draft.
 
 Example:
 

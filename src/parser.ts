@@ -13,6 +13,7 @@ import type {
   PrimitiveType,
   Program,
   ReturnStatement,
+  StringPart,
   Statement,
   TopLevelDeclaration,
   TypeNode,
@@ -21,6 +22,7 @@ import type {
   WhileExpression,
 } from "./ast";
 import { error, type Diagnostic } from "./diagnostic";
+import { lex } from "./lexer";
 import { makeLocation, mergeSpans, spanFrom } from "./span";
 import type { Token, TokenKind } from "./token";
 
@@ -408,12 +410,11 @@ class Parser {
       };
     }
 
-    if (this.match("String")) {
+    if (this.match("String") || this.match("MultilineString")) {
       const token = this.previous();
       return {
         kind: "StringLiteral",
-        value: token.text,
-        text: token.text,
+        parts: parseStringParts(token.text, token.span, this.diagnostics),
         span: token.span,
       };
     }
@@ -609,6 +610,19 @@ class Parser {
   private peek(): Token {
     return this.tokens[this.index + 1] ?? this.current();
   }
+
+  public parseInterpolationExpression(): {
+    readonly expression: Expression;
+    readonly diagnostics: readonly Diagnostic[];
+    readonly consumedAll: boolean;
+  } {
+    const expression = this.parseExpression();
+    return {
+      expression,
+      diagnostics: this.diagnostics,
+      consumedAll: this.check("Eof"),
+    };
+  }
 }
 
 function primitiveTypeFromToken(kind: TokenKind): PrimitiveType | undefined {
@@ -711,6 +725,219 @@ function binaryPrecedence(operator: BinaryOperator): number {
     case "%":
       return 6;
   }
+}
+
+function parseStringParts(
+  source: string,
+  span: Token["span"],
+  diagnostics: Diagnostic[],
+): readonly StringPart[] {
+  const parts: StringPart[] = [];
+  let text = "";
+  let index = 0;
+
+  while (index < source.length) {
+    if (source.startsWith("${", index)) {
+      if (text.length > 0) {
+        parts.push({ kind: "StringText", value: text });
+        text = "";
+      }
+
+      const interpolationEnd = findInterpolationEnd(source, index + 2);
+      if (interpolationEnd === undefined) {
+        diagnostics.push(
+          error("Unterminated string interpolation.", span, {
+            code: "PLN004",
+            label: "this interpolation is missing a closing '}'",
+            notes: [{ kind: "help", message: "close the interpolation with '}'" }],
+          }),
+        );
+        break;
+      }
+
+      const expressionSource = source.slice(index + 2, interpolationEnd).trim();
+      const expression = parseInterpolationSource(expressionSource, span, diagnostics);
+      if (expression !== undefined) {
+        parts.push({ kind: "StringInterpolation", expression });
+      }
+
+      index = interpolationEnd + 1;
+      continue;
+    }
+
+    if (source[index] === "\\") {
+      const escaped = source[index + 1];
+      const decoded = decodeStringEscape(escaped);
+      if (decoded !== undefined) {
+        text += decoded;
+        index += 2;
+        continue;
+      }
+
+      diagnostics.push(
+        error(`Unsupported escape sequence '\\${escaped ?? ""}'.`, span, {
+          code: "PLN003",
+          label: "this escape sequence is not supported",
+        }),
+      );
+
+      if (escaped !== undefined) {
+        text += escaped;
+        index += 2;
+      } else {
+        index += 1;
+      }
+      continue;
+    }
+
+    text += source[index] ?? "";
+    index += 1;
+  }
+
+  if (text.length > 0 || parts.length === 0) {
+    parts.push({ kind: "StringText", value: text });
+  }
+
+  return mergeAdjacentStringText(parts);
+}
+
+function parseInterpolationSource(
+  source: string,
+  span: Token["span"],
+  diagnostics: Diagnostic[],
+): Expression | undefined {
+  if (source.length === 0) {
+    diagnostics.push(
+      error("String interpolation must contain an expression.", span, {
+        code: "PLN005",
+        label: "this interpolation is empty",
+      }),
+    );
+    return undefined;
+  }
+
+  const lexResult = lex(source);
+  if (lexResult.diagnostics.length > 0) {
+    diagnostics.push(
+      error("Invalid interpolation expression.", span, {
+        code: "PLN005",
+        label: "this interpolation does not contain a valid expression",
+        notes: [
+          { kind: "note", message: lexResult.diagnostics[0]?.message ?? "invalid expression" },
+        ],
+      }),
+    );
+    return undefined;
+  }
+
+  const parser = new Parser(lexResult.tokens);
+  const result = parser.parseInterpolationExpression();
+  if (result.diagnostics.length > 0 || !result.consumedAll) {
+    diagnostics.push(
+      error("Invalid interpolation expression.", span, {
+        code: "PLN005",
+        label: "this interpolation does not contain a valid expression",
+        notes: [
+          {
+            kind: "note",
+            message: result.diagnostics[0]?.message ?? "expected a single expression",
+          },
+        ],
+      }),
+    );
+    return undefined;
+  }
+
+  return result.expression;
+}
+
+function findInterpolationEnd(source: string, start: number): number | undefined {
+  let depth = 1;
+  let index = start;
+
+  while (index < source.length) {
+    const char = source[index];
+
+    if (char === '"') {
+      index = skipQuotedString(source, index + 1);
+      continue;
+    }
+
+    if (char === "{") {
+      depth += 1;
+      index += 1;
+      continue;
+    }
+
+    if (char === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return index;
+      }
+      index += 1;
+      continue;
+    }
+
+    index += 1;
+  }
+
+  return undefined;
+}
+
+function skipQuotedString(source: string, index: number): number {
+  let cursor = index;
+
+  while (cursor < source.length) {
+    const char = source[cursor];
+    if (char === "\\") {
+      cursor += 2;
+      continue;
+    }
+    if (char === '"') {
+      return cursor + 1;
+    }
+    cursor += 1;
+  }
+
+  return cursor;
+}
+
+function decodeStringEscape(char: string | undefined): string | undefined {
+  switch (char) {
+    case "0":
+      return "\0";
+    case "t":
+      return "\t";
+    case "n":
+      return "\n";
+    case "r":
+      return "\r";
+    case '"':
+      return '"';
+    case "\\":
+      return "\\";
+    default:
+      return undefined;
+  }
+}
+
+function mergeAdjacentStringText(parts: readonly StringPart[]): readonly StringPart[] {
+  const merged: StringPart[] = [];
+
+  for (const part of parts) {
+    const previous = merged[merged.length - 1];
+    if (part.kind === "StringText" && previous?.kind === "StringText") {
+      merged[merged.length - 1] = {
+        kind: "StringText",
+        value: previous.value + part.value,
+      };
+      continue;
+    }
+
+    merged.push(part);
+  }
+
+  return merged;
 }
 
 function syntheticEof(): Token {
