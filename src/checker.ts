@@ -1,4 +1,5 @@
 import type {
+  AssignmentOperator,
   AssignmentStatement,
   BinaryOperator,
   Block,
@@ -271,6 +272,12 @@ class Checker {
           notes: [{ kind: "help", message: "only 'let' bindings may be reassigned" }],
         }),
       );
+      return;
+    }
+
+    if (isCompoundAssignmentOperator(statement.operator)) {
+      this.expectType(symbol.type, primitiveType("number"), statement.nameSpan);
+      this.expectType(valueType, primitiveType("number"), statement.value.span);
       return;
     }
 
@@ -599,4 +606,8 @@ function isArithmeticOperator(operator: BinaryOperator): boolean {
   return (
     operator === "+" || operator === "-" || operator === "*" || operator === "/" || operator === "%"
   );
+}
+
+function isCompoundAssignmentOperator(operator: AssignmentOperator): boolean {
+  return operator !== "=";
 }

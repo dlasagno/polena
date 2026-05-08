@@ -26,8 +26,8 @@ fn describeScore(score: number): string {
 
 const base: number = 40 + 2;
 let adjusted = add(base, abs(-8));
-adjusted = adjusted + 20;
-adjusted = adjusted - 2;
+adjusted += 20;
+adjusted -= 2;
 
 let studentName: string = "Ada";
 studentName = "Ada Lovelace";

@@ -67,8 +67,11 @@ export type ReturnStatement = {
   readonly span: Span;
 };
 
+export type AssignmentOperator = "=" | "+=" | "-=" | "*=" | "/=" | "%=";
+
 export type AssignmentStatement = {
   readonly kind: "AssignmentStatement";
+  readonly operator: AssignmentOperator;
   readonly name: string;
   readonly nameSpan: Span;
   readonly value: Expression;

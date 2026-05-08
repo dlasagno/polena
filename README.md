@@ -11,6 +11,7 @@ programs end-to-end. It supports:
 - `number`, `string`, and `boolean` literals
 - `const` and `let` declarations with required initializers
 - Basic reassignment for `let` bindings
+- Numeric compound assignment: `+=`, `-=`, `*=`, `/=`, `%=` for `let` bindings
 - Optional variable type annotations
 - Function declarations with typed parameters and explicit return types
 - Final-expression function returns and explicit `return expr;`
@@ -20,8 +21,8 @@ programs end-to-end. It supports:
 - `if` expressions and statement-position `if` without `else`
 
 It intentionally does not yet support arrays, objects, enums, match expressions,
-modules/imports, string interpolation, loops, compound assignment, or the full
-type system from the language draft.
+modules/imports, string interpolation, loops, or the full type system from the
+language draft.
 
 Example:
 
@@ -31,7 +32,7 @@ fn add(a: number, b: number): number {
 }
 
 let value = add(20, 21);
-value = value + 1;
+value += 1;
 ```
 
 Polena source files use `.plna` as the standard extension. The CLI also accepts

@@ -82,7 +82,7 @@ function emitVariableDeclaration(declaration: VariableDeclaration, indent: strin
 }
 
 function emitAssignmentStatement(statement: AssignmentStatement, indent: string): string {
-  return `${indent}${statement.name} = ${emitExpression(statement.value, indent)};`;
+  return `${indent}${statement.name} ${statement.operator} ${emitExpression(statement.value, indent)};`;
 }
 
 function emitExpression(expression: Expression, indent = ""): string {

@@ -1,4 +1,5 @@
 import type {
+  AssignmentOperator,
   AssignmentStatement,
   BinaryOperator,
   Block,
@@ -231,12 +232,14 @@ class Parser {
 
   private parseAssignmentStatement(): AssignmentStatement {
     const name = this.expect("Identifier", "Expected assignment target.");
-    this.expect("Equal", "Expected '=' in assignment statement.");
+    const operatorToken = this.advanceAssignmentOperator();
+    const operator = assignmentOperatorFromToken(operatorToken.kind) ?? "=";
     const value = this.parseExpression();
     const semicolon = this.expect("Semicolon", "Expected ';' after assignment statement.");
 
     return {
       kind: "AssignmentStatement",
+      operator,
       name: name.text,
       nameSpan: name.span,
       value,
@@ -458,7 +461,23 @@ class Parser {
   }
 
   private isAssignmentStatementStart(): boolean {
-    return this.check("Identifier") && this.peek().kind === "Equal";
+    return this.check("Identifier") && assignmentOperatorFromToken(this.peek().kind) !== undefined;
+  }
+
+  private advanceAssignmentOperator(): Token {
+    const token = this.current();
+    const operator = assignmentOperatorFromToken(token.kind);
+    if (operator !== undefined) {
+      return this.advance();
+    }
+
+    this.diagnostics.push(
+      error("Expected assignment operator in assignment statement.", token.span, {
+        code: "PLN012",
+        label: "parser was looking here",
+      }),
+    );
+    return token;
   }
 
   private advance(): Token {
@@ -503,6 +522,25 @@ function unaryOperatorFromToken(kind: TokenKind): UnaryOperator | undefined {
       return "!";
     case "Minus":
       return "-";
+    default:
+      return undefined;
+  }
+}
+
+function assignmentOperatorFromToken(kind: TokenKind): AssignmentOperator | undefined {
+  switch (kind) {
+    case "Equal":
+      return "=";
+    case "PlusEqual":
+      return "+=";
+    case "MinusEqual":
+      return "-=";
+    case "StarEqual":
+      return "*=";
+    case "SlashEqual":
+      return "/=";
+    case "PercentEqual":
+      return "%=";
     default:
       return undefined;
   }

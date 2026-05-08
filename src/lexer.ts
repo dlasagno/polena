@@ -85,16 +85,16 @@ class Lexer {
         this.addToken("Semicolon", start);
         return;
       case "+":
-        this.addToken("Plus", start);
+        this.addToken(this.match("=") ? "PlusEqual" : "Plus", start);
         return;
       case "-":
-        this.addToken("Minus", start);
+        this.addToken(this.match("=") ? "MinusEqual" : "Minus", start);
         return;
       case "*":
-        this.addToken("Star", start);
+        this.addToken(this.match("=") ? "StarEqual" : "Star", start);
         return;
       case "%":
-        this.addToken("Percent", start);
+        this.addToken(this.match("=") ? "PercentEqual" : "Percent", start);
         return;
       case "!":
         this.addToken(this.match("=") ? "BangEqual" : "Bang", start);
@@ -113,7 +113,7 @@ class Lexer {
           this.skipLineComment();
           return;
         }
-        this.addToken("Slash", start);
+        this.addToken(this.match("=") ? "SlashEqual" : "Slash", start);
         return;
       case '"':
         this.scanString(start);
