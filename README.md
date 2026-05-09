@@ -40,18 +40,36 @@ value += 1;
 Polena source files use `.plna` as the standard extension. The CLI also accepts
 the longer `.polena` extension for now.
 
+## Package layout
+
+Polena is organized as a small Bun workspace:
+
+- `packages/compiler` contains the compiler core, diagnostics, parser, checker,
+  and JavaScript code generator.
+- `packages/cli` contains the `polena` command line entrypoint and file I/O.
+- `packages/language-server` contains the diagnostics-first language server.
+- `packages/vscode-extension` contains the VS Code grammar and LSP client.
+
 ## VS Code extension
 
-A local VS Code syntax-highlighting extension lives in `vscode-polena`.
+A local VS Code extension lives in `packages/vscode-extension`.
 
 To try it:
 
 ```sh
-code vscode-polena
+bun run --cwd packages/vscode-extension build
+code packages/vscode-extension
 ```
 
 Then press `F5` in VS Code to launch an Extension Development Host and open any
-`.plna` or `.polena` file in that window.
+`.plna` or `.polena` file in that window. Syntax highlighting works alongside
+language-server diagnostics.
+
+Create an installable VSIX:
+
+```sh
+bun run --cwd packages/vscode-extension build:vsix
+```
 
 Compile a file to JavaScript:
 
@@ -71,9 +89,9 @@ That writes the compiler to `dist/polena` on Unix-like systems and
 The CLI also supports explicit commands and standard help/version flags:
 
 ```sh
-bun run src/index.ts --help
-bun run src/index.ts --version
-bun run src/index.ts compile example.plna --out example.js
+bun run packages/cli/src/index.ts --help
+bun run packages/cli/src/index.ts --version
+bun run packages/cli/src/index.ts compile example.plna --out example.js
 ./dist/polena --version
 ```
 

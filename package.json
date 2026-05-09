@@ -1,21 +1,22 @@
 {
-  "name": "polena",
+  "name": "polena-workspace",
   "version": "0.1.0",
-  "description": "Polena programming language compiler",
-  "module": "src/index.ts",
+  "description": "Polena programming language workspace",
+  "private": true,
   "type": "module",
-  "bin": {
-    "polena": "src/index.ts"
-  },
   "license": "MIT",
   "packageManager": "bun@1.3.13",
   "engines": {
     "bun": ">=1.3.13"
   },
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
-    "build:binary": "bun build ./src/index.ts --compile --outfile ./dist/polena",
+    "build": "bun run --filter '*' build",
+    "build:binary": "bun build ./packages/cli/src/index.ts --compile --outfile ./dist/polena",
     "check": "bun run typecheck && bun run lint && bun run format:check && bun run test",
-    "compile": "bun run src/index.ts compile",
+    "compile": "bun run ./packages/cli/src/index.ts compile",
     "format": "biome format --write .",
     "format:check": "biome format .",
     "lint": "biome lint .",
@@ -24,9 +25,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.14",
-    "@types/bun": "latest"
-  },
-  "peerDependencies": {
+    "@types/bun": "latest",
     "typescript": "^6.0.3"
   }
 }

@@ -1,0 +1,19 @@
+{
+  "name": "@polena/cli",
+  "version": "0.1.0",
+  "description": "Polena command line interface",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "polena": "./src/index.ts"
+  },
+  "dependencies": {
+    "@polena/compiler": "workspace:*"
+  },
+  "scripts": {
+    "build": "bun build ./src/index.ts --outfile ./dist/index.js --target node",
+    "build:binary": "bun build ./src/index.ts --compile --outfile ../../dist/polena",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  }
+}

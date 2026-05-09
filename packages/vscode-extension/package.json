@@ -1,18 +1,29 @@
 {
-  "name": "polena-syntax",
-  "displayName": "Polena Syntax",
-  "description": "Syntax highlighting and language configuration for the Polena language.",
+  "name": "polena-vscode",
+  "displayName": "Polena",
+  "description": "Language support for Polena source files.",
   "version": "0.0.1",
   "publisher": "polena",
   "license": "MIT",
+  "type": "module",
   "engines": {
     "vscode": "^1.85.0"
   },
+  "main": "./dist/extension.js",
   "scripts": {
-    "check": "echo Grammar-only VS Code extension; no build step required."
+    "build": "bun build ../language-server/src/index.ts --outfile ./dist/server.js --target node && bun build ./src/extension.ts --outfile ./dist/extension.js --target node --external vscode",
+    "build:vsix": "bun run build && vsce package --no-dependencies",
+    "check": "bun run build",
+    "package": "bun run build:vsix"
   },
   "categories": [
     "Programming Languages"
+  ],
+  "files": [
+    "dist",
+    "language-configuration.json",
+    "syntaxes",
+    "README.md"
   ],
   "keywords": [
     "polena",
@@ -43,6 +54,10 @@
     ]
   },
   "devDependencies": {
+    "@types/vscode": "1.85.0",
     "@vscode/vsce": "^3.9.1"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
   }
 }

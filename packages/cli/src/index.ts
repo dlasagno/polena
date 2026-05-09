@@ -4,10 +4,6 @@ import packageJson from "../package.json";
 import { runCli, type CliIo } from "./cli";
 
 export { formatHelp, isSupportedSourceFile, runCli } from "./cli";
-export { compile } from "./compiler";
-export type { CompileResult, Diagnostic } from "./compiler";
-export { renderDiagnostic, renderDiagnostics } from "./diagnostic-renderer";
-export type { RenderDiagnosticOptions } from "./diagnostic-renderer";
 
 if (import.meta.main) {
   const io: CliIo = {

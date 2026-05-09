@@ -1,0 +1,23 @@
+{
+  "name": "@polena/language-server",
+  "version": "0.1.0",
+  "description": "Polena language server",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "polena-language-server": "./dist/server.js"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@polena/compiler": "workspace:*",
+    "vscode-languageserver": "^9.0.1",
+    "vscode-languageserver-textdocument": "^1.0.12"
+  },
+  "scripts": {
+    "build": "bun build ./src/index.ts --outfile ./dist/server.js --target node",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  }
+}

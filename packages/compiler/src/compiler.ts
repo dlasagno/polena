@@ -1,8 +1,14 @@
 import { check } from "./checker";
 import { generateJavaScript } from "./codegen";
+import type { Program } from "./ast";
 import type { Diagnostic } from "./diagnostic";
 import { lex } from "./lexer";
 import { parse } from "./parser";
+
+export type AnalyzeResult = {
+  readonly program: Program;
+  readonly diagnostics: readonly Diagnostic[];
+};
 
 export type CompileResult =
   | {
@@ -15,7 +21,7 @@ export type CompileResult =
       readonly diagnostics: readonly Diagnostic[];
     };
 
-export function compile(source: string): CompileResult {
+export function analyze(source: string): AnalyzeResult {
   const lexResult = lex(source);
   const parseResult = parse(lexResult.tokens);
   const checkResult = check(parseResult.program);
@@ -25,14 +31,23 @@ export function compile(source: string): CompileResult {
     ...checkResult.diagnostics,
   ];
 
-  if (diagnostics.some((diagnostic) => diagnostic.severity === "error")) {
-    return { ok: false, diagnostics };
+  return {
+    program: parseResult.program,
+    diagnostics,
+  };
+}
+
+export function compile(source: string): CompileResult {
+  const analysis = analyze(source);
+
+  if (analysis.diagnostics.some((diagnostic) => diagnostic.severity === "error")) {
+    return { ok: false, diagnostics: analysis.diagnostics };
   }
 
   return {
     ok: true,
-    js: generateJavaScript(parseResult.program),
-    diagnostics,
+    js: generateJavaScript(analysis.program),
+    diagnostics: analysis.diagnostics,
   };
 }
 

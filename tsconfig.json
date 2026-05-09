@@ -29,7 +29,9 @@
     "noPropertyAccessFromIndexSignature": false,
 
     "paths": {
-      "@/*": ["./src/*"]
+      "@polena/compiler": ["./packages/compiler/src/index.ts"],
+      "@polena/cli": ["./packages/cli/src/index.ts"],
+      "@polena/language-server": ["./packages/language-server/src/index.ts"]
     }
   }
 }

@@ -1,5 +1,4 @@
-import { compile } from "./compiler";
-import { renderDiagnostics } from "./diagnostic-renderer";
+import { compile, renderDiagnostics } from "@polena/compiler";
 
 const supportedSourceExtensions = [".plna", ".polena"] as const;
 
