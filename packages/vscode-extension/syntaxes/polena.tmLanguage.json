@@ -106,7 +106,6 @@
     "interpolation": {
       "patterns": [
         {
-          "name": "meta.interpolation.polena",
           "begin": "\\$\\{",
           "beginCaptures": {
             "0": {
@@ -119,6 +118,7 @@
               "name": "punctuation.section.embedded.end.polena"
             }
           },
+          "contentName": "meta.embedded.expression.polena",
           "patterns": [
             {
               "include": "#expression"
@@ -148,13 +148,27 @@
           "include": "#numbers"
         },
         {
-          "include": "#operators"
-        },
-        {
           "include": "#function-call"
         },
         {
+          "include": "#identifiers"
+        },
+        {
+          "include": "#operators"
+        },
+        {
           "include": "#punctuation"
+        },
+        {
+          "include": "#interpolation"
+        }
+      ]
+    },
+    "identifiers": {
+      "patterns": [
+        {
+          "name": "variable.other.readwrite.polena",
+          "match": "\\b[A-Za-z_$][A-Za-z0-9_$]*\\b"
         }
       ]
     },
