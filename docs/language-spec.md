@@ -490,13 +490,21 @@ supported comparison operations.
 Supported ordering signatures:
 
 ```tsx
-T > T = boolean
-T >= T = boolean
-T < T = boolean
-T <= T = boolean
+number > number = boolean
+number >= number = boolean
+number < number = boolean
+number <= number = boolean
+
+bigint > bigint = boolean
+bigint >= bigint = boolean
+bigint < bigint = boolean
+bigint <= bigint = boolean
 ```
 
-Ordering support for non-primitive types is **TBD**.
+Ordering is not supported for `boolean`, `string`, arrays, objects, functions,
+or mixed `number`/`bigint` operands.
+
+Ordering support for future user-defined types is **TBD**.
 
 Equality support is type-specific:
 

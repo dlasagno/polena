@@ -78,6 +78,10 @@ export function isEqualityComparableType(type: Type): boolean {
   return type.kind === "primitive" && type.name !== "void";
 }
 
+export function isOrderingComparableType(type: Type): boolean {
+  return isNumericType(type);
+}
+
 export function inferArithmeticType(left: Type, right: Type): Type | undefined {
   if (isNumericType(left) && isNumericType(right) && left.name === right.name) {
     return left;

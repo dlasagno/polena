@@ -68,7 +68,7 @@ Status values:
 | Unary `!` | Implemented | Operand must be `boolean`. |
 | Unary `-` | Implemented | Operand must be numeric. |
 | Arithmetic operators | Implemented | Numeric operands only; `number` and `bigint` cannot be mixed. |
-| Comparison operators | Partially implemented | Compatible same-type operands are checked, and equality rejects arrays and functions; ordering rules for non-primitive types remain unresolved. |
+| Comparison operators | Implemented | Equality supports primitive values and rejects arrays and functions; ordering supports same-type `number` and `bigint` operands only. |
 | Logical `and` / `or` | Implemented | Operands must be `boolean`. |
 | String concatenation with `++` | Not implemented | Spec includes `++`, but the MVP does not tokenize or parse it. |
 | Array concatenation with `++` | Not implemented | Spec includes `++`, but the MVP does not tokenize or parse it. |

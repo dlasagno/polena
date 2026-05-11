@@ -572,6 +572,12 @@ const value = double(total);
     expect(executeValue(result.js)).toBe(84n);
   });
 
+  test("supports bigint ordering", () => {
+    const result = expectCompileOk("const value = 2n >= 1n;");
+
+    expect(executeValue(result.js)).toBe(true);
+  });
+
   test("supports array literals and checked indexing", () => {
     const result = expectCompileOk(`
 const values = [20, 22];
@@ -818,6 +824,57 @@ const value = add != add;
     expect(result.ok).toBe(false);
     expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
       "Operator '!=' cannot compare 'function' values.",
+    );
+  });
+
+  test("rejects ordering non-numeric primitive values", () => {
+    const stringResult = compile('const value = "a" < "b";');
+    const booleanResult = compile("const value = true > false;");
+
+    expect(stringResult.ok).toBe(false);
+    expect(stringResult.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Operator '<' cannot order 'string' values.",
+    );
+    expect(booleanResult.ok).toBe(false);
+    expect(booleanResult.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Operator '>' cannot order 'boolean' values.",
+    );
+  });
+
+  test("rejects ordering arrays", () => {
+    const result = compile(`
+const left = [1];
+const right = [1];
+const value = left < right;
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Operator '<' cannot order '[]number' values.",
+    );
+  });
+
+  test("rejects ordering functions", () => {
+    const result = compile(`
+fn add(a: number, b: number): number {
+  a + b
+}
+
+const value = add > add;
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Operator '>' cannot order 'function' values.",
+    );
+  });
+
+  test("rejects mixed number and bigint ordering", () => {
+    const result = compile("const value = 1 < 2n;");
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Operator '<' requires compatible operands, got 'number' and 'bigint'.",
     );
   });
 

@@ -29,6 +29,7 @@ import {
   inferArithmeticType,
   isEqualityComparableType,
   isNumericType,
+  isOrderingComparableType,
   preferredArithmeticType,
   primitiveType,
   sameType,
@@ -665,6 +666,39 @@ class Checker {
       return primitiveType("boolean");
     }
 
+    if (isOrderingOperator(operator)) {
+      if (
+        !sameType(leftType, rightType) &&
+        leftType.kind !== "unknown" &&
+        rightType.kind !== "unknown"
+      ) {
+        this.diagnostics.push(
+          error(
+            `Operator '${operator}' requires compatible operands, got '${formatType(leftType)}' and '${formatType(
+              rightType,
+            )}'.`,
+            span,
+            {
+              code: DiagnosticCode.IncompatibleOperands,
+              label: "these operands do not have compatible types",
+            },
+          ),
+        );
+      } else if (
+        leftType.kind !== "unknown" &&
+        rightType.kind !== "unknown" &&
+        !isOrderingComparableType(leftType)
+      ) {
+        this.diagnostics.push(
+          error(`Operator '${operator}' cannot order '${formatType(leftType)}' values.`, span, {
+            code: DiagnosticCode.IncompatibleOperands,
+            label: "this type does not support ordering comparison",
+          }),
+        );
+      }
+      return primitiveType("boolean");
+    }
+
     if (
       !sameType(leftType, rightType) &&
       leftType.kind !== "unknown" &&
@@ -984,6 +1018,10 @@ function isArithmeticOperator(operator: BinaryOperator): boolean {
   return (
     operator === "+" || operator === "-" || operator === "*" || operator === "/" || operator === "%"
   );
+}
+
+function isOrderingOperator(operator: BinaryOperator): boolean {
+  return operator === ">" || operator === ">=" || operator === "<" || operator === "<=";
 }
 
 function isCompoundAssignmentOperator(operator: AssignmentOperator): boolean {
