@@ -1,4 +1,5 @@
 import { error, type Diagnostic } from "./diagnostic";
+import { DiagnosticCode } from "./diagnostic-codes";
 import { makeLocation, spanFrom, type SourceLocation } from "./span";
 import type { Token, TokenKind } from "./token";
 
@@ -146,7 +147,7 @@ class Lexer {
     this.tokens.push({ kind: "Invalid", text: char, span });
     this.diagnostics.push(
       error(`Unexpected character '${char}'.`, span, {
-        code: "PLN001",
+        code: DiagnosticCode.UnexpectedCharacter,
         label: "this character is not part of Polena syntax",
       }),
     );
@@ -174,7 +175,7 @@ class Lexer {
         this.tokens.push({ kind: "Invalid", text, span });
         this.diagnostics.push(
           error("Bigint literals cannot have a fractional part.", span, {
-            code: "PLN003",
+            code: DiagnosticCode.MalformedLiteralOrEscape,
             label: "remove the decimal point or use a 'number' literal instead",
           }),
         );
@@ -209,7 +210,7 @@ class Lexer {
         const span = spanFrom(start, this.location());
         this.diagnostics.push(
           error("Unterminated string literal.", span, {
-            code: "PLN002",
+            code: DiagnosticCode.UnterminatedString,
             label: "string literal starts here but is not closed",
             notes: [{ kind: "help", message: 'add a closing `"` before the end of the line' }],
           }),
@@ -231,7 +232,7 @@ class Lexer {
       const span = spanFrom(start, this.location());
       this.diagnostics.push(
         error("Unterminated string literal.", span, {
-          code: "PLN002",
+          code: DiagnosticCode.UnterminatedString,
           label: "string literal starts here but is not closed",
           notes: [{ kind: "help", message: 'add a closing `"` before the end of the file' }],
         }),

@@ -22,6 +22,7 @@ import type {
   WhileExpression,
 } from "./ast";
 import { error, type Diagnostic } from "./diagnostic";
+import { DiagnosticCode } from "./diagnostic-codes";
 import { lex } from "./lexer";
 import { makeLocation, mergeSpans, spanFrom } from "./span";
 import type { Token, TokenKind } from "./token";
@@ -304,7 +305,7 @@ class Parser {
     if (type === undefined) {
       this.diagnostics.push(
         error("Expected a primitive type.", token.span, {
-          code: "PLN010",
+          code: DiagnosticCode.ExpectedTypeSyntax,
           label: "expected 'number', 'bigint', 'string', 'boolean', or 'void'",
         }),
       );
@@ -452,7 +453,7 @@ class Parser {
     const token = this.current();
     this.diagnostics.push(
       error("Expected an expression.", token.span, {
-        code: "PLN011",
+        code: DiagnosticCode.ExpectedExpression,
         label: "expected an expression here",
       }),
     );
@@ -560,7 +561,7 @@ class Parser {
     const token = this.current();
     this.diagnostics.push(
       error(message, token.span, {
-        code: "PLN012",
+        code: DiagnosticCode.ParseExpectedToken,
         label: "parser was looking here",
       }),
     );
@@ -593,7 +594,7 @@ class Parser {
 
     this.diagnostics.push(
       error("Expected assignment operator in assignment statement.", token.span, {
-        code: "PLN012",
+        code: DiagnosticCode.ParseExpectedToken,
         label: "parser was looking here",
       }),
     );
@@ -758,7 +759,7 @@ function parseStringParts(
       if (interpolationEnd === undefined) {
         diagnostics.push(
           error("Unterminated string interpolation.", span, {
-            code: "PLN004",
+            code: DiagnosticCode.UnterminatedInterpolation,
             label: "this interpolation is missing a closing '}'",
             notes: [{ kind: "help", message: "close the interpolation with '}'" }],
           }),
@@ -787,7 +788,7 @@ function parseStringParts(
 
       diagnostics.push(
         error(`Unsupported escape sequence '\\${escaped ?? ""}'.`, span, {
-          code: "PLN003",
+          code: DiagnosticCode.MalformedLiteralOrEscape,
           label: "this escape sequence is not supported",
         }),
       );
@@ -820,7 +821,7 @@ function parseInterpolationSource(
   if (source.length === 0) {
     diagnostics.push(
       error("String interpolation must contain an expression.", span, {
-        code: "PLN005",
+        code: DiagnosticCode.InvalidInterpolation,
         label: "this interpolation is empty",
       }),
     );
@@ -831,7 +832,7 @@ function parseInterpolationSource(
   if (lexResult.diagnostics.length > 0) {
     diagnostics.push(
       error("Invalid interpolation expression.", span, {
-        code: "PLN005",
+        code: DiagnosticCode.InvalidInterpolation,
         label: "this interpolation does not contain a valid expression",
         notes: [
           { kind: "note", message: lexResult.diagnostics[0]?.message ?? "invalid expression" },
@@ -846,7 +847,7 @@ function parseInterpolationSource(
   if (result.diagnostics.length > 0 || !result.consumedAll) {
     diagnostics.push(
       error("Invalid interpolation expression.", span, {
-        code: "PLN005",
+        code: DiagnosticCode.InvalidInterpolation,
         label: "this interpolation does not contain a valid expression",
         notes: [
           {

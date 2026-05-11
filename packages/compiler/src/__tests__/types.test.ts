@@ -1,0 +1,46 @@
+import { describe, expect, test } from "bun:test";
+import {
+  formatType,
+  functionType,
+  inferArithmeticType,
+  primitiveType,
+  sameType,
+  unknownType,
+} from "../types";
+
+describe("semantic types", () => {
+  test("treats identical primitive types as equal", () => {
+    expect(sameType(primitiveType("number"), primitiveType("number"))).toBe(true);
+    expect(sameType(primitiveType("number"), primitiveType("bigint"))).toBe(false);
+  });
+
+  test("treats structurally identical function types as equal", () => {
+    const left = functionType([primitiveType("number")], primitiveType("string"));
+    const right = functionType([primitiveType("number")], primitiveType("string"));
+
+    expect(sameType(left, right)).toBe(true);
+  });
+
+  test("formats user-facing type names", () => {
+    expect(formatType(primitiveType("number"))).toBe("number");
+    expect(formatType(primitiveType("bigint"))).toBe("bigint");
+    expect(formatType(primitiveType("string"))).toBe("string");
+    expect(formatType(primitiveType("boolean"))).toBe("boolean");
+    expect(formatType(primitiveType("void"))).toBe("void");
+    expect(formatType(functionType([], primitiveType("void")))).toBe("function");
+    expect(formatType(unknownType())).toBe("unknown");
+  });
+
+  test("infers arithmetic types for matching numeric operands", () => {
+    expect(inferArithmeticType(primitiveType("number"), primitiveType("number"))).toEqual(
+      primitiveType("number"),
+    );
+    expect(inferArithmeticType(primitiveType("bigint"), primitiveType("bigint"))).toEqual(
+      primitiveType("bigint"),
+    );
+  });
+
+  test("rejects arithmetic inference for mixed number and bigint operands", () => {
+    expect(inferArithmeticType(primitiveType("number"), primitiveType("bigint"))).toBeUndefined();
+  });
+});

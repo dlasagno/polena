@@ -18,32 +18,29 @@ import type {
   WhileExpression,
 } from "./ast";
 import { error, type Diagnostic } from "./diagnostic";
+import { DiagnosticCode } from "./diagnostic-codes";
 import { preludeFunctions } from "./prelude";
+import { Scope } from "./symbols";
 import type { Span } from "./span";
+import {
+  formatType,
+  functionType,
+  inferArithmeticType,
+  isNumericType,
+  preferredArithmeticType,
+  primitiveType,
+  sameType,
+  type Type,
+  unknownType,
+} from "./types";
 
 export type CheckResult = {
   readonly diagnostics: readonly Diagnostic[];
 };
 
-type ValueType =
-  | { readonly kind: "primitive"; readonly name: PrimitiveType }
-  | {
-      readonly kind: "function";
-      readonly params: readonly PrimitiveType[];
-      readonly returnType: PrimitiveType;
-    }
-  | { readonly kind: "unknown" };
-
-type SymbolInfo = {
-  readonly name: string;
-  readonly type: ValueType;
-  readonly span: Span;
-  readonly assignability: "mutable-variable" | "immutable-binding";
-};
-
 type LoopContext = {
   readonly expectsValue: boolean;
-  breakType?: ValueType;
+  breakType?: Type;
   sawValueBreak: boolean;
 };
 
@@ -57,25 +54,6 @@ type InferOptions = {
 export function check(program: Program): CheckResult {
   const checker = new Checker();
   return checker.check(program);
-}
-
-class Scope {
-  private readonly symbols = new Map<string, SymbolInfo>();
-
-  public constructor(private readonly parent?: Scope) {}
-
-  public declare(symbol: SymbolInfo): boolean {
-    if (this.symbols.has(symbol.name)) {
-      return false;
-    }
-
-    this.symbols.set(symbol.name, symbol);
-    return true;
-  }
-
-  public lookup(name: string): SymbolInfo | undefined {
-    return this.symbols.get(name) ?? this.parent?.lookup(name);
-  }
 }
 
 class Checker {
@@ -126,11 +104,10 @@ class Checker {
     for (const fn of preludeFunctions) {
       scope.declare({
         name: fn.name,
-        type: {
-          kind: "function",
-          params: fn.params,
-          returnType: fn.returnType,
-        },
+        type: functionType(
+          fn.params.map((param) => primitiveType(param)),
+          primitiveType(fn.returnType),
+        ),
         span,
         assignability: "immutable-binding",
       });
@@ -138,11 +115,10 @@ class Checker {
   }
 
   private declareFunction(scope: Scope, declaration: FunctionDeclaration): void {
-    const type: ValueType = {
-      kind: "function",
-      params: declaration.params.map((param) => param.type.name),
-      returnType: declaration.returnType.name,
-    };
+    const type = functionType(
+      declaration.params.map((param) => primitiveType(param.type.name)),
+      primitiveType(declaration.returnType.name),
+    );
 
     if (
       !scope.declare({
@@ -154,7 +130,7 @@ class Checker {
     ) {
       this.diagnostics.push(
         error(`Duplicate top-level name '${declaration.name}'.`, declaration.nameSpan, {
-          code: "PLN100",
+          code: DiagnosticCode.DuplicateName,
           label: "this name is already defined",
         }),
       );
@@ -189,7 +165,7 @@ class Checker {
           `Function '${declaration.name}' must return '${declaration.returnType.name}'.`,
           declaration.nameSpan,
           {
-            code: "PLN203",
+            code: DiagnosticCode.MissingReturn,
             label: "this function can finish without returning a value",
           },
         ),
@@ -262,7 +238,7 @@ class Checker {
     ) {
       this.diagnostics.push(
         error(`Duplicate parameter '${param.name}'.`, param.nameSpan, {
-          code: "PLN101",
+          code: DiagnosticCode.DuplicateParameter,
           label: "this parameter name is already used",
         }),
       );
@@ -298,7 +274,7 @@ class Checker {
     ) {
       this.diagnostics.push(
         error(`Duplicate name '${declaration.name}'.`, declaration.nameSpan, {
-          code: "PLN100",
+          code: DiagnosticCode.DuplicateName,
           label: "this name is already defined in this scope",
         }),
       );
@@ -320,7 +296,7 @@ class Checker {
     if (symbol === undefined) {
       this.diagnostics.push(
         error(`Unknown name '${statement.name}'.`, statement.nameSpan, {
-          code: "PLN102",
+          code: DiagnosticCode.UnknownName,
           label: "no value with this name is in scope",
           notes: [
             {
@@ -336,7 +312,7 @@ class Checker {
     if (symbol.assignability !== "mutable-variable") {
       this.diagnostics.push(
         error(`Cannot assign to '${statement.name}'.`, statement.nameSpan, {
-          code: "PLN206",
+          code: DiagnosticCode.CannotAssign,
           label: "this binding is not mutable",
           notes: [{ kind: "help", message: "only 'let' bindings may be reassigned" }],
         }),
@@ -345,7 +321,7 @@ class Checker {
     }
 
     if (isCompoundAssignmentOperator(statement.operator)) {
-      if (symbol.type.kind === "primitive" && isNumericPrimitiveType(symbol.type.name)) {
+      if (isNumericType(symbol.type)) {
         this.expectType(valueType, symbol.type, statement.value.span);
         return;
       }
@@ -380,7 +356,7 @@ class Checker {
     if (loopContext === undefined) {
       this.diagnostics.push(
         error("Break statement must be inside a loop.", statement.span, {
-          code: "PLN207",
+          code: DiagnosticCode.BreakOutsideLoop,
           label: "this break does not have a loop to exit",
         }),
       );
@@ -391,7 +367,7 @@ class Checker {
       if (loopContext.expectsValue) {
         this.diagnostics.push(
           error("Value-producing while expressions must use 'break value;'.", statement.span, {
-            code: "PLN209",
+            code: DiagnosticCode.MissingBreakValue,
             label: "this loop needs a value when it breaks early",
             notes: [
               {
@@ -418,7 +394,7 @@ class Checker {
           "Break with a value is only allowed inside value-producing while expressions.",
           statement.span,
           {
-            code: "PLN210",
+            code: DiagnosticCode.BreakValueInStatementLoop,
             label: "this loop does not produce a value",
             notes: [
               {
@@ -449,7 +425,7 @@ class Checker {
 
     this.diagnostics.push(
       error("Continue statement must be inside a loop.", statement.span, {
-        code: "PLN208",
+        code: DiagnosticCode.ContinueOutsideLoop,
         label: "this continue does not have a loop to continue",
       }),
     );
@@ -459,7 +435,7 @@ class Checker {
     expression: Expression,
     scope: Scope,
     options: InferOptions = { ifAsValue: true, whileAsValue: true },
-  ): ValueType {
+  ): Type {
     switch (expression.kind) {
       case "NumberLiteral":
         return primitiveType("number");
@@ -474,7 +450,7 @@ class Checker {
         if (symbol === undefined) {
           this.diagnostics.push(
             error(`Unknown name '${expression.name}'.`, expression.span, {
-              code: "PLN102",
+              code: DiagnosticCode.UnknownName,
               label: "no value with this name is in scope",
               notes: [
                 {
@@ -520,7 +496,7 @@ class Checker {
     span: Span,
     scope: Scope,
     options: InferOptions,
-  ): ValueType {
+  ): Type {
     const operandType = this.inferExpression(operand, scope, options);
 
     switch (operator) {
@@ -528,7 +504,7 @@ class Checker {
         this.expectType(operandType, primitiveType("boolean"), span);
         return primitiveType("boolean");
       case "-":
-        if (operandType.kind === "primitive" && isNumericPrimitiveType(operandType.name)) {
+        if (isNumericType(operandType)) {
           return operandType;
         }
 
@@ -541,7 +517,7 @@ class Checker {
     expression: Extract<Expression, { kind: "StringLiteral" }>,
     scope: Scope,
     options: InferOptions,
-  ): ValueType {
+  ): Type {
     for (const part of expression.parts) {
       if (part.kind === "StringInterpolation") {
         this.inferExpression(part.expression, scope, options);
@@ -558,17 +534,17 @@ class Checker {
     span: Span,
     scope: Scope,
     options: InferOptions,
-  ): ValueType {
+  ): Type {
     const leftType = this.inferExpression(left, scope, options);
     const rightType = this.inferExpression(right, scope, options);
 
     if (isArithmeticOperator(operator)) {
       const arithmeticType = inferArithmeticType(leftType, rightType);
       if (arithmeticType !== undefined) {
-        return primitiveType(arithmeticType);
+        return arithmeticType;
       }
 
-      if (isNumericValueType(leftType) && isNumericValueType(rightType)) {
+      if (isNumericType(leftType) && isNumericType(rightType)) {
         this.diagnostics.push(
           error(
             `Operator '${operator}' requires compatible operands, got '${formatType(leftType)}' and '${formatType(
@@ -576,7 +552,7 @@ class Checker {
             )}'.`,
             span,
             {
-              code: "PLN204",
+              code: DiagnosticCode.IncompatibleOperands,
               label: "these operands do not have compatible types",
             },
           ),
@@ -585,9 +561,9 @@ class Checker {
       }
 
       const expectedNumericType = preferredArithmeticType(leftType, rightType);
-      this.expectType(leftType, primitiveType(expectedNumericType), left.span);
-      this.expectType(rightType, primitiveType(expectedNumericType), right.span);
-      return primitiveType(expectedNumericType);
+      this.expectType(leftType, expectedNumericType, left.span);
+      this.expectType(rightType, expectedNumericType, right.span);
+      return expectedNumericType;
     }
 
     if (operator === "and" || operator === "or") {
@@ -608,7 +584,7 @@ class Checker {
           )}'.`,
           span,
           {
-            code: "PLN204",
+            code: DiagnosticCode.IncompatibleOperands,
             label: "these operands do not have compatible types",
           },
         ),
@@ -618,11 +594,7 @@ class Checker {
     return primitiveType("boolean");
   }
 
-  private inferIfExpression(
-    expression: IfExpression,
-    scope: Scope,
-    options: InferOptions,
-  ): ValueType {
+  private inferIfExpression(expression: IfExpression, scope: Scope, options: InferOptions): Type {
     const conditionType = this.inferExpression(expression.condition, scope, {
       ifAsValue: true,
       whileAsValue: true,
@@ -637,7 +609,7 @@ class Checker {
       if (options.ifAsValue) {
         this.diagnostics.push(
           error("If expression used as a value must have an else branch.", expression.span, {
-            code: "PLN205",
+            code: DiagnosticCode.MissingIfElseValue,
             label: "this if expression can finish without producing a value",
             notes: [
               { kind: "help", message: "add an else branch that produces a compatible value" },
@@ -663,7 +635,7 @@ class Checker {
     expression: WhileExpression,
     scope: Scope,
     options: InferOptions,
-  ): ValueType {
+  ): Type {
     const conditionType = this.inferExpression(expression.condition, scope, {
       ifAsValue: true,
       whileAsValue: true,
@@ -703,7 +675,7 @@ class Checker {
     if (expression.elseBlock === undefined) {
       this.diagnostics.push(
         error("While expression used as a value must have an else branch.", expression.span, {
-          code: "PLN211",
+          code: DiagnosticCode.MissingWhileElseValue,
           label: "this while expression can finish without producing a value",
           notes: [{ kind: "help", message: "add an else branch that produces a compatible value" }],
         }),
@@ -720,7 +692,7 @@ class Checker {
     return loopContext.breakType.kind === "unknown" ? elseType : loopContext.breakType;
   }
 
-  private inferBlockType(block: Block, parentScope: Scope, options: InferOptions): ValueType {
+  private inferBlockType(block: Block, parentScope: Scope, options: InferOptions): Type {
     const scope = new Scope(parentScope);
     const returnType = options.returnType ?? "void";
 
@@ -737,7 +709,7 @@ class Checker {
     expression: Extract<Expression, { kind: "CallExpression" }>,
     scope: Scope,
     options: InferOptions,
-  ): ValueType {
+  ): Type {
     const calleeType = this.inferExpression(expression.callee, scope, options);
 
     if (calleeType.kind === "unknown") {
@@ -750,7 +722,7 @@ class Checker {
     if (calleeType.kind !== "function") {
       this.diagnostics.push(
         error(`Cannot call value of type '${formatType(calleeType)}'.`, expression.callee.span, {
-          code: "PLN200",
+          code: DiagnosticCode.CannotCallNonFunction,
           label: "this value is not callable",
         }),
       );
@@ -763,7 +735,7 @@ class Checker {
           `Expected ${calleeType.params.length} argument(s), got ${expression.args.length}.`,
           expression.span,
           {
-            code: "PLN201",
+            code: DiagnosticCode.WrongArgumentCount,
             label: "wrong number of arguments in this call",
           },
         ),
@@ -779,7 +751,7 @@ class Checker {
         continue;
       }
 
-      this.expectType(this.inferExpression(arg, scope, options), primitiveType(expected), arg.span);
+      this.expectType(this.inferExpression(arg, scope, options), expected, arg.span);
     }
 
     for (let index = count; index < expression.args.length; index += 1) {
@@ -789,7 +761,7 @@ class Checker {
       }
     }
 
-    return primitiveType(calleeType.returnType);
+    return calleeType.returnType;
   }
 
   private checkIgnoredBlock(block: Block, parentScope: Scope, options: InferOptions): void {
@@ -825,7 +797,7 @@ class Checker {
     });
   }
 
-  private recordLoopBreakType(loopContext: LoopContext, actualType: ValueType, span: Span): void {
+  private recordLoopBreakType(loopContext: LoopContext, actualType: Type, span: Span): void {
     if (loopContext.breakType === undefined) {
       loopContext.breakType = actualType;
       loopContext.sawValueBreak = true;
@@ -839,14 +811,14 @@ class Checker {
     }
   }
 
-  private expectType(actual: ValueType, expected: ValueType, span: Span): void {
+  private expectType(actual: Type, expected: Type, span: Span): void {
     if (actual.kind === "unknown" || expected.kind === "unknown" || sameType(actual, expected)) {
       return;
     }
 
     this.diagnostics.push(
       error(`Expected '${formatType(expected)}', got '${formatType(actual)}'.`, span, {
-        code: "PLN202",
+        code: DiagnosticCode.TypeMismatch,
         label: `expected '${formatType(expected)}' here`,
         notes: [
           {
@@ -859,77 +831,10 @@ class Checker {
   }
 }
 
-function primitiveType(name: PrimitiveType): ValueType {
-  return { kind: "primitive", name };
-}
-
-function unknownType(): ValueType {
-  return { kind: "unknown" };
-}
-
-function sameType(left: ValueType, right: ValueType): boolean {
-  if (left.kind !== right.kind) {
-    return false;
-  }
-
-  switch (left.kind) {
-    case "primitive":
-      return right.kind === "primitive" && left.name === right.name;
-    case "function":
-      return left === right;
-    case "unknown":
-      return true;
-  }
-}
-
-function formatType(type: ValueType): string {
-  switch (type.kind) {
-    case "primitive":
-      return type.name;
-    case "function":
-      return "function";
-    case "unknown":
-      return "unknown";
-  }
-}
-
 function isArithmeticOperator(operator: BinaryOperator): boolean {
   return (
     operator === "+" || operator === "-" || operator === "*" || operator === "/" || operator === "%"
   );
-}
-
-function inferArithmeticType(left: ValueType, right: ValueType): PrimitiveType | undefined {
-  if (
-    left.kind === "primitive" &&
-    right.kind === "primitive" &&
-    left.name === right.name &&
-    isNumericPrimitiveType(left.name)
-  ) {
-    return left.name;
-  }
-
-  return undefined;
-}
-
-function preferredArithmeticType(left: ValueType, right: ValueType): "number" | "bigint" {
-  if (left.kind === "primitive" && isNumericPrimitiveType(left.name)) {
-    return left.name;
-  }
-
-  if (right.kind === "primitive" && isNumericPrimitiveType(right.name)) {
-    return right.name;
-  }
-
-  return "number";
-}
-
-function isNumericValueType(type: ValueType): type is Extract<ValueType, { kind: "primitive" }> {
-  return type.kind === "primitive" && isNumericPrimitiveType(type.name);
-}
-
-function isNumericPrimitiveType(name: PrimitiveType): name is "number" | "bigint" {
-  return name === "number" || name === "bigint";
 }
 
 function isCompoundAssignmentOperator(operator: AssignmentOperator): boolean {
