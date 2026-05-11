@@ -49,8 +49,8 @@ Candidate work:
   `docs/implementation-status.md` aligned with compiler behavior.
 - Add more end-to-end example programs that exercise functions, arrays,
   expression-valued control flow, checked indexing, and diagnostics.
-- Decide whether equality should reject arrays and functions, then update the
-  spec, checker, tests, and implementation status together.
+- Keep equality semantics for unsupported types covered by spec text, checker
+  diagnostics, tests, and implementation status.
 
 CLI:
 
@@ -411,11 +411,10 @@ architecture are stronger:
 The next few useful steps are:
 
 1. Stabilize diagnostics and tests for the current MVP.
-2. Resolve the known equality semantics gap.
-3. Specify and implement `type` declarations.
-4. Add object types and object literals as an end-to-end feature.
-5. Implement fieldless enums and exhaustive `match`.
-6. Revisit `Option`, `Result`, and generics with concrete enum experience.
+2. Specify and implement `type` declarations.
+3. Add object types and object literals as an end-to-end feature.
+4. Implement fieldless enums and exhaustive `match`.
+5. Revisit `Option`, `Result`, and generics with concrete enum experience.
 
 This order keeps each milestone useful on its own while building toward the
 language features that unlock larger programs.

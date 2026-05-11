@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import type { CompileResult } from "../compiler";
 import { compile, lex, parse } from "../compiler";
 
@@ -515,6 +516,17 @@ const value = add(answer, 1);
 
     expect(result.js).toContain('let name = "Ada";');
     expect(executeValue(result.js)).toBe(43);
+  });
+
+  test("compiles the checked-in MVP example", () => {
+    const source = readFileSync(
+      new URL("../../../../examples/basic.plna", import.meta.url),
+      "utf8",
+    );
+    const result = expectCompileOk(source);
+
+    expect(result.js).toContain("__polenaIndex");
+    expect(result.js).toContain("const thresholds = [70, 90];");
   });
 
   test("supports reassigning let bindings", () => {

@@ -8,7 +8,7 @@ The current implementation is a very small compiler MVP for testing basic Polena
 programs end-to-end. It supports:
 
 - Line comments with `//`
-- `number`, `string`, and `boolean` literals
+- `number`, `bigint`, `string`, and `boolean` literals
 - String interpolation and multiline strings
 - `const` and `let` declarations with required initializers
 - Basic reassignment for `let` bindings
@@ -16,6 +16,7 @@ programs end-to-end. It supports:
 - Optional variable type annotations
 - Function declarations with typed parameters and explicit return types
 - Final-expression function returns and explicit `return expr;`
+- `void` function returns
 - Function calls
 - A provisional prelude with `println(message: string): void`
 - Unary `!` and `-`
