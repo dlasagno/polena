@@ -12,6 +12,10 @@ export type TypeNode =
       readonly kind: "ArrayType";
       readonly element: TypeNode;
       readonly span: Span;
+    }
+  | {
+      readonly kind: "UnknownType";
+      readonly span: Span;
     };
 
 export type Program = {
@@ -51,6 +55,7 @@ export type Block = {
   readonly statements: readonly Statement[];
   readonly finalExpression?: Expression;
   readonly span: Span;
+  readonly isMissing?: boolean;
 };
 
 export type Statement =

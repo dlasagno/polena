@@ -124,6 +124,8 @@ class Checker {
         return primitiveType(typeNode.name);
       case "ArrayType":
         return arrayType(this.typeFromNode(typeNode.element));
+      case "UnknownType":
+        return unknownType();
     }
   }
 
@@ -154,6 +156,10 @@ class Checker {
 
     for (const param of declaration.params) {
       this.declareParameter(scope, param);
+    }
+
+    if (declaration.body.isMissing === true) {
+      return;
     }
 
     const explicitReturns = this.checkBlock(declaration.body, scope, returnType);
@@ -847,6 +853,10 @@ class Checker {
   }
 
   private inferBlockType(block: Block, parentScope: Scope, options: InferOptions): Type {
+    if (block.isMissing === true) {
+      return unknownType();
+    }
+
     const scope = new Scope(parentScope);
     const returnType = options.returnType ?? primitiveType("void");
 
@@ -975,6 +985,10 @@ class Checker {
   }
 
   private checkIgnoredBlock(block: Block, parentScope: Scope, options: InferOptions): void {
+    if (block.isMissing === true) {
+      return;
+    }
+
     const scope = new Scope(parentScope);
     const returnType = options.returnType ?? primitiveType("void");
     this.checkBlockInLoop(block, scope, returnType, options.loopContext);

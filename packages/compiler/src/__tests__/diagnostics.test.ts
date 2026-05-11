@@ -72,6 +72,132 @@ describe("diagnostic regressions", () => {
     expect(result.diagnostics).toHaveLength(1);
   });
 
+  test("recovers after a malformed grouped expression without cascading", () => {
+    const result = analyze("const value = (1 2);");
+
+    expectDiagnostic(result.diagnostics[0], {
+      code: DiagnosticCode.ParseExpectedToken,
+      message: "Expected ')' after expression.",
+      label: "parser was looking here",
+      span: span(17, 1, 18, 18, 1, 19),
+    });
+    expect(result.diagnostics).toHaveLength(1);
+  });
+
+  test("recovers after malformed call arguments without cascading", () => {
+    const result = analyze(`
+fn add(a: number): number {
+  a
+}
+
+const value = add(1 2);
+`);
+
+    expectDiagnostic(result.diagnostics[0], {
+      code: DiagnosticCode.ParseExpectedToken,
+      message: "Expected ')' after arguments.",
+      label: "parser was looking here",
+      span: span(56, 6, 21, 57, 6, 22),
+    });
+    expect(result.diagnostics).toHaveLength(1);
+  });
+
+  test("recovers after malformed array literals without cascading", () => {
+    const result = analyze("const values = [1 2];");
+
+    expectDiagnostic(result.diagnostics[0], {
+      code: DiagnosticCode.ParseExpectedToken,
+      message: "Expected ']' after array literal.",
+      label: "parser was looking here",
+      span: span(18, 1, 19, 19, 1, 20),
+    });
+    expect(result.diagnostics).toHaveLength(1);
+  });
+
+  test("recovers after malformed variable type annotations without checker noise", () => {
+    const result = analyze("const value: = 1;");
+
+    expectDiagnostic(result.diagnostics[0], {
+      code: DiagnosticCode.ExpectedTypeSyntax,
+      message: "Expected a primitive type.",
+      label: "expected a type such as 'number', 'string', or '[]number'",
+      span: span(13, 1, 14, 14, 1, 15),
+    });
+    expect(result.diagnostics).toHaveLength(1);
+  });
+
+  test("recovers after malformed function return types without checker noise", () => {
+    const result = analyze("fn value(): { 1 }");
+
+    expectDiagnostic(result.diagnostics[0], {
+      code: DiagnosticCode.ExpectedTypeSyntax,
+      message: "Expected a primitive type.",
+      label: "expected a type such as 'number', 'string', or '[]number'",
+      span: span(12, 1, 13, 13, 1, 14),
+    });
+    expect(result.diagnostics).toHaveLength(1);
+  });
+
+  test("recovers after missing function bodies without missing-return noise", () => {
+    const result = analyze("fn value(): number");
+
+    expectDiagnostic(result.diagnostics[0], {
+      code: DiagnosticCode.ParseExpectedToken,
+      message: "Expected '{' before function body.",
+      label: "parser was looking here",
+      span: span(18, 1, 19, 18, 1, 19),
+    });
+    expect(result.diagnostics).toHaveLength(1);
+  });
+
+  test("reports missing if, else, and while blocks with context-specific messages", () => {
+    const missingIfBlock = analyze("const value = if true 1 else { 2 };");
+    const missingElseBlock = analyze("const value = if true { 1 } else 2;");
+    const missingWhileBody = analyze("while true break;");
+
+    expectDiagnostic(missingIfBlock.diagnostics[0], {
+      code: DiagnosticCode.ParseExpectedToken,
+      message: "Expected '{' before if body.",
+      label: "parser was looking here",
+      span: span(22, 1, 23, 23, 1, 24),
+    });
+    expect(missingIfBlock.diagnostics).toHaveLength(1);
+
+    expectDiagnostic(missingElseBlock.diagnostics[0], {
+      code: DiagnosticCode.ParseExpectedToken,
+      message: "Expected '{' before else block.",
+      label: "parser was looking here",
+      span: span(33, 1, 34, 34, 1, 35),
+    });
+    expect(missingElseBlock.diagnostics).toHaveLength(1);
+
+    expectDiagnostic(missingWhileBody.diagnostics[0], {
+      code: DiagnosticCode.ParseExpectedToken,
+      message: "Expected '{' before while body.",
+      label: "parser was looking here",
+      span: span(11, 1, 12, 16, 1, 17),
+    });
+    expect(missingWhileBody.diagnostics).toHaveLength(1);
+  });
+
+  test("reports trailing call commas without arity noise", () => {
+    const result = analyze(`
+fn add(a: number): number {
+  a
+}
+
+const value = add(1,);
+`);
+
+    expectDiagnostic(result.diagnostics[0], {
+      code: DiagnosticCode.ExpectedExpression,
+      message: "Expected an expression.",
+      label: "expected an expression here",
+      span: span(56, 6, 21, 57, 6, 22),
+    });
+    expect(result.diagnostics).toHaveLength(1);
+  });
+
   test("reports unknown names with stable help text", () => {
     const result = analyze("const value = missing;");
 

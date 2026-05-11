@@ -47,7 +47,9 @@ class Parser {
     const declarations: TopLevelDeclaration[] = [];
 
     while (!this.check("Eof")) {
+      const startIndex = this.index;
       declarations.push(this.parseTopLevelDeclaration());
+      this.ensureProgress(startIndex);
     }
 
     const start = this.tokens[0]?.span.start ?? makeLocation(0, 1, 1);
@@ -116,7 +118,7 @@ class Parser {
     this.expect("RightParen", "Expected ')' after function parameters.");
     this.expect("Colon", "Expected ':' before function return type.");
     const returnType = this.parseType();
-    const body = this.parseBlock();
+    const body = this.parseBlock("function body");
 
     return {
       kind: "FunctionDeclaration",
@@ -143,34 +145,53 @@ class Parser {
     };
   }
 
-  private parseBlock(): Block {
-    const leftBrace = this.expect("LeftBrace", "Expected '{' before function body.");
+  private parseBlock(context: string): Block {
+    if (!this.check("LeftBrace")) {
+      const token = this.current();
+      this.diagnostics.push(
+        error(`Expected '{' before ${context}.`, token.span, {
+          code: DiagnosticCode.ParseExpectedToken,
+          label: "parser was looking here",
+        }),
+      );
+      this.recoverMissingBlock();
+      return { kind: "Block", statements: [], span: token.span, isMissing: true };
+    }
+
+    const leftBrace = this.advance();
     const statements: Statement[] = [];
     let finalExpression: Expression | undefined;
 
     while (!this.check("RightBrace") && !this.check("Eof")) {
+      const startIndex = this.index;
+
       if (this.check("Const") || this.check("Let")) {
         statements.push(this.parseVariableDeclaration(true));
+        this.ensureProgress(startIndex);
         continue;
       }
 
       if (this.check("Return")) {
         statements.push(this.parseReturnStatement());
+        this.ensureProgress(startIndex);
         continue;
       }
 
       if (this.check("Break")) {
         statements.push(this.parseBreakStatement());
+        this.ensureProgress(startIndex);
         continue;
       }
 
       if (this.check("Continue")) {
         statements.push(this.parseContinueStatement());
+        this.ensureProgress(startIndex);
         continue;
       }
 
       if (this.isAssignmentStatementStart()) {
         statements.push(this.parseAssignmentStatement());
+        this.ensureProgress(startIndex);
         continue;
       }
 
@@ -181,6 +202,7 @@ class Parser {
           expression,
           span: expression.span,
         });
+        this.ensureProgress(startIndex);
         continue;
       }
 
@@ -191,6 +213,7 @@ class Parser {
           expression,
           span: mergeSpans(expression.span, semicolon.span),
         });
+        this.ensureProgress(startIndex);
         continue;
       }
 
@@ -320,8 +343,10 @@ class Parser {
           label: "expected a type such as 'number', 'string', or '[]number'",
         }),
       );
-      this.advance();
-      return { kind: "PrimitiveType", name: "void", span: token.span };
+      if (!this.isTypeRecoveryBoundary()) {
+        this.advance();
+      }
+      return { kind: "UnknownType", span: token.span };
     }
 
     this.advance();
@@ -385,12 +410,29 @@ class Parser {
         const args: Expression[] = [];
 
         if (!this.check("RightParen")) {
-          do {
+          while (true) {
             args.push(this.parseExpression());
-          } while (this.match("Comma"));
+
+            if (!this.match("Comma")) {
+              break;
+            }
+
+            if (this.check("RightParen")) {
+              this.diagnostics.push(
+                error("Expected an expression.", this.current().span, {
+                  code: DiagnosticCode.ExpectedExpression,
+                  label: "expected an expression here",
+                }),
+              );
+              break;
+            }
+          }
         }
 
-        const rightParen = this.expect("RightParen", "Expected ')' after arguments.");
+        const rightParen = this.expectClosingDelimiter(
+          "RightParen",
+          "Expected ')' after arguments.",
+        );
         expression = {
           kind: "CallExpression",
           callee: expression,
@@ -404,7 +446,10 @@ class Parser {
 
       if (this.match("LeftBracket")) {
         const index = this.parseExpression();
-        const rightBracket = this.expect("RightBracket", "Expected ']' after array index.");
+        const rightBracket = this.expectClosingDelimiter(
+          "RightBracket",
+          "Expected ']' after array index.",
+        );
         expression = {
           kind: "IndexExpression",
           target: expression,
@@ -490,7 +535,7 @@ class Parser {
 
     if (this.match("LeftParen")) {
       const expression = this.parseExpression();
-      this.expect("RightParen", "Expected ')' after expression.");
+      this.expectClosingDelimiter("RightParen", "Expected ')' after expression.");
       return expression;
     }
 
@@ -526,7 +571,10 @@ class Parser {
       } while (this.match("Comma"));
     }
 
-    const rightBracket = this.expect("RightBracket", "Expected ']' after array literal.");
+    const rightBracket = this.expectClosingDelimiter(
+      "RightBracket",
+      "Expected ']' after array literal.",
+    );
     return {
       kind: "ArrayLiteral",
       elements,
@@ -537,11 +585,11 @@ class Parser {
   private parseIfExpression(): IfExpression {
     const ifToken = this.expect("If", "Expected 'if'.");
     const condition = this.parseCondition("if");
-    const thenBlock = this.parseBlock();
+    const thenBlock = this.parseBlock("if body");
     let elseBlock: Block | undefined;
 
     if (this.match("Else")) {
-      elseBlock = this.parseBlock();
+      elseBlock = this.parseBlock("else block");
     }
 
     return {
@@ -564,11 +612,11 @@ class Parser {
       this.expect("RightParen", "Expected ')' after while continuation.");
     }
 
-    const body = this.parseBlock();
+    const body = this.parseBlock("while body");
     let elseBlock: Block | undefined;
 
     if (this.match("Else")) {
-      elseBlock = this.parseBlock();
+      elseBlock = this.parseBlock("else block");
     }
 
     return {
@@ -636,6 +684,30 @@ class Parser {
     return token;
   }
 
+  private expectClosingDelimiter(kind: "RightParen" | "RightBracket", message: string): Token {
+    if (this.check(kind)) {
+      return this.advance();
+    }
+
+    const token = this.current();
+    this.diagnostics.push(
+      error(message, token.span, {
+        code: DiagnosticCode.ParseExpectedToken,
+        label: "parser was looking here",
+      }),
+    );
+
+    while (!this.check(kind) && !this.isClosingDelimiterRecoveryBoundary()) {
+      this.advance();
+    }
+
+    if (this.check(kind)) {
+      return this.advance();
+    }
+
+    return token;
+  }
+
   private match(kind: TokenKind): boolean {
     if (!this.check(kind)) {
       return false;
@@ -666,6 +738,49 @@ class Parser {
     }
   }
 
+  private isClosingDelimiterRecoveryBoundary(): boolean {
+    switch (this.current().kind) {
+      case "Semicolon":
+      case "RightBrace":
+      case "Eof":
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  private isTypeRecoveryBoundary(): boolean {
+    switch (this.current().kind) {
+      case "Equal":
+      case "LeftBrace":
+      case "RightParen":
+      case "Comma":
+      case "Semicolon":
+      case "Eof":
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  private recoverMissingBlock(): void {
+    while (!this.isMissingBlockRecoveryBoundary()) {
+      this.advance();
+    }
+  }
+
+  private isMissingBlockRecoveryBoundary(): boolean {
+    switch (this.current().kind) {
+      case "Else":
+      case "Semicolon":
+      case "RightBrace":
+      case "Eof":
+        return true;
+      default:
+        return false;
+    }
+  }
+
   private advanceAssignmentOperator(): Token {
     const token = this.current();
     const operator = assignmentOperatorFromToken(token.kind);
@@ -688,6 +803,12 @@ class Parser {
       this.index += 1;
     }
     return token;
+  }
+
+  private ensureProgress(startIndex: number): void {
+    if (this.index === startIndex && !this.check("Eof")) {
+      this.advance();
+    }
   }
 
   private previous(): Token {
