@@ -20,7 +20,7 @@ import type {
 import { error, type Diagnostic } from "./diagnostic";
 import { DiagnosticCode } from "./diagnostic-codes";
 import { preludeFunctions } from "./prelude";
-import { Scope } from "./symbols";
+import { Scope, type SymbolInfo } from "./symbols";
 import type { Span } from "./span";
 import {
   arrayType,
@@ -133,21 +133,19 @@ class Checker {
       this.typeFromNode(declaration.returnType),
     );
 
-    if (
-      !scope.declare({
+    this.declareName(
+      scope,
+      {
         name: declaration.name,
         type,
         span: declaration.nameSpan,
         assignability: "immutable-binding",
-      })
-    ) {
-      this.diagnostics.push(
-        error(`Duplicate top-level name '${declaration.name}'.`, declaration.nameSpan, {
-          code: DiagnosticCode.DuplicateName,
-          label: "this name is already defined",
-        }),
-      );
-    }
+      },
+      {
+        duplicateMessage: `Duplicate top-level name '${declaration.name}'.`,
+        duplicateLabel: "this name is already defined",
+      },
+    );
   }
 
   private checkFunction(declaration: FunctionDeclaration, parentScope: Scope): void {
@@ -239,21 +237,20 @@ class Checker {
   }
 
   private declareParameter(scope: Scope, param: Parameter): void {
-    if (
-      !scope.declare({
+    this.declareName(
+      scope,
+      {
         name: param.name,
         type: this.typeFromNode(param.type),
         span: param.nameSpan,
         assignability: "immutable-binding",
-      })
-    ) {
-      this.diagnostics.push(
-        error(`Duplicate parameter '${param.name}'.`, param.nameSpan, {
-          code: DiagnosticCode.DuplicateParameter,
-          label: "this parameter name is already used",
-        }),
-      );
-    }
+      },
+      {
+        duplicateMessage: `Duplicate parameter '${param.name}'.`,
+        duplicateLabel: "this parameter name is already used",
+        duplicateCode: DiagnosticCode.DuplicateParameter,
+      },
+    );
   }
 
   private checkVariableDeclaration(
@@ -277,21 +274,51 @@ class Checker {
       this.expectType(initializerType, bindingType, declaration.initializer.span);
     }
 
-    if (
-      !scope.declare({
+    this.declareName(
+      scope,
+      {
         name: declaration.name,
         type: bindingType,
         span: declaration.nameSpan,
         assignability: declaration.mutability === "let" ? "mutable-variable" : "immutable-binding",
-      })
-    ) {
+      },
+      {
+        duplicateMessage: `Duplicate name '${declaration.name}'.`,
+        duplicateLabel: "this name is already defined in this scope",
+      },
+    );
+  }
+
+  private declareName(
+    scope: Scope,
+    symbol: SymbolInfo,
+    messages: {
+      readonly duplicateMessage: string;
+      readonly duplicateLabel: string;
+      readonly duplicateCode?: string;
+    },
+  ): void {
+    if (scope.lookupLocal(symbol.name) !== undefined) {
       this.diagnostics.push(
-        error(`Duplicate name '${declaration.name}'.`, declaration.nameSpan, {
-          code: DiagnosticCode.DuplicateName,
-          label: "this name is already defined in this scope",
+        error(messages.duplicateMessage, symbol.span, {
+          code: messages.duplicateCode ?? DiagnosticCode.DuplicateName,
+          label: messages.duplicateLabel,
         }),
       );
+      return;
     }
+
+    if (scope.lookupParent(symbol.name) !== undefined) {
+      this.diagnostics.push(
+        error(`Name '${symbol.name}' shadows an existing name.`, symbol.span, {
+          code: DiagnosticCode.DuplicateName,
+          label: "this name is already defined in an outer scope",
+        }),
+      );
+      return;
+    }
+
+    scope.declare(symbol);
   }
 
   private checkAssignmentStatement(

@@ -342,13 +342,19 @@ count = count + 1;
 
 ## 11.3 Shadowing
 
-Shadowing is **TBD**.
+The initial compiler MVP does not allow a declaration to reuse a name that is
+already declared in the same scope or in an outer scope.
+
+More expressive shadowing behavior is **TBD**, including Rust-style variable
+redeclaration shadowing where a name may be redeclared to produce a new binding,
+possibly with a different type.
 
 Potential options:
 
 1. Allow shadowing in inner scopes.
 2. Disallow shadowing entirely.
 3. Allow explicit shadowing using a dedicated syntax.
+4. Allow same-scope variable redeclaration shadowing.
 
 ---
 

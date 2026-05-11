@@ -57,7 +57,7 @@ Status values:
 | Compound assignment | Implemented | `+=`, `-=`, `*=`, `/=`, `%=` for numeric `let` bindings. |
 | Assignment to array elements | Not implemented | Spec direction allows checked index assignment. |
 | Assignment to object fields | Not implemented | Objects are not implemented. |
-| Shadowing rules | Not implemented | Still TBD in the spec. |
+| Shadowing rules | Partially implemented | The MVP rejects duplicate names in the same scope and shadowing names from outer scopes; future redeclaration shadowing remains TBD in the spec. |
 
 ---
 

@@ -781,6 +781,67 @@ const value = while i < 3 : (i += 1) {
     );
   });
 
+  test("rejects duplicate local variables", () => {
+    const result = compile(`
+fn value(): number {
+  const count = 1;
+  const count = 2;
+  count
+}
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Duplicate name 'count'.",
+    );
+  });
+
+  test("rejects duplicate top-level variable and function names", () => {
+    const result = compile(`
+const value = 1;
+
+fn value(): number {
+  2
+}
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Duplicate name 'value'.",
+    );
+  });
+
+  test("rejects local variables that duplicate parameters", () => {
+    const result = compile(`
+fn value(count: number): number {
+  const count = 1;
+  count
+}
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Duplicate name 'count'.",
+    );
+  });
+
+  test("rejects shadowing names from outer scopes", () => {
+    const result = compile(`
+const count = 1;
+const value = if true {
+  const count = 2;
+  count
+} else {
+  count
+};
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Name 'count' shadows an existing name.",
+    );
+  });
+
   test("rejects incompatible binary operands", () => {
     const result = compile('const value = 1 + "x";');
 

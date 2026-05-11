@@ -22,6 +22,14 @@ export class Scope {
     return true;
   }
 
+  public lookupLocal(name: string): SymbolInfo | undefined {
+    return this.symbols.get(name);
+  }
+
+  public lookupParent(name: string): SymbolInfo | undefined {
+    return this.parent?.lookup(name);
+  }
+
   public lookup(name: string): SymbolInfo | undefined {
     return this.symbols.get(name) ?? this.parent?.lookup(name);
   }
