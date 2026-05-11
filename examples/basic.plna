@@ -6,6 +6,16 @@ type Scores = []Score;
 type ScoreRows = []Scores;
 type Credits = bigint;
 type StatusText = string;
+type Student = {
+  id: string,
+  name: StudentName,
+  active: boolean,
+};
+type Review = {
+  score: Score,
+  credits: Credits,
+  labels: []StatusText,
+};
 
 fn abs(value: Score): Score {
   if value < 0 {
@@ -32,6 +42,12 @@ fn firstScore(values: Scores): Score {
 }
 
 const studentName: StudentName = "Ada";
+const student: Student = {
+  id: "student-1",
+  name: studentName,
+  active: true,
+};
+const studentCopy: Student = student;
 const enabled = true;
 const base: Score = 40 + 2;
 const offset = abs(-8);
@@ -85,6 +101,12 @@ const label = if ready {
 } else {
   "incomplete"
 };
+const review: Review = {
+  score: adjusted,
+  credits: totalCredits,
+  labels: [label, "reviewed"],
+};
+const reviewCopy: Review = review;
 
 const greeting = "Hello ${studentName}!";
 const summary = "Score ${adjusted}, reviews ${reviewCount}, next step ${firstLargeStep}, pass ${minimumPassingScore}, excellent ${excellentScore}";

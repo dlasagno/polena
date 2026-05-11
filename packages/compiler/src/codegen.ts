@@ -236,6 +236,10 @@ class JavaScriptEmitter {
         return `[${expression.elements
           .map((element) => this.emitExpression(element, indent, loopContext))
           .join(", ")}]`;
+      case "ObjectLiteral":
+        return `{ ${expression.fields
+          .map((field) => `${field.name}: ${this.emitExpression(field.value, indent, loopContext)}`)
+          .join(", ")} }`;
       case "NameExpression":
         return expression.name;
       case "UnaryExpression":

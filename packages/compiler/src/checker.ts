@@ -28,12 +28,15 @@ import {
   formatType,
   functionType,
   inferArithmeticType,
+  isAssignableTo,
   isEqualityComparableType,
   isNumericType,
   isOrderingComparableType,
+  objectType,
   preferredArithmeticType,
   primitiveType,
   sameType,
+  type ObjectTypeField as SemanticObjectTypeField,
   type Type,
   unknownType,
 } from "./types";
@@ -209,11 +212,40 @@ class Checker {
         return primitiveType(typeNode.name);
       case "ArrayType":
         return arrayType(this.typeFromNode(typeNode.element));
+      case "ObjectType":
+        return this.typeFromObjectTypeNode(typeNode);
       case "NamedType":
         return this.resolveNamedType(typeNode.name, typeNode.nameSpan);
       case "UnknownType":
         return unknownType();
     }
+  }
+
+  private typeFromObjectTypeNode(
+    typeNode: Extract<TypeNode, { readonly kind: "ObjectType" }>,
+  ): Type {
+    const fields: SemanticObjectTypeField[] = [];
+    const seenFields = new Set<string>();
+
+    for (const field of typeNode.fields) {
+      if (seenFields.has(field.name)) {
+        this.diagnostics.push(
+          error(`Duplicate object field '${field.name}'.`, field.nameSpan, {
+            code: DiagnosticCode.DuplicateName,
+            label: "this field is already defined in this object type",
+          }),
+        );
+        continue;
+      }
+
+      seenFields.add(field.name);
+      fields.push({
+        name: field.name,
+        type: this.typeFromNode(field.type),
+      });
+    }
+
+    return objectType(fields);
   }
 
   private declareFunction(scope: Scope, declaration: FunctionDeclaration): void {
@@ -578,6 +610,8 @@ class Checker {
         return primitiveType("boolean");
       case "ArrayLiteral":
         return this.inferArrayLiteral(expression, scope, options);
+      case "ObjectLiteral":
+        return this.inferObjectLiteral(expression, scope, options);
       case "NameExpression": {
         const symbol = scope.lookup(expression.name);
         if (symbol === undefined) {
@@ -706,6 +740,68 @@ class Checker {
     }
 
     return arrayType(elementType ?? unknownType());
+  }
+
+  private inferObjectLiteral(
+    expression: Extract<Expression, { kind: "ObjectLiteral" }>,
+    scope: Scope,
+    options: InferOptions,
+  ): Type {
+    const expectedFields =
+      options.expectedType?.kind === "object" ? options.expectedType.fields : undefined;
+    const fields: { name: string; type: Type }[] = [];
+    const seenFields = new Set<string>();
+
+    for (const field of expression.fields) {
+      if (seenFields.has(field.name)) {
+        this.diagnostics.push(
+          error(`Duplicate object field '${field.name}'.`, field.nameSpan, {
+            code: DiagnosticCode.DuplicateName,
+            label: "this field is already defined in this object literal",
+          }),
+        );
+        continue;
+      }
+
+      seenFields.add(field.name);
+      const expectedField = expectedFields?.find((candidate) => candidate.name === field.name);
+      if (expectedFields !== undefined && expectedField === undefined) {
+        this.diagnostics.push(
+          error(`Unknown object field '${field.name}'.`, field.nameSpan, {
+            code: DiagnosticCode.UnknownProperty,
+            label: "this field is not part of the expected object type",
+          }),
+        );
+      }
+
+      const fieldType = this.inferExpression(field.value, scope, {
+        ...options,
+        expectedType: expectedField?.type,
+      });
+
+      if (expectedField !== undefined) {
+        this.expectType(fieldType, expectedField.type, field.value.span);
+      }
+
+      fields.push({ name: field.name, type: fieldType });
+    }
+
+    if (expectedFields !== undefined) {
+      for (const expectedField of expectedFields) {
+        if (seenFields.has(expectedField.name)) {
+          continue;
+        }
+
+        this.diagnostics.push(
+          error(`Missing object field '${expectedField.name}'.`, expression.span, {
+            code: DiagnosticCode.TypeMismatch,
+            label: "this object literal is missing a required field",
+          }),
+        );
+      }
+    }
+
+    return objectType(fields);
   }
 
   private inferBinaryExpression(
@@ -1123,7 +1219,7 @@ class Checker {
   }
 
   private expectType(actual: Type, expected: Type, span: Span): void {
-    if (actual.kind === "unknown" || expected.kind === "unknown" || sameType(actual, expected)) {
+    if (isAssignableTo(actual, expected)) {
       return;
     }
 

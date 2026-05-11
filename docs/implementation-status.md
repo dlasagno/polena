@@ -124,9 +124,9 @@ Status values:
 
 | Feature | Status | Notes |
 |---|---|---|
-| Object literals | Not implemented | Not parsed or typed. |
-| Object type declarations | Not implemented | General `type` declarations are not implemented. |
-| Structural object typing | Not implemented | Depends on object types. |
+| Object literals | Partially implemented | Parsed, checked, and emitted. Contextual object literals require exact fields. |
+| Object type declarations | Partially implemented | Supported through `type Name = { ... };`. |
+| Structural object typing | Not implemented | The language specifies structural typing, but the MVP currently requires exact object assignability. |
 | Object property access | Not implemented | Only array `.length` is supported as a member expression. |
 | Object field assignment | Not implemented | Depends on object support. |
 | Object introspection directives | Not implemented | Depends on directives and object types. |
@@ -139,7 +139,7 @@ Status values:
 |---|---|---|
 | Primitive type annotations | Implemented | `number`, `bigint`, `boolean`, `string`, `void`. |
 | Array type annotations | Implemented | `[]T`. |
-| `type Name = ...;` declarations | Partially implemented | Supports aliases to existing primitive, array, and named alias types. Object and enum type bodies are not implemented. |
+| `type Name = ...;` declarations | Partially implemented | Supports aliases to primitive, array, object, and named alias types. Enum type bodies are not implemented. |
 | Type aliases | Implemented | Transparent aliases; recursive aliases are rejected. |
 | Separate type/value namespaces | Implemented | Type aliases and value bindings may use the same name. |
 | Generics | Not implemented | Still TBD in the spec. |

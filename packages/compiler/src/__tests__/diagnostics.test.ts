@@ -130,12 +130,12 @@ const value = add(1 2);
     const result = analyze("fn value(): { 1 }");
 
     expectDiagnostic(result.diagnostics[0], {
-      code: DiagnosticCode.ExpectedTypeSyntax,
-      message: "Expected a type.",
-      label: "expected a type such as 'number', 'string', or '[]number'",
-      span: span(12, 1, 13, 13, 1, 14),
+      code: DiagnosticCode.ParseExpectedToken,
+      message: "Expected field name in object type.",
+      label: "parser was looking here",
+      span: span(14, 1, 15, 15, 1, 16),
     });
-    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics).toHaveLength(2);
   });
 
   test("recovers after missing function bodies without missing-return noise", () => {

@@ -3,6 +3,7 @@ import type { PrimitiveType } from "./ast";
 export type Type =
   | { readonly kind: "primitive"; readonly name: PrimitiveType }
   | { readonly kind: "array"; readonly element: Type }
+  | { readonly kind: "object"; readonly fields: readonly ObjectTypeField[] }
   | {
       readonly kind: "function";
       readonly params: readonly Type[];
@@ -10,12 +11,21 @@ export type Type =
     }
   | { readonly kind: "unknown" };
 
+export type ObjectTypeField = {
+  readonly name: string;
+  readonly type: Type;
+};
+
 export function primitiveType(name: PrimitiveType): Type {
   return { kind: "primitive", name };
 }
 
 export function arrayType(element: Type): Type {
   return { kind: "array", element };
+}
+
+export function objectType(fields: readonly ObjectTypeField[]): Type {
+  return { kind: "object", fields };
 }
 
 export function functionType(params: readonly Type[], returnType: Type): Type {
@@ -36,6 +46,8 @@ export function sameType(left: Type, right: Type): boolean {
       return right.kind === "primitive" && left.name === right.name;
     case "array":
       return right.kind === "array" && sameType(left.element, right.element);
+    case "object":
+      return right.kind === "object" && sameObjectFields(left.fields, right.fields);
     case "function":
       return (
         right.kind === "function" &&
@@ -51,12 +63,20 @@ export function sameType(left: Type, right: Type): boolean {
   }
 }
 
+export function isAssignableTo(source: Type, target: Type): boolean {
+  return source.kind === "unknown" || target.kind === "unknown" || sameType(source, target);
+}
+
 export function formatType(type: Type): string {
   switch (type.kind) {
     case "primitive":
       return type.name;
     case "array":
       return `[]${formatType(type.element)}`;
+    case "object":
+      return `{ ${type.fields
+        .map((field) => `${field.name}: ${formatType(field.type)}`)
+        .join(", ")} }`;
     case "function":
       return "function";
     case "unknown":
@@ -100,4 +120,22 @@ export function preferredArithmeticType(left: Type, right: Type): Type {
   }
 
   return primitiveType("number");
+}
+
+function sameObjectFields(
+  left: readonly ObjectTypeField[],
+  right: readonly ObjectTypeField[],
+): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  for (const leftField of left) {
+    const rightField = right.find((field) => field.name === leftField.name);
+    if (rightField === undefined || !sameType(leftField.type, rightField.type)) {
+      return false;
+    }
+  }
+
+  return true;
 }

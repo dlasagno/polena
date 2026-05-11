@@ -209,6 +209,35 @@ describe("parser", () => {
     });
   });
 
+  test("parses object type declarations and object literals", () => {
+    const lexResult = lex(
+      'type User = { id: string, score: number, }; const user: User = { id: "1", score: 90, };',
+    );
+    const parseResult = parse(lexResult.tokens);
+
+    expect(parseResult.diagnostics).toHaveLength(0);
+    expect(parseResult.program.declarations[0]).toMatchObject({
+      kind: "TypeDeclaration",
+      value: {
+        kind: "ObjectType",
+        fields: [
+          { kind: "ObjectTypeField", name: "id" },
+          { kind: "ObjectTypeField", name: "score" },
+        ],
+      },
+    });
+    expect(parseResult.program.declarations[1]).toMatchObject({
+      kind: "VariableDeclaration",
+      initializer: {
+        kind: "ObjectLiteral",
+        fields: [
+          { kind: "ObjectLiteralField", name: "id" },
+          { kind: "ObjectLiteralField", name: "score" },
+        ],
+      },
+    });
+  });
+
   test("parses interpolated strings into text and expression parts", () => {
     const lexResult = lex(['const value = "Hello ', "$", "{name}", '!";'].join(""));
     const parseResult = parse(lexResult.tokens);
@@ -585,6 +614,37 @@ const value: Label = Label;
 `);
 
     expect(executeValue(result.js)).toBe("Ada");
+  });
+
+  test("supports exact object literals with named object types", () => {
+    const result = expectCompileOk(`
+type User = {
+  id: string,
+  score: number,
+};
+
+const value: User = {
+  score: 90,
+  id: "ada",
+};
+`);
+
+    expect(result.js).toContain('const value = { score: 90, id: "ada" };');
+    const execute = new Function(`${result.js}\nreturn value.score;`) as () => unknown;
+    expect(execute()).toBe(90);
+  });
+
+  test("infers exact object literal types", () => {
+    const result = expectCompileOk(`
+const user = {
+  id: "ada",
+  score: 90,
+};
+
+const value = user;
+`);
+
+    expect(result.js).toContain('const user = { id: "ada", score: 90 };');
   });
 
   test("supports reassigning let bindings", () => {
@@ -1216,6 +1276,83 @@ const value: Scores = [];
     expect(result.ok).toBe(false);
     expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
       "Recursive type alias 'Scores'.",
+    );
+  });
+
+  test("rejects object literals with missing fields", () => {
+    const result = compile(`
+type User = {
+  id: string,
+  score: number,
+};
+
+const value: User = {
+  id: "ada",
+};
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Missing object field 'score'.",
+    );
+  });
+
+  test("rejects object literals with extra fields", () => {
+    const result = compile(`
+type User = {
+  id: string,
+};
+
+const value: User = {
+  id: "ada",
+  score: 90,
+};
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Unknown object field 'score'.",
+    );
+  });
+
+  test("rejects duplicate object literal fields", () => {
+    const result = compile(`
+const value = {
+  id: "ada",
+  id: "grace",
+};
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Duplicate object field 'id'.",
+    );
+  });
+
+  test("rejects duplicate object type fields", () => {
+    const result = compile(`
+type User = {
+  id: string,
+  id: number,
+};
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Duplicate object field 'id'.",
+    );
+  });
+
+  test("rejects structural object assignment before structural assignability is implemented", () => {
+    const result = compile(`
+const a = { a: 1, b: 2 };
+type X = { a: number };
+const b: X = a;
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Expected '{ a: number }', got '{ a: number, b: number }'.",
     );
   });
 

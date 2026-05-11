@@ -20,9 +20,22 @@ export type TypeNode =
       readonly span: Span;
     }
   | {
+      readonly kind: "ObjectType";
+      readonly fields: readonly ObjectTypeField[];
+      readonly span: Span;
+    }
+  | {
       readonly kind: "UnknownType";
       readonly span: Span;
     };
+
+export type ObjectTypeField = {
+  readonly kind: "ObjectTypeField";
+  readonly name: string;
+  readonly nameSpan: Span;
+  readonly type: TypeNode;
+  readonly span: Span;
+};
 
 export type Program = {
   readonly kind: "Program";
@@ -128,6 +141,7 @@ export type ExpressionStatement = {
 export type Expression =
   | LiteralExpression
   | ArrayLiteralExpression
+  | ObjectLiteralExpression
   | NameExpression
   | UnaryExpression
   | BinaryExpression
@@ -179,6 +193,20 @@ export type NameExpression = {
 export type ArrayLiteralExpression = {
   readonly kind: "ArrayLiteral";
   readonly elements: readonly Expression[];
+  readonly span: Span;
+};
+
+export type ObjectLiteralExpression = {
+  readonly kind: "ObjectLiteral";
+  readonly fields: readonly ObjectLiteralField[];
+  readonly span: Span;
+};
+
+export type ObjectLiteralField = {
+  readonly kind: "ObjectLiteralField";
+  readonly name: string;
+  readonly nameSpan: Span;
+  readonly value: Expression;
   readonly span: Span;
 };
 

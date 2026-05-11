@@ -4,6 +4,8 @@ import {
   formatType,
   functionType,
   inferArithmeticType,
+  isAssignableTo,
+  objectType,
   primitiveType,
   sameType,
   unknownType,
@@ -31,6 +33,26 @@ describe("semantic types", () => {
     );
   });
 
+  test("treats object type equality as exact and field-order independent", () => {
+    const left = objectType([
+      { name: "id", type: primitiveType("string") },
+      { name: "score", type: primitiveType("number") },
+    ]);
+    const sameFieldsDifferentOrder = objectType([
+      { name: "score", type: primitiveType("number") },
+      { name: "id", type: primitiveType("string") },
+    ]);
+    const wider = objectType([
+      { name: "id", type: primitiveType("string") },
+      { name: "score", type: primitiveType("number") },
+      { name: "active", type: primitiveType("boolean") },
+    ]);
+
+    expect(sameType(left, sameFieldsDifferentOrder)).toBe(true);
+    expect(sameType(left, wider)).toBe(false);
+    expect(isAssignableTo(wider, left)).toBe(false);
+  });
+
   test("formats user-facing type names", () => {
     expect(formatType(primitiveType("number"))).toBe("number");
     expect(formatType(primitiveType("bigint"))).toBe("bigint");
@@ -39,6 +61,9 @@ describe("semantic types", () => {
     expect(formatType(primitiveType("void"))).toBe("void");
     expect(formatType(arrayType(primitiveType("number")))).toBe("[]number");
     expect(formatType(arrayType(arrayType(primitiveType("number"))))).toBe("[][]number");
+    expect(formatType(objectType([{ name: "id", type: primitiveType("string") }]))).toBe(
+      "{ id: string }",
+    );
     expect(formatType(functionType([], primitiveType("void")))).toBe("function");
     expect(formatType(unknownType())).toBe("unknown");
   });

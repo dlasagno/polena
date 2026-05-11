@@ -9,6 +9,9 @@ import type {
   FunctionDeclaration,
   IfExpression,
   LoopContinuation,
+  ObjectLiteralExpression,
+  ObjectLiteralField,
+  ObjectTypeField,
   Parameter,
   PrimitiveType,
   Program,
@@ -354,6 +357,51 @@ class Parser {
       };
     }
 
+    if (this.match("LeftBrace")) {
+      const leftBrace = this.previous();
+      const fields: ObjectTypeField[] = [];
+
+      if (!this.check("RightBrace")) {
+        do {
+          if (this.check("RightBrace")) {
+            break;
+          }
+
+          if (!this.check("Identifier")) {
+            this.diagnostics.push(
+              error("Expected field name in object type.", this.current().span, {
+                code: DiagnosticCode.ParseExpectedToken,
+                label: "parser was looking here",
+              }),
+            );
+            this.recoverToClosingBrace();
+            break;
+          }
+
+          const name = this.advance();
+          this.expect("Colon", "Expected ':' after object type field name.");
+          const type = this.parseType();
+          fields.push({
+            kind: "ObjectTypeField" as const,
+            name: name.text,
+            nameSpan: name.span,
+            type,
+            span: mergeSpans(name.span, type.span),
+          });
+        } while (this.match("Comma"));
+      }
+
+      const rightBrace = this.expectClosingDelimiter(
+        "RightBrace",
+        "Expected '}' after object type.",
+      );
+      return {
+        kind: "ObjectType",
+        fields,
+        span: mergeSpans(leftBrace.span, rightBrace.span),
+      };
+    }
+
     const token = this.current();
     const type = primitiveTypeFromToken(token.kind);
 
@@ -549,6 +597,10 @@ class Parser {
       return this.parseArrayLiteral();
     }
 
+    if (this.check("LeftBrace")) {
+      return this.parseObjectLiteral();
+    }
+
     if (this.match("True")) {
       const token = this.previous();
       return { kind: "BooleanLiteral", value: true, span: token.span };
@@ -611,6 +663,46 @@ class Parser {
       elements,
       span: mergeSpans(leftBracket.span, rightBracket.span),
     };
+  }
+
+  private parseObjectLiteral(): ObjectLiteralExpression {
+    const leftBrace = this.expect("LeftBrace", "Expected '{'.");
+    const fields: ObjectLiteralField[] = [];
+
+    if (!this.check("RightBrace")) {
+      do {
+        if (this.check("RightBrace")) {
+          break;
+        }
+
+        const name = this.expect("Identifier", "Expected field name in object literal.");
+        this.expect("Colon", "Expected ':' after object literal field name.");
+        const value = this.parseExpression();
+        fields.push({
+          kind: "ObjectLiteralField" as const,
+          name: name.text,
+          nameSpan: name.span,
+          value,
+          span: mergeSpans(name.span, value.span),
+        });
+      } while (this.match("Comma"));
+    }
+
+    const rightBrace = this.expectClosingDelimiter(
+      "RightBrace",
+      "Expected '}' after object literal.",
+    );
+    return {
+      kind: "ObjectLiteral",
+      fields,
+      span: mergeSpans(leftBrace.span, rightBrace.span),
+    };
+  }
+
+  private recoverToClosingBrace(): void {
+    while (!this.check("RightBrace") && !this.check("Eof")) {
+      this.advance();
+    }
   }
 
   private parseIfExpression(): IfExpression {
@@ -715,7 +807,10 @@ class Parser {
     return token;
   }
 
-  private expectClosingDelimiter(kind: "RightParen" | "RightBracket", message: string): Token {
+  private expectClosingDelimiter(
+    kind: "RightParen" | "RightBracket" | "RightBrace",
+    message: string,
+  ): Token {
     if (this.check(kind)) {
       return this.advance();
     }

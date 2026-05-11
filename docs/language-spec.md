@@ -939,7 +939,13 @@ greet(user);
 
 Extra fields are allowed when assigning to a narrower structural type.
 
-Exact object types and excess-property restrictions are **TBD**.
+Fresh object literals assigned directly to an annotated object type may be
+checked more strictly than non-literal values. The exact excess-property rules
+are **TBD**.
+
+The current compiler MVP parses and checks object type declarations and object
+literals, but general structural assignability is not implemented yet. For now,
+assigning one object-typed value to another requires the same exact object shape.
 
 ---
 

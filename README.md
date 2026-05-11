@@ -26,9 +26,11 @@ programs end-to-end. It supports:
 - `while` loops, `break`/`continue`, and expression-valued `while ... else ...`
 - Array type syntax such as `[]number` and named aliases for array types
 - Array literals, typed empty arrays, `.length`, and checked indexing
+- Object type aliases and exact object literals
 
-It intentionally does not yet support objects, enums, match expressions, modules/imports,
-or the full type system from the language draft.
+It intentionally does not yet support object property access, structural object
+assignability, enums, match expressions, modules/imports, or the full type
+system from the language draft.
 
 Example:
 
