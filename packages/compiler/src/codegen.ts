@@ -45,6 +45,8 @@ class JavaScriptEmitter {
 
   private emitTopLevelDeclaration(declaration: TopLevelDeclaration): string[] {
     switch (declaration.kind) {
+      case "TypeDeclaration":
+        return [];
       case "FunctionDeclaration":
         return this.emitFunctionDeclaration(declaration);
       case "VariableDeclaration":

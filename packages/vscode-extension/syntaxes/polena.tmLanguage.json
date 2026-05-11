@@ -16,6 +16,9 @@
       "include": "#function-declaration"
     },
     {
+      "include": "#type-declaration"
+    },
+    {
       "include": "#variable-declaration"
     },
     {
@@ -230,11 +233,27 @@
         }
       ]
     },
+    "type-declaration": {
+      "patterns": [
+        {
+          "name": "meta.type.declaration.polena",
+          "match": "\\b(type)\\b\\s+([A-Za-z_$][A-Za-z0-9_$]*)",
+          "captures": {
+            "1": {
+              "name": "keyword.declaration.type.polena"
+            },
+            "2": {
+              "name": "entity.name.type.polena"
+            }
+          }
+        }
+      ]
+    },
     "reserved-keywords": {
       "patterns": [
         {
           "name": "keyword.other.reserved.polena",
-          "match": "\\b(?:as|comptime|enum|impl|match|trait|type|unknown)\\b"
+          "match": "\\b(?:as|comptime|enum|impl|match|trait|unknown)\\b"
         }
       ]
     },

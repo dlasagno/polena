@@ -6,6 +6,7 @@ import type { Token, TokenKind } from "./token";
 const keywords = new Map<string, TokenKind>([
   ["const", "Const"],
   ["let", "Let"],
+  ["type", "Type"],
   ["fn", "Fn"],
   ["return", "Return"],
   ["if", "If"],

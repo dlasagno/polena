@@ -36,6 +36,20 @@ describe("lexer", () => {
     ]);
   });
 
+  test("tokenizes type declarations", () => {
+    const result = lex("type Score = number;");
+
+    expect(result.diagnostics).toHaveLength(0);
+    expect(result.tokens.map((token) => token.kind)).toEqual([
+      "Type",
+      "Identifier",
+      "Equal",
+      "NumberType",
+      "Semicolon",
+      "Eof",
+    ]);
+  });
+
   test("tokenizes if and else keywords", () => {
     const result = lex("if enabled { 1 } else { 0 }");
 
@@ -177,6 +191,21 @@ describe("parser", () => {
       kind: "VariableDeclaration",
       typeAnnotation: { kind: "PrimitiveType", name: "bigint" },
       initializer: { kind: "BigIntLiteral", text: "42n" },
+    });
+  });
+
+  test("parses type declarations", () => {
+    const lexResult = lex("type Scores = []Score;");
+    const parseResult = parse(lexResult.tokens);
+
+    expect(parseResult.diagnostics).toHaveLength(0);
+    expect(parseResult.program.declarations[0]).toMatchObject({
+      kind: "TypeDeclaration",
+      name: "Scores",
+      value: {
+        kind: "ArrayType",
+        element: { kind: "NamedType", name: "Score" },
+      },
     });
   });
 
@@ -527,6 +556,35 @@ const value = add(answer, 1);
 
     expect(result.js).toContain("__polenaIndex");
     expect(result.js).toContain("const thresholds = [70, 90];");
+  });
+
+  test("supports named type aliases in annotations", () => {
+    const result = expectCompileOk(`
+type Score = number;
+type Scores = []Score;
+type Matrix = []Scores;
+
+fn first(values: Scores): Score {
+  values[0]
+}
+
+const scores: Scores = [40, 2];
+const matrix: Matrix = [scores];
+const value: Score = first(matrix[0]);
+`);
+
+    expect(result.js).not.toContain("type Score");
+    expect(executeValue(result.js)).toBe(40);
+  });
+
+  test("keeps type and value namespaces separate", () => {
+    const result = expectCompileOk(`
+type Label = string;
+const Label = "Ada";
+const value: Label = Label;
+`);
+
+    expect(executeValue(result.js)).toBe("Ada");
   });
 
   test("supports reassigning let bindings", () => {
@@ -1125,6 +1183,39 @@ const value = add(1);
     expect(result.ok).toBe(false);
     expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
       "Expected 2 argument(s), got 1.",
+    );
+  });
+
+  test("rejects duplicate type names", () => {
+    const result = compile(`
+type Score = number;
+type Score = string;
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Duplicate type name 'Score'.",
+    );
+  });
+
+  test("rejects unknown type names", () => {
+    const result = compile("const value: Missing = 1;");
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Unknown type 'Missing'.",
+    );
+  });
+
+  test("rejects recursive type aliases", () => {
+    const result = compile(`
+type Scores = []Scores;
+const value: Scores = [];
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Recursive type alias 'Scores'.",
     );
   });
 

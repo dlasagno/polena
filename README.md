@@ -14,6 +14,7 @@ programs end-to-end. It supports:
 - Basic reassignment for `let` bindings
 - Numeric compound assignment: `+=`, `-=`, `*=`, `/=`, `%=` for `let` bindings
 - Optional variable type annotations
+- Transparent type aliases with `type Name = ExistingType;`
 - Function declarations with typed parameters and explicit return types
 - Final-expression function returns and explicit `return expr;`
 - `void` function returns
@@ -23,7 +24,7 @@ programs end-to-end. It supports:
 - Binary arithmetic, comparison, `and`, and `or` expressions
 - `if` expressions and statement-position `if` without `else`
 - `while` loops, `break`/`continue`, and expression-valued `while ... else ...`
-- Array type syntax such as `[]number`
+- Array type syntax such as `[]number` and named aliases for array types
 - Array literals, typed empty arrays, `.length`, and checked indexing
 
 It intentionally does not yet support objects, enums, match expressions, modules/imports,
@@ -32,11 +33,13 @@ or the full type system from the language draft.
 Example:
 
 ```tsx
-fn add(a: number, b: number): number {
+type Score = number;
+
+fn add(a: Score, b: Score): Score {
   a + b
 }
 
-let value = add(20, 21);
+let value: Score = add(20, 21);
 value += 1;
 ```
 

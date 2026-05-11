@@ -1608,6 +1608,16 @@ Type aliases are transparent unless otherwise specified.
 
 Nominal type aliases/newtypes are **TBD**.
 
+The current compiler MVP supports transparent aliases to existing types:
+
+```tsx
+type Score = number;
+type Scores = []Score;
+```
+
+Object and enum type declaration bodies are part of the language direction but
+are not implemented in the MVP.
+
 ---
 
 # 25. Generics

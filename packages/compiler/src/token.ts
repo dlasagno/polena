@@ -8,6 +8,7 @@ export type TokenKind =
   | "MultilineString"
   | "Const"
   | "Let"
+  | "Type"
   | "Fn"
   | "Return"
   | "If"

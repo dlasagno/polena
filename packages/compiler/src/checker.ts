@@ -13,6 +13,7 @@ import type {
   Program,
   ReturnStatement,
   Statement,
+  TypeDeclaration,
   TypeNode,
   VariableDeclaration,
   WhileExpression,
@@ -55,6 +56,12 @@ type InferOptions = {
   readonly expectedType?: Type;
 };
 
+type TypeSymbol = {
+  readonly name: string;
+  readonly value: TypeNode;
+  readonly span: Span;
+};
+
 export function check(program: Program): CheckResult {
   const checker = new Checker();
   return checker.check(program);
@@ -62,10 +69,29 @@ export function check(program: Program): CheckResult {
 
 class Checker {
   private readonly diagnostics: Diagnostic[] = [];
+  private readonly typeSymbols = new Map<string, TypeSymbol>();
+  private readonly resolvedTypeSymbols = new Map<string, Type>();
+  private readonly resolvingTypeSymbols = new Set<string>();
 
   public check(program: Program): CheckResult {
     const scope = new Scope();
     this.declarePrelude(scope, program.span);
+
+    for (const declaration of program.declarations) {
+      if (declaration.kind !== "TypeDeclaration") {
+        continue;
+      }
+
+      this.declareType(declaration);
+    }
+
+    for (const declaration of program.declarations) {
+      if (declaration.kind !== "TypeDeclaration") {
+        continue;
+      }
+
+      this.resolveTypeDeclaration(declaration);
+    }
 
     for (const declaration of program.declarations) {
       if (declaration.kind !== "FunctionDeclaration") {
@@ -77,6 +103,8 @@ class Checker {
 
     for (const declaration of program.declarations) {
       switch (declaration.kind) {
+        case "TypeDeclaration":
+          break;
         case "FunctionDeclaration":
           this.checkFunction(declaration, scope);
           break;
@@ -118,12 +146,71 @@ class Checker {
     }
   }
 
+  private declareType(declaration: TypeDeclaration): void {
+    if (this.typeSymbols.has(declaration.name)) {
+      this.diagnostics.push(
+        error(`Duplicate type name '${declaration.name}'.`, declaration.nameSpan, {
+          code: DiagnosticCode.DuplicateName,
+          label: "this type name is already defined",
+        }),
+      );
+      return;
+    }
+
+    this.typeSymbols.set(declaration.name, {
+      name: declaration.name,
+      value: declaration.value,
+      span: declaration.nameSpan,
+    });
+  }
+
+  private resolveTypeDeclaration(declaration: TypeDeclaration): Type {
+    return this.resolveNamedType(declaration.name, declaration.nameSpan);
+  }
+
+  private resolveNamedType(name: string, span: Span): Type {
+    const resolved = this.resolvedTypeSymbols.get(name);
+    if (resolved !== undefined) {
+      return resolved;
+    }
+
+    const symbol = this.typeSymbols.get(name);
+    if (symbol === undefined) {
+      this.diagnostics.push(
+        error(`Unknown type '${name}'.`, span, {
+          code: DiagnosticCode.UnknownType,
+          label: "no type with this name is in scope",
+          notes: [{ kind: "help", message: "declare it with 'type' before using it" }],
+        }),
+      );
+      return unknownType();
+    }
+
+    if (this.resolvingTypeSymbols.has(name)) {
+      this.diagnostics.push(
+        error(`Recursive type alias '${name}'.`, span, {
+          code: DiagnosticCode.RecursiveTypeAlias,
+          label: "this type alias refers to itself",
+        }),
+      );
+      return unknownType();
+    }
+
+    this.resolvingTypeSymbols.add(name);
+    const type = this.typeFromNode(symbol.value);
+    this.resolvingTypeSymbols.delete(name);
+    this.resolvedTypeSymbols.set(name, type);
+    return type;
+  }
+
   private typeFromNode(typeNode: TypeNode): Type {
     switch (typeNode.kind) {
       case "PrimitiveType":
         return primitiveType(typeNode.name);
       case "ArrayType":
         return arrayType(this.typeFromNode(typeNode.element));
+      case "NamedType":
+        return this.resolveNamedType(typeNode.name, typeNode.nameSpan);
       case "UnknownType":
         return unknownType();
     }

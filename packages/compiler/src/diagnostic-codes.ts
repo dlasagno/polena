@@ -7,6 +7,8 @@ export const DiagnosticCode = {
   ExpectedTypeSyntax: "PLN010",
   ExpectedExpression: "PLN011",
   ParseExpectedToken: "PLN012",
+  UnknownType: "PLN013",
+  RecursiveTypeAlias: "PLN014",
   DuplicateName: "PLN100",
   DuplicateParameter: "PLN101",
   UnknownName: "PLN102",

@@ -1,6 +1,13 @@
 // A broader tour of the current compiler MVP.
 
-fn abs(value: number): number {
+type StudentName = string;
+type Score = number;
+type Scores = []Score;
+type ScoreRows = []Scores;
+type Credits = bigint;
+type StatusText = string;
+
+fn abs(value: Score): Score {
   if value < 0 {
     return -value;
   }
@@ -8,7 +15,7 @@ fn abs(value: number): number {
   value
 }
 
-fn describeScore(score: number, passed: boolean): string {
+fn describeScore(score: Score, passed: boolean): StatusText {
   if passed and score >= 90 {
     "excellent"
   } else {
@@ -20,11 +27,15 @@ fn describeScore(score: number, passed: boolean): string {
   }
 }
 
-const studentName: string = "Ada";
+fn firstScore(values: Scores): Score {
+  values[0]
+}
+
+const studentName: StudentName = "Ada";
 const enabled = true;
-const base: number = 40 + 2;
+const base: Score = 40 + 2;
 const offset = abs(-8);
-const reviewBonus: bigint = 12n;
+const reviewBonus: Credits = 12n;
 
 let adjusted = base + offset;
 adjusted += 10;
@@ -65,9 +76,10 @@ if enabled and !(studentName == "") {
 }
 
 const passed = ready and reviewCount >= 8;
-const thresholds: []number = [70, 90];
-const minimumPassingScore = thresholds[0];
-const excellentScore = thresholds[1];
+const thresholds: Scores = [70, 90];
+const scoreRows: ScoreRows = [thresholds, [adjusted, reviewCount]];
+const minimumPassingScore: Score = firstScore(scoreRows[0]);
+const excellentScore = scoreRows[0][1];
 const label = if ready {
   describeScore(adjusted, passed)
 } else {

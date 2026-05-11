@@ -16,6 +16,7 @@ import type {
   StringPart,
   Statement,
   TopLevelDeclaration,
+  TypeDeclaration,
   TypeNode,
   UnaryOperator,
   VariableDeclaration,
@@ -66,6 +67,10 @@ class Parser {
   }
 
   private parseTopLevelDeclaration(): TopLevelDeclaration {
+    if (this.check("Type")) {
+      return this.parseTypeDeclaration();
+    }
+
     if (this.check("Fn")) {
       return this.parseFunctionDeclaration();
     }
@@ -100,6 +105,22 @@ class Parser {
       kind: "ExpressionStatement",
       expression,
       span: mergeSpans(expression.span, semicolon.span),
+    };
+  }
+
+  private parseTypeDeclaration(): TypeDeclaration {
+    const typeToken = this.expect("Type", "Expected 'type'.");
+    const name = this.expect("Identifier", "Expected type name.");
+    this.expect("Equal", "Expected '=' in type declaration.");
+    const value = this.parseType();
+    const semicolon = this.expect("Semicolon", "Expected ';' after type declaration.");
+
+    return {
+      kind: "TypeDeclaration",
+      name: name.text,
+      nameSpan: name.span,
+      value,
+      span: mergeSpans(typeToken.span, semicolon.span),
     };
   }
 
@@ -337,8 +358,18 @@ class Parser {
     const type = primitiveTypeFromToken(token.kind);
 
     if (type === undefined) {
+      if (token.kind === "Identifier") {
+        this.advance();
+        return {
+          kind: "NamedType",
+          name: token.text,
+          nameSpan: token.span,
+          span: token.span,
+        };
+      }
+
       this.diagnostics.push(
-        error("Expected a primitive type.", token.span, {
+        error("Expected a type.", token.span, {
           code: DiagnosticCode.ExpectedTypeSyntax,
           label: "expected a type such as 'number', 'string', or '[]number'",
         }),

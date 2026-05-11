@@ -119,7 +119,7 @@ const value = add(1 2);
 
     expectDiagnostic(result.diagnostics[0], {
       code: DiagnosticCode.ExpectedTypeSyntax,
-      message: "Expected a primitive type.",
+      message: "Expected a type.",
       label: "expected a type such as 'number', 'string', or '[]number'",
       span: span(13, 1, 14, 14, 1, 15),
     });
@@ -131,7 +131,7 @@ const value = add(1 2);
 
     expectDiagnostic(result.diagnostics[0], {
       code: DiagnosticCode.ExpectedTypeSyntax,
-      message: "Expected a primitive type.",
+      message: "Expected a type.",
       label: "expected a type such as 'number', 'string', or '[]number'",
       span: span(12, 1, 13, 13, 1, 14),
     });

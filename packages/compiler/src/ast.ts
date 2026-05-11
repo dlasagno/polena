@@ -14,6 +14,12 @@ export type TypeNode =
       readonly span: Span;
     }
   | {
+      readonly kind: "NamedType";
+      readonly name: string;
+      readonly nameSpan: Span;
+      readonly span: Span;
+    }
+  | {
       readonly kind: "UnknownType";
       readonly span: Span;
     };
@@ -26,11 +32,20 @@ export type Program = {
 
 export type TopLevelDeclaration =
   | FunctionDeclaration
+  | TypeDeclaration
   | VariableDeclaration
   | AssignmentStatement
   | BreakStatement
   | ContinueStatement
   | ExpressionStatement;
+
+export type TypeDeclaration = {
+  readonly kind: "TypeDeclaration";
+  readonly name: string;
+  readonly nameSpan: Span;
+  readonly value: TypeNode;
+  readonly span: Span;
+};
 
 export type FunctionDeclaration = {
   readonly kind: "FunctionDeclaration";

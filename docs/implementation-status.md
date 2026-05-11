@@ -139,9 +139,9 @@ Status values:
 |---|---|---|
 | Primitive type annotations | Implemented | `number`, `bigint`, `boolean`, `string`, `void`. |
 | Array type annotations | Implemented | `[]T`. |
-| `type Name = ...;` declarations | Not implemented | Spec direction is all named types use `type`. |
-| Type aliases | Not implemented | Depends on type declarations. |
-| Separate type/value namespaces | Not implemented | Depends on type declarations. |
+| `type Name = ...;` declarations | Partially implemented | Supports aliases to existing primitive, array, and named alias types. Object and enum type bodies are not implemented. |
+| Type aliases | Implemented | Transparent aliases; recursive aliases are rejected. |
+| Separate type/value namespaces | Implemented | Type aliases and value bindings may use the same name. |
 | Generics | Not implemented | Still TBD in the spec. |
 | `unknown` source type | Not implemented | Internal unknown type exists for error recovery only. |
 
