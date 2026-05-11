@@ -501,7 +501,9 @@ class Parser {
         label: "expected an expression here",
       }),
     );
-    this.advance();
+    if (!this.isExpressionRecoveryBoundary()) {
+      this.advance();
+    }
     return {
       kind: "NumberLiteral",
       value: 0,
@@ -649,6 +651,19 @@ class Parser {
 
   private isAssignmentStatementStart(): boolean {
     return this.check("Identifier") && assignmentOperatorFromToken(this.peek().kind) !== undefined;
+  }
+
+  private isExpressionRecoveryBoundary(): boolean {
+    switch (this.current().kind) {
+      case "Semicolon":
+      case "RightBrace":
+      case "RightParen":
+      case "RightBracket":
+      case "Eof":
+        return true;
+      default:
+        return false;
+    }
   }
 
   private advanceAssignmentOperator(): Token {

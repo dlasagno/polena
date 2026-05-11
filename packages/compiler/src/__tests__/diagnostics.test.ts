@@ -60,7 +60,7 @@ describe("diagnostic regressions", () => {
     });
   });
 
-  test("reports missing expressions before follow-up recovery diagnostics", () => {
+  test("reports missing expressions without a follow-up semicolon diagnostic", () => {
     const result = analyze("const value = ;");
 
     expectDiagnostic(result.diagnostics[0], {
@@ -69,7 +69,7 @@ describe("diagnostic regressions", () => {
       label: "expected an expression here",
       span: span(14, 1, 15, 15, 1, 16),
     });
-    expect(result.diagnostics[1]?.code).toBe(DiagnosticCode.ParseExpectedToken);
+    expect(result.diagnostics).toHaveLength(1);
   });
 
   test("reports unknown names with stable help text", () => {
