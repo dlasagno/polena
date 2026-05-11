@@ -475,7 +475,8 @@ Division behavior for bigint is **TBD**.
 
 ## 15.2 Comparison Operators
 
-Comparison operators can only be applied to values with compatible types.
+Comparison operators can only be applied to values with compatible types and
+supported comparison operations.
 
 ```tsx
 1 == 1
@@ -486,18 +487,28 @@ Comparison operators can only be applied to values with compatible types.
 8 <= 9
 ```
 
-Supported signatures:
+Supported ordering signatures:
 
 ```tsx
-T == T = boolean
-T != T = boolean
 T > T = boolean
 T >= T = boolean
 T < T = boolean
 T <= T = boolean
 ```
 
-For primitive values, comparisons follow the language’s own semantics.
+Ordering support for non-primitive types is **TBD**.
+
+Equality support is type-specific:
+
+- primitive values may be compared with `==` and `!=`,
+- enum values may be compared with `==` and `!=` when both operands have the
+  same enum type,
+- object values cannot be compared with `==` or `!=`,
+- array values cannot be compared with `==` or `!=`,
+- function values cannot be compared with `==` or `!=`,
+- equality for `Option`, `Result`, and other user-defined types is **TBD**.
+
+For primitive values, comparisons follow the language's own semantics.
 
 Comparing unrelated types is invalid:
 
@@ -507,15 +518,29 @@ Comparing unrelated types is invalid:
 
 Because equality does not perform implicit coercion, there is no `===` operator.
 
-Object and array equality is by reference, not value.
+Objects and arrays cannot be compared with `==` or `!=`.
 
 ```tsx
 const a = { x: 1 };
 const b = { x: 1 };
-const c = a;
-a == b // false
-a == c // true
+a == b // Invalid.
 ```
+
+```tsx
+const xs = [1];
+const ys = [1];
+xs == ys // Invalid.
+```
+
+Use explicit functions for reference or structural comparison.
+
+```tsx
+sameRef(a, b)
+deepEqual(a, b)
+User.equals(a, b)
+```
+
+Exact standard-library names for these operations are **TBD**.
 
 ---
 
@@ -643,9 +668,19 @@ Arrays expose their length as a property:
 numbers.length
 ```
 
-`length` has type `number`.
+`length` currently has type `number`.
 
-Whether array indexes use `number` or a dedicated integer/index type is **TBD**.
+A dedicated array index type is desirable. A likely name is:
+
+```tsx
+Index
+```
+
+Whether `length` should continue to return `number` or eventually return
+`Index` is **TBD**.
+
+The conversion model between `number`, `Index`, and any future integer types is
+**TBD**.
 
 ---
 
@@ -665,13 +700,37 @@ If the index is out of bounds, the program panics.
 const value = numbers[index]; // Type: number. Panics if index is invalid.
 ```
 
-The current JavaScript backend emits a runtime bounds check for this operation.
-The index must be an integer-valued `number`; negative, fractional, `NaN`, and
+The current JavaScript backend emits a runtime bounds check for this operation
+and accepts integer-valued `number` indexes. Negative, fractional, `NaN`, and
 out-of-bounds indexes panic at runtime.
+
+The intended long-term direction is that arbitrary `number` values should not
+necessarily be valid indexes. Integer literals may be allowed in index contexts:
+
+```tsx
+values[0]
+```
+
+But the following should be rejected or checked:
+
+```tsx
+values[1.5] // Invalid or checked.
+values[-1]  // Invalid or checked.
+```
 
 This operation does not return `undefined`.
 
 Array indexing never produces an untyped missing value.
+
+Array elements may be assigned by index when the array value is mutable:
+
+```tsx
+values[0] = "Ada";
+```
+
+Index assignment checks index validity at runtime under the same rules as index
+access. Invalid indexes panic. The assigned value must be compatible with the
+array element type.
 
 ---
 
@@ -688,6 +747,8 @@ The type of `get` is:
 ```tsx
 fn get(index: number): Option<T>
 ```
+
+The final parameter type may become `Index`.
 
 Example:
 
@@ -780,6 +841,38 @@ user.name
 Objects cannot be used as hash maps. Use a `Map` type for dynamic key/value storage.
 
 Dynamic property access is **TBD**.
+
+For now, object and array mutability follows JavaScript-like behavior:
+
+- `const` prevents rebinding,
+- `let` allows rebinding,
+- object and array values may still be mutable unless otherwise restricted.
+
+Example direction:
+
+```tsx
+const user = {
+	name: "Ada",
+};
+
+user.name = "Grace"; // Likely allowed for now.
+```
+
+`const` does not freeze the object or array value.
+
+```tsx
+const user = {
+	name: "Ada",
+};
+
+user = { name: "Grace" }; // Invalid: rebinding a const binding.
+user.name = "Grace";     // Valid for now: mutating the object value.
+```
+
+Property assignment requires the property to be known on the object's static type
+and the assigned value to be compatible with the property type.
+
+The long-term mutability model is **TBD**.
 
 ---
 
@@ -1034,6 +1127,10 @@ Values are constructed using the enum name:
 ```tsx
 const red = Color.Red;
 ```
+
+`Color.Red` is currently specified as enum variant construction syntax. The
+preferred direction is that `Color` itself does not automatically become a
+runtime metadata object.
 
 When the enum type is known and there is no ambiguity, the enum name may be omitted:
 
@@ -1443,7 +1540,7 @@ const op: fn(number, number): number = fn (a, b) {
 
 # 24. Type Declarations
 
-Types are declared using `type`.
+All named types are declared using `type`.
 
 ```tsx
 type User = {
@@ -1468,6 +1565,30 @@ type Color = enum {
 	Blue,
 };
 ```
+
+There are no separate user-facing constructs like TypeScript's `interface`,
+`class`, and `type` split.
+
+Types are primarily compile-time constructs. Runtime metadata for types is not
+emitted automatically.
+
+Type names and value names may overlap. Types and values are resolved in the
+namespace required by the syntactic context.
+
+```tsx
+type User = {
+	id: string,
+};
+
+const User = "not a type";
+
+const label: User = {
+	id: User,
+};
+```
+
+In the example above, `User` in the type annotation refers to the type, while
+`User` in the initializer refers to the value.
 
 Type aliases are transparent unless otherwise specified.
 
@@ -1522,6 +1643,10 @@ impl Display for User {
 ```
 
 Traits are **TBD** and may be deferred.
+
+The likely initial approach is to start with plain functions and defer methods,
+associated functions, `impl` blocks, and traits until the core language is more
+stable.
 
 ---
 
@@ -1670,6 +1795,13 @@ const size = comptime 1024 * 4;
 
 Compile-time side effects such as reading files, environment variables, or network resources are **TBD** and should be explicit for caching and reproducibility.
 
+Compiler directives are related to compile-time evaluation but distinct. A
+directive such as `@enumVariantNames(Color)` is itself a compile-time operation
+and does not need an explicit `comptime` marker.
+
+Directive definitions and open design questions are tracked separately in
+[Compiler Directives](compiler-directives.md).
+
 ---
 
 # 33. Build Modes
@@ -1710,10 +1842,13 @@ The following rules are core to the language:
 - No normal `null` or `undefined` values.
 - Optional values must be represented explicitly.
 - Property access must be statically known to be valid.
+- Object and array equality with `==` or `!=` is not allowed.
 - Array indexing is checked by default.
 - Recoverable errors use `Result`.
 - Panics are for programmer errors, not normal error handling.
 - Match expressions over enums must be exhaustive.
+- Runtime type-derived data must be requested explicitly with compiler
+  directives.
 - JavaScript interop boundaries must be explicit.
 
 ---
@@ -1807,16 +1942,22 @@ The following topics need further design:
 5. Anonymous function ergonomics.
 6. Shadowing rules.
 7. Object exactness and excess-property checks.
-8. Equality semantics for arrays and objects.
+8. Exact standard-library names for reference and structural equality helpers.
 9. Bigint division behavior.
-10. Integer/index type design.
+10. Exact `Index` design.
 11. Module/import/export system.
 12. JavaScript interop declaration format.
 13. `.d.ts` conversion strategy.
 14. Async model.
-15. Compile-time evaluation model.
+15. Compile-time evaluation and compiler directive phase model.
 16. Panic behavior.
 17. Unsafe operations.
 18. Standard library naming conventions.
 19. Formatter canonical style.
 20. Unicode identifiers and Unicode string escapes.
+21. Runtime enum representation.
+22. Whether enum type names exist in value position.
+23. Object introspection depth and alias preservation.
+24. Structural typing, type identity, and possible future distinct types.
+25. Long-term mutability model.
+26. User-defined directives, macros, and generated code hygiene.

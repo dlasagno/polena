@@ -113,6 +113,10 @@ help: declare it before using it, or check for a spelling mistake
 See [docs/prelude.md](docs/prelude.md) for the currently available prelude
 functions.
 
+See [docs/implementation-status.md](docs/implementation-status.md) for a
+feature-by-feature view of what the current MVP implements from the language
+draft.
+
 ## Development
 
 Install dependencies:
