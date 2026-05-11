@@ -793,6 +793,34 @@ const value = while i < 3 : (i += 1) {
     );
   });
 
+  test("rejects array equality", () => {
+    const result = compile(`
+const left = [1];
+const right = [1];
+const value = left == right;
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Operator '==' cannot compare '[]number' values.",
+    );
+  });
+
+  test("rejects function equality", () => {
+    const result = compile(`
+fn add(a: number, b: number): number {
+  a + b
+}
+
+const value = add != add;
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Operator '!=' cannot compare 'function' values.",
+    );
+  });
+
   test("rejects mixed array element types", () => {
     const result = compile('const values = [1, "x"];');
 

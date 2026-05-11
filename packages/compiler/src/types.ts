@@ -74,6 +74,10 @@ export function isNumericPrimitiveName(name: PrimitiveType): name is "number" | 
   return name === "number" || name === "bigint";
 }
 
+export function isEqualityComparableType(type: Type): boolean {
+  return type.kind === "primitive" && type.name !== "void";
+}
+
 export function inferArithmeticType(left: Type, right: Type): Type | undefined {
   if (isNumericType(left) && isNumericType(right) && left.name === right.name) {
     return left;

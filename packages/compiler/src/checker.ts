@@ -27,6 +27,7 @@ import {
   formatType,
   functionType,
   inferArithmeticType,
+  isEqualityComparableType,
   isNumericType,
   preferredArithmeticType,
   primitiveType,
@@ -628,6 +629,39 @@ class Checker {
     if (operator === "and" || operator === "or") {
       this.expectType(leftType, primitiveType("boolean"), left.span);
       this.expectType(rightType, primitiveType("boolean"), right.span);
+      return primitiveType("boolean");
+    }
+
+    if (operator === "==" || operator === "!=") {
+      if (
+        !sameType(leftType, rightType) &&
+        leftType.kind !== "unknown" &&
+        rightType.kind !== "unknown"
+      ) {
+        this.diagnostics.push(
+          error(
+            `Operator '${operator}' requires compatible operands, got '${formatType(leftType)}' and '${formatType(
+              rightType,
+            )}'.`,
+            span,
+            {
+              code: DiagnosticCode.IncompatibleOperands,
+              label: "these operands do not have compatible types",
+            },
+          ),
+        );
+      } else if (
+        leftType.kind !== "unknown" &&
+        rightType.kind !== "unknown" &&
+        !isEqualityComparableType(leftType)
+      ) {
+        this.diagnostics.push(
+          error(`Operator '${operator}' cannot compare '${formatType(leftType)}' values.`, span, {
+            code: DiagnosticCode.IncompatibleOperands,
+            label: "this type does not support equality comparison",
+          }),
+        );
+      }
       return primitiveType("boolean");
     }
 
