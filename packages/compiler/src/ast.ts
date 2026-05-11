@@ -2,11 +2,17 @@ import type { Span } from "./span";
 
 export type PrimitiveType = "number" | "bigint" | "string" | "boolean" | "void";
 
-export type TypeNode = {
-  readonly kind: "PrimitiveType";
-  readonly name: PrimitiveType;
-  readonly span: Span;
-};
+export type TypeNode =
+  | {
+      readonly kind: "PrimitiveType";
+      readonly name: PrimitiveType;
+      readonly span: Span;
+    }
+  | {
+      readonly kind: "ArrayType";
+      readonly element: TypeNode;
+      readonly span: Span;
+    };
 
 export type Program = {
   readonly kind: "Program";
@@ -101,12 +107,15 @@ export type ExpressionStatement = {
 
 export type Expression =
   | LiteralExpression
+  | ArrayLiteralExpression
   | NameExpression
   | UnaryExpression
   | BinaryExpression
   | IfExpression
   | WhileExpression
-  | CallExpression;
+  | CallExpression
+  | IndexExpression
+  | MemberExpression;
 
 export type LiteralExpression =
   | {
@@ -144,6 +153,12 @@ export type StringPart =
 export type NameExpression = {
   readonly kind: "NameExpression";
   readonly name: string;
+  readonly span: Span;
+};
+
+export type ArrayLiteralExpression = {
+  readonly kind: "ArrayLiteral";
+  readonly elements: readonly Expression[];
   readonly span: Span;
 };
 
@@ -202,5 +217,20 @@ export type CallExpression = {
   readonly kind: "CallExpression";
   readonly callee: Expression;
   readonly args: readonly Expression[];
+  readonly span: Span;
+};
+
+export type IndexExpression = {
+  readonly kind: "IndexExpression";
+  readonly target: Expression;
+  readonly index: Expression;
+  readonly span: Span;
+};
+
+export type MemberExpression = {
+  readonly kind: "MemberExpression";
+  readonly target: Expression;
+  readonly name: string;
+  readonly nameSpan: Span;
   readonly span: Span;
 };

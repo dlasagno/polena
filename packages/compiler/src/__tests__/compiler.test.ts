@@ -87,6 +87,46 @@ describe("lexer", () => {
     ]);
   });
 
+  test("tokenizes array literals and array types", () => {
+    const result = lex("const values: []number = [1, 2];");
+
+    expect(result.diagnostics).toHaveLength(0);
+    expect(result.tokens.map((token) => token.kind)).toEqual([
+      "Const",
+      "Identifier",
+      "Colon",
+      "LeftBracket",
+      "RightBracket",
+      "NumberType",
+      "Equal",
+      "LeftBracket",
+      "Number",
+      "Comma",
+      "Number",
+      "RightBracket",
+      "Semicolon",
+      "Eof",
+    ]);
+  });
+
+  test("tokenizes array member and index expressions", () => {
+    const result = lex("values.length; values[0];");
+
+    expect(result.diagnostics).toHaveLength(0);
+    expect(result.tokens.map((token) => token.kind)).toEqual([
+      "Identifier",
+      "Dot",
+      "Identifier",
+      "Semicolon",
+      "Identifier",
+      "LeftBracket",
+      "Number",
+      "RightBracket",
+      "Semicolon",
+      "Eof",
+    ]);
+  });
+
   test("tokenizes multiline strings", () => {
     const result = lex("const value = \\\\hello\n  \\\\world\n;");
 
@@ -196,6 +236,75 @@ describe("parser", () => {
     expect(parseResult.program.declarations[1]).toMatchObject({
       kind: "AssignmentStatement",
       operator: "+=",
+    });
+  });
+
+  test("parses array type annotations and literals", () => {
+    const lexResult = lex("const values: []number = [1, 2,];");
+    const parseResult = parse(lexResult.tokens);
+
+    expect(parseResult.diagnostics).toHaveLength(0);
+    expect(parseResult.program.declarations[0]).toMatchObject({
+      kind: "VariableDeclaration",
+      typeAnnotation: {
+        kind: "ArrayType",
+        element: { kind: "PrimitiveType", name: "number" },
+      },
+      initializer: {
+        kind: "ArrayLiteral",
+        elements: [{ kind: "NumberLiteral" }, { kind: "NumberLiteral" }],
+      },
+    });
+  });
+
+  test("parses nested array types and literals", () => {
+    const lexResult = lex("const values: [][]number = [[1]];");
+    const parseResult = parse(lexResult.tokens);
+
+    expect(parseResult.diagnostics).toHaveLength(0);
+    expect(parseResult.program.declarations[0]).toMatchObject({
+      kind: "VariableDeclaration",
+      typeAnnotation: {
+        kind: "ArrayType",
+        element: {
+          kind: "ArrayType",
+          element: { kind: "PrimitiveType", name: "number" },
+        },
+      },
+      initializer: {
+        kind: "ArrayLiteral",
+        elements: [{ kind: "ArrayLiteral" }],
+      },
+    });
+  });
+
+  test("parses empty array literals", () => {
+    const lexResult = lex("const values: []number = [];");
+    const parseResult = parse(lexResult.tokens);
+
+    expect(parseResult.diagnostics).toHaveLength(0);
+    expect(parseResult.program.declarations[0]).toMatchObject({
+      kind: "VariableDeclaration",
+      initializer: { kind: "ArrayLiteral", elements: [] },
+    });
+  });
+
+  test("parses index and member expressions", () => {
+    const lexResult = lex("const value = values[0].length;");
+    const parseResult = parse(lexResult.tokens);
+
+    expect(parseResult.diagnostics).toHaveLength(0);
+    expect(parseResult.program.declarations[0]).toMatchObject({
+      kind: "VariableDeclaration",
+      initializer: {
+        kind: "MemberExpression",
+        name: "length",
+        target: {
+          kind: "IndexExpression",
+          target: { kind: "NameExpression", name: "values" },
+          index: { kind: "NumberLiteral" },
+        },
+      },
     });
   });
 });
@@ -463,6 +572,65 @@ const value = double(total);
     expect(executeValue(result.js)).toBe(84n);
   });
 
+  test("supports array literals and checked indexing", () => {
+    const result = expectCompileOk(`
+const values = [20, 22];
+const value = values[0] + values[1];
+`);
+
+    expect(result.js).toContain("function __polenaIndex");
+    expect(executeValue(result.js)).toBe(42);
+  });
+
+  test("supports typed empty arrays and array length", () => {
+    const result = expectCompileOk(`
+const values: []number = [];
+const value = values.length;
+`);
+
+    expect(result.js).not.toContain("function __polenaIndex");
+    expect(executeValue(result.js)).toBe(0);
+  });
+
+  test("supports array function parameters and returns", () => {
+    const result = expectCompileOk(`
+fn pair(a: number, b: number): []number {
+  [a, b]
+}
+
+const value = pair(20, 22)[1];
+`);
+
+    expect(executeValue(result.js)).toBe(22);
+  });
+
+  test("supports nested arrays", () => {
+    const result = expectCompileOk(`
+const values: [][]number = [[1], [42]];
+const value = values[1][0];
+`);
+
+    expect(executeValue(result.js)).toBe(42);
+  });
+
+  test("throws on out-of-bounds array indexes", () => {
+    const result = expectCompileOk(`
+const values = [1];
+const value = values[1];
+`);
+
+    expect(() => executeValue(result.js)).toThrow(RangeError);
+  });
+
+  test("throws on fractional array indexes", () => {
+    const result = expectCompileOk(`
+const values = [1];
+const value = values[0.5];
+`);
+
+    expect(() => executeValue(result.js)).toThrow(RangeError);
+  });
+
   test("rejects non-boolean if conditions", () => {
     const result = compile("const value = if 1 { 1 } else { 0 };");
 
@@ -622,6 +790,75 @@ const value = while i < 3 : (i += 1) {
     expect(result.ok).toBe(false);
     expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
       "Operator '+' requires compatible operands, got 'number' and 'bigint'.",
+    );
+  });
+
+  test("rejects mixed array element types", () => {
+    const result = compile('const values = [1, "x"];');
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Expected 'number', got 'string'.",
+    );
+  });
+
+  test("rejects untyped empty arrays", () => {
+    const result = compile("const values = [];");
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Cannot infer the element type of an empty array.",
+    );
+  });
+
+  test("rejects array literals that do not match annotations", () => {
+    const result = compile('const values: []number = ["x"];');
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Expected '[]number', got '[]string'.",
+    );
+  });
+
+  test("rejects indexing non-array values", () => {
+    const result = compile("const value = 1[0];");
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Cannot index value of type 'number'.",
+    );
+  });
+
+  test("rejects non-number array indexes", () => {
+    const result = compile(`
+const values = [1];
+const value = values["0"];
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Expected 'number', got 'string'.",
+    );
+  });
+
+  test("rejects unknown array properties", () => {
+    const result = compile(`
+const values = [1];
+const value = values.size;
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Unknown property 'size' on type '[]number'.",
+    );
+  });
+
+  test("rejects length access on non-array values", () => {
+    const result = compile("const value = 1.length;");
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Unknown property 'length' on type 'number'.",
     );
   });
 

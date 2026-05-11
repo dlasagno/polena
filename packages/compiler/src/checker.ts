@@ -10,10 +10,10 @@ import type {
   IfExpression,
   LoopContinuation,
   Parameter,
-  PrimitiveType,
   Program,
   ReturnStatement,
   Statement,
+  TypeNode,
   VariableDeclaration,
   WhileExpression,
 } from "./ast";
@@ -23,6 +23,7 @@ import { preludeFunctions } from "./prelude";
 import { Scope } from "./symbols";
 import type { Span } from "./span";
 import {
+  arrayType,
   formatType,
   functionType,
   inferArithmeticType,
@@ -47,8 +48,9 @@ type LoopContext = {
 type InferOptions = {
   readonly ifAsValue: boolean;
   readonly whileAsValue: boolean;
-  readonly returnType?: PrimitiveType;
+  readonly returnType?: Type;
   readonly loopContext?: LoopContext;
+  readonly expectedType?: Type;
 };
 
 export function check(program: Program): CheckResult {
@@ -114,10 +116,19 @@ class Checker {
     }
   }
 
+  private typeFromNode(typeNode: TypeNode): Type {
+    switch (typeNode.kind) {
+      case "PrimitiveType":
+        return primitiveType(typeNode.name);
+      case "ArrayType":
+        return arrayType(this.typeFromNode(typeNode.element));
+    }
+  }
+
   private declareFunction(scope: Scope, declaration: FunctionDeclaration): void {
     const type = functionType(
-      declaration.params.map((param) => primitiveType(param.type.name)),
-      primitiveType(declaration.returnType.name),
+      declaration.params.map((param) => this.typeFromNode(param.type)),
+      this.typeFromNode(declaration.returnType),
     );
 
     if (
@@ -139,30 +150,28 @@ class Checker {
 
   private checkFunction(declaration: FunctionDeclaration, parentScope: Scope): void {
     const scope = new Scope(parentScope);
+    const returnType = this.typeFromNode(declaration.returnType);
 
     for (const param of declaration.params) {
       this.declareParameter(scope, param);
     }
 
-    const explicitReturns = this.checkBlock(declaration.body, scope, declaration.returnType.name);
+    const explicitReturns = this.checkBlock(declaration.body, scope, returnType);
     if (declaration.body.finalExpression !== undefined) {
       const finalType = this.inferExpression(declaration.body.finalExpression, scope, {
-        ifAsValue: declaration.returnType.name !== "void",
-        whileAsValue: declaration.returnType.name !== "void",
-        returnType: declaration.returnType.name,
+        ifAsValue: !sameType(returnType, primitiveType("void")),
+        whileAsValue: !sameType(returnType, primitiveType("void")),
+        returnType,
+        expectedType: returnType,
       });
-      this.expectType(
-        finalType,
-        primitiveType(declaration.returnType.name),
-        declaration.body.finalExpression.span,
-      );
+      this.expectType(finalType, returnType, declaration.body.finalExpression.span);
       return;
     }
 
-    if (declaration.returnType.name !== "void" && explicitReturns === 0) {
+    if (!sameType(returnType, primitiveType("void")) && explicitReturns === 0) {
       this.diagnostics.push(
         error(
-          `Function '${declaration.name}' must return '${declaration.returnType.name}'.`,
+          `Function '${declaration.name}' must return '${formatType(returnType)}'.`,
           declaration.nameSpan,
           {
             code: DiagnosticCode.MissingReturn,
@@ -173,14 +182,14 @@ class Checker {
     }
   }
 
-  private checkBlock(block: Block, scope: Scope, returnType: PrimitiveType): number {
+  private checkBlock(block: Block, scope: Scope, returnType: Type): number {
     return this.checkBlockInLoop(block, scope, returnType);
   }
 
   private checkBlockInLoop(
     block: Block,
     scope: Scope,
-    returnType: PrimitiveType,
+    returnType: Type,
     loopContext?: LoopContext,
   ): number {
     let explicitReturns = 0;
@@ -197,7 +206,7 @@ class Checker {
   private checkStatement(
     statement: Statement,
     scope: Scope,
-    returnType: PrimitiveType,
+    returnType: Type,
     loopContext?: LoopContext,
   ): boolean {
     switch (statement.kind) {
@@ -231,7 +240,7 @@ class Checker {
     if (
       !scope.declare({
         name: param.name,
-        type: primitiveType(param.type.name),
+        type: this.typeFromNode(param.type),
         span: param.nameSpan,
         assignability: "immutable-binding",
       })
@@ -248,26 +257,28 @@ class Checker {
   private checkVariableDeclaration(
     declaration: VariableDeclaration,
     scope: Scope,
-    returnType?: PrimitiveType,
+    returnType?: Type,
   ): void {
+    const declaredType =
+      declaration.typeAnnotation === undefined
+        ? undefined
+        : this.typeFromNode(declaration.typeAnnotation);
     const initializerType = this.inferExpression(declaration.initializer, scope, {
       ifAsValue: true,
       whileAsValue: true,
       ...(returnType === undefined ? {} : { returnType }),
+      ...(declaredType === undefined ? {} : { expectedType: declaredType }),
     });
-    const declaredType =
-      declaration.typeAnnotation === undefined
-        ? initializerType
-        : primitiveType(declaration.typeAnnotation.name);
+    const bindingType = declaredType ?? initializerType;
 
     if (declaration.typeAnnotation !== undefined) {
-      this.expectType(initializerType, declaredType, declaration.initializer.span);
+      this.expectType(initializerType, bindingType, declaration.initializer.span);
     }
 
     if (
       !scope.declare({
         name: declaration.name,
-        type: declaredType,
+        type: bindingType,
         span: declaration.nameSpan,
         assignability: declaration.mutability === "let" ? "mutable-variable" : "immutable-binding",
       })
@@ -284,13 +295,14 @@ class Checker {
   private checkAssignmentStatement(
     statement: AssignmentStatement,
     scope: Scope,
-    returnType?: PrimitiveType,
+    returnType?: Type,
   ): void {
     const symbol = scope.lookup(statement.name);
     const valueType = this.inferExpression(statement.value, scope, {
       ifAsValue: true,
       whileAsValue: true,
       ...(returnType === undefined ? {} : { returnType }),
+      ...(symbol === undefined ? {} : { expectedType: symbol.type }),
     });
 
     if (symbol === undefined) {
@@ -334,23 +346,20 @@ class Checker {
     this.expectType(valueType, symbol.type, statement.value.span);
   }
 
-  private checkReturnStatement(
-    statement: ReturnStatement,
-    scope: Scope,
-    returnType: PrimitiveType,
-  ): void {
+  private checkReturnStatement(statement: ReturnStatement, scope: Scope, returnType: Type): void {
     const actualType = this.inferExpression(statement.expression, scope, {
       ifAsValue: true,
       whileAsValue: true,
       returnType,
+      expectedType: returnType,
     });
-    this.expectType(actualType, primitiveType(returnType), statement.expression.span);
+    this.expectType(actualType, returnType, statement.expression.span);
   }
 
   private checkBreakStatement(
     statement: BreakStatement,
     scope: Scope,
-    returnType?: PrimitiveType,
+    returnType?: Type,
     loopContext?: LoopContext,
   ): void {
     if (loopContext === undefined) {
@@ -445,6 +454,8 @@ class Checker {
         return this.inferStringLiteral(expression, scope, options);
       case "BooleanLiteral":
         return primitiveType("boolean");
+      case "ArrayLiteral":
+        return this.inferArrayLiteral(expression, scope, options);
       case "NameExpression": {
         const symbol = scope.lookup(expression.name);
         if (symbol === undefined) {
@@ -487,6 +498,10 @@ class Checker {
         return this.inferWhileExpression(expression, scope, options);
       case "CallExpression":
         return this.inferCallExpression(expression, scope, options);
+      case "IndexExpression":
+        return this.inferIndexExpression(expression, scope, options);
+      case "MemberExpression":
+        return this.inferMemberExpression(expression, scope, options);
     }
   }
 
@@ -525,6 +540,50 @@ class Checker {
     }
 
     return primitiveType("string");
+  }
+
+  private inferArrayLiteral(
+    expression: Extract<Expression, { kind: "ArrayLiteral" }>,
+    scope: Scope,
+    options: InferOptions,
+  ): Type {
+    if (expression.elements.length === 0) {
+      if (options.expectedType?.kind === "array") {
+        return options.expectedType;
+      }
+
+      this.diagnostics.push(
+        error("Cannot infer the element type of an empty array.", expression.span, {
+          code: DiagnosticCode.CannotInferArrayElementType,
+          label: "add a type annotation for this empty array",
+          notes: [
+            {
+              kind: "help",
+              message: "write a type annotation such as 'const values: []number = [];'",
+            },
+          ],
+        }),
+      );
+      return arrayType(unknownType());
+    }
+
+    let elementType: Type | undefined;
+    for (const element of expression.elements) {
+      const actualType = this.inferExpression(element, scope, {
+        ...options,
+        expectedType:
+          options.expectedType?.kind === "array" ? options.expectedType.element : undefined,
+      });
+
+      if (elementType === undefined || elementType.kind === "unknown") {
+        elementType = actualType;
+        continue;
+      }
+
+      this.expectType(actualType, elementType, element.span);
+    }
+
+    return arrayType(elementType ?? unknownType());
   }
 
   private inferBinaryExpression(
@@ -694,7 +753,7 @@ class Checker {
 
   private inferBlockType(block: Block, parentScope: Scope, options: InferOptions): Type {
     const scope = new Scope(parentScope);
-    const returnType = options.returnType ?? "void";
+    const returnType = options.returnType ?? primitiveType("void");
 
     this.checkBlockInLoop(block, scope, returnType, options.loopContext);
 
@@ -764,9 +823,65 @@ class Checker {
     return calleeType.returnType;
   }
 
+  private inferIndexExpression(
+    expression: Extract<Expression, { kind: "IndexExpression" }>,
+    scope: Scope,
+    options: InferOptions,
+  ): Type {
+    const targetType = this.inferExpression(expression.target, scope, options);
+    const indexType = this.inferExpression(expression.index, scope, {
+      ...options,
+      expectedType: primitiveType("number"),
+    });
+    this.expectType(indexType, primitiveType("number"), expression.index.span);
+
+    if (targetType.kind === "unknown") {
+      return unknownType();
+    }
+
+    if (targetType.kind !== "array") {
+      this.diagnostics.push(
+        error(`Cannot index value of type '${formatType(targetType)}'.`, expression.target.span, {
+          code: DiagnosticCode.CannotIndexNonArray,
+          label: "this value is not an array",
+        }),
+      );
+      return unknownType();
+    }
+
+    return targetType.element;
+  }
+
+  private inferMemberExpression(
+    expression: Extract<Expression, { kind: "MemberExpression" }>,
+    scope: Scope,
+    options: InferOptions,
+  ): Type {
+    const targetType = this.inferExpression(expression.target, scope, options);
+    if (targetType.kind === "unknown") {
+      return unknownType();
+    }
+
+    if (expression.name === "length" && targetType.kind === "array") {
+      return primitiveType("number");
+    }
+
+    this.diagnostics.push(
+      error(
+        `Unknown property '${expression.name}' on type '${formatType(targetType)}'.`,
+        expression.nameSpan,
+        {
+          code: DiagnosticCode.UnknownProperty,
+          label: "this property is not available",
+        },
+      ),
+    );
+    return unknownType();
+  }
+
   private checkIgnoredBlock(block: Block, parentScope: Scope, options: InferOptions): void {
     const scope = new Scope(parentScope);
-    const returnType = options.returnType ?? "void";
+    const returnType = options.returnType ?? primitiveType("void");
     this.checkBlockInLoop(block, scope, returnType, options.loopContext);
 
     if (block.finalExpression !== undefined) {

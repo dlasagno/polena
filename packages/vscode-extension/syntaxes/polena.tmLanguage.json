@@ -305,6 +305,10 @@
           "match": ","
         },
         {
+          "name": "punctuation.accessor.dot.polena",
+          "match": "\\."
+        },
+        {
           "name": "punctuation.terminator.statement.polena",
           "match": ";"
         },
@@ -323,6 +327,14 @@
         {
           "name": "punctuation.section.group.end.polena",
           "match": "\\)"
+        },
+        {
+          "name": "punctuation.section.brackets.begin.polena",
+          "match": "\\["
+        },
+        {
+          "name": "punctuation.section.brackets.end.polena",
+          "match": "\\]"
         }
       ]
     }

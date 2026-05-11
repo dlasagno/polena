@@ -2,6 +2,7 @@ import type { PrimitiveType } from "./ast";
 
 export type Type =
   | { readonly kind: "primitive"; readonly name: PrimitiveType }
+  | { readonly kind: "array"; readonly element: Type }
   | {
       readonly kind: "function";
       readonly params: readonly Type[];
@@ -11,6 +12,10 @@ export type Type =
 
 export function primitiveType(name: PrimitiveType): Type {
   return { kind: "primitive", name };
+}
+
+export function arrayType(element: Type): Type {
+  return { kind: "array", element };
 }
 
 export function functionType(params: readonly Type[], returnType: Type): Type {
@@ -29,6 +34,8 @@ export function sameType(left: Type, right: Type): boolean {
   switch (left.kind) {
     case "primitive":
       return right.kind === "primitive" && left.name === right.name;
+    case "array":
+      return right.kind === "array" && sameType(left.element, right.element);
     case "function":
       return (
         right.kind === "function" &&
@@ -48,6 +55,8 @@ export function formatType(type: Type): string {
   switch (type.kind) {
     case "primitive":
       return type.name;
+    case "array":
+      return `[]${formatType(type.element)}`;
     case "function":
       return "function";
     case "unknown":

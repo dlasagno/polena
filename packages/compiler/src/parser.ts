@@ -299,6 +299,17 @@ class Parser {
   }
 
   private parseType(): TypeNode {
+    if (this.match("LeftBracket")) {
+      const leftBracket = this.previous();
+      this.expect("RightBracket", "Expected ']' in array type.");
+      const element = this.parseType();
+      return {
+        kind: "ArrayType",
+        element,
+        span: mergeSpans(leftBracket.span, element.span),
+      };
+    }
+
     const token = this.current();
     const type = primitiveTypeFromToken(token.kind);
 
@@ -306,7 +317,7 @@ class Parser {
       this.diagnostics.push(
         error("Expected a primitive type.", token.span, {
           code: DiagnosticCode.ExpectedTypeSyntax,
-          label: "expected 'number', 'bigint', 'string', 'boolean', or 'void'",
+          label: "expected a type such as 'number', 'string', or '[]number'",
         }),
       );
       this.advance();
@@ -352,7 +363,7 @@ class Parser {
   private parseUnaryExpression(): Expression {
     const operator = unaryOperatorFromToken(this.current().kind);
     if (operator === undefined) {
-      return this.parseCallExpression();
+      return this.parsePostfixExpression();
     }
 
     const token = this.advance();
@@ -365,28 +376,57 @@ class Parser {
     };
   }
 
-  private parseCallExpression(): Expression {
+  private parsePostfixExpression(): Expression {
     let expression = this.parsePrimaryExpression();
 
-    while (this.match("LeftParen")) {
-      const leftParen = this.previous();
-      const args: Expression[] = [];
+    while (true) {
+      if (this.match("LeftParen")) {
+        const leftParen = this.previous();
+        const args: Expression[] = [];
 
-      if (!this.check("RightParen")) {
-        do {
-          args.push(this.parseExpression());
-        } while (this.match("Comma"));
+        if (!this.check("RightParen")) {
+          do {
+            args.push(this.parseExpression());
+          } while (this.match("Comma"));
+        }
+
+        const rightParen = this.expect("RightParen", "Expected ')' after arguments.");
+        expression = {
+          kind: "CallExpression",
+          callee: expression,
+          args,
+          span: mergeSpans(expression.span, rightParen.span),
+        };
+
+        void leftParen;
+        continue;
       }
 
-      const rightParen = this.expect("RightParen", "Expected ')' after arguments.");
-      expression = {
-        kind: "CallExpression",
-        callee: expression,
-        args,
-        span: mergeSpans(expression.span, rightParen.span),
-      };
+      if (this.match("LeftBracket")) {
+        const index = this.parseExpression();
+        const rightBracket = this.expect("RightBracket", "Expected ']' after array index.");
+        expression = {
+          kind: "IndexExpression",
+          target: expression,
+          index,
+          span: mergeSpans(expression.span, rightBracket.span),
+        };
+        continue;
+      }
 
-      void leftParen;
+      if (this.match("Dot")) {
+        const name = this.expect("Identifier", "Expected property name after '.'.");
+        expression = {
+          kind: "MemberExpression",
+          target: expression,
+          name: name.text,
+          nameSpan: name.span,
+          span: mergeSpans(expression.span, name.span),
+        };
+        continue;
+      }
+
+      break;
     }
 
     return expression;
@@ -429,6 +469,10 @@ class Parser {
       };
     }
 
+    if (this.check("LeftBracket")) {
+      return this.parseArrayLiteral();
+    }
+
     if (this.match("True")) {
       const token = this.previous();
       return { kind: "BooleanLiteral", value: true, span: token.span };
@@ -463,6 +507,28 @@ class Parser {
       value: 0,
       text: "0",
       span: token.span,
+    };
+  }
+
+  private parseArrayLiteral(): Expression {
+    const leftBracket = this.expect("LeftBracket", "Expected '['.");
+    const elements: Expression[] = [];
+
+    if (!this.check("RightBracket")) {
+      do {
+        if (this.check("RightBracket")) {
+          break;
+        }
+
+        elements.push(this.parseExpression());
+      } while (this.match("Comma"));
+    }
+
+    const rightBracket = this.expect("RightBracket", "Expected ']' after array literal.");
+    return {
+      kind: "ArrayLiteral",
+      elements,
+      span: mergeSpans(leftBracket.span, rightBracket.span),
     };
   }
 

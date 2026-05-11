@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  arrayType,
   formatType,
   functionType,
   inferArithmeticType,
@@ -21,12 +22,23 @@ describe("semantic types", () => {
     expect(sameType(left, right)).toBe(true);
   });
 
+  test("treats structurally identical array types as equal", () => {
+    expect(sameType(arrayType(primitiveType("number")), arrayType(primitiveType("number")))).toBe(
+      true,
+    );
+    expect(sameType(arrayType(primitiveType("number")), arrayType(primitiveType("string")))).toBe(
+      false,
+    );
+  });
+
   test("formats user-facing type names", () => {
     expect(formatType(primitiveType("number"))).toBe("number");
     expect(formatType(primitiveType("bigint"))).toBe("bigint");
     expect(formatType(primitiveType("string"))).toBe("string");
     expect(formatType(primitiveType("boolean"))).toBe("boolean");
     expect(formatType(primitiveType("void"))).toBe("void");
+    expect(formatType(arrayType(primitiveType("number")))).toBe("[]number");
+    expect(formatType(arrayType(arrayType(primitiveType("number"))))).toBe("[][]number");
     expect(formatType(functionType([], primitiveType("void")))).toBe("function");
     expect(formatType(unknownType())).toBe("unknown");
   });

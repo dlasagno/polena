@@ -22,9 +22,11 @@ programs end-to-end. It supports:
 - Binary arithmetic, comparison, `and`, and `or` expressions
 - `if` expressions and statement-position `if` without `else`
 - `while` loops, `break`/`continue`, and expression-valued `while ... else ...`
+- Array type syntax such as `[]number`
+- Array literals, typed empty arrays, `.length`, and checked indexing
 
-It intentionally does not yet support arrays, objects, enums, match expressions,
-modules/imports, or the full type system from the language draft.
+It intentionally does not yet support objects, enums, match expressions, modules/imports,
+or the full type system from the language draft.
 
 Example:
 

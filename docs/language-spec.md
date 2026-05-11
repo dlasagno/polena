@@ -665,6 +665,10 @@ If the index is out of bounds, the program panics.
 const value = numbers[index]; // Type: number. Panics if index is invalid.
 ```
 
+The current JavaScript backend emits a runtime bounds check for this operation.
+The index must be an integer-valued `number`; negative, fractional, `NaN`, and
+out-of-bounds indexes panic at runtime.
+
 This operation does not return `undefined`.
 
 Array indexing never produces an untyped missing value.

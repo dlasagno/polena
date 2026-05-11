@@ -80,6 +80,15 @@ class Lexer {
       case "}":
         this.addToken("RightBrace", start);
         return;
+      case "[":
+        this.addToken("LeftBracket", start);
+        return;
+      case "]":
+        this.addToken("RightBracket", start);
+        return;
+      case ".":
+        this.addToken("Dot", start);
+        return;
       case ",":
         this.addToken("Comma", start);
         return;

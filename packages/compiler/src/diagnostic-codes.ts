@@ -22,4 +22,7 @@ export const DiagnosticCode = {
   MissingBreakValue: "PLN209",
   BreakValueInStatementLoop: "PLN210",
   MissingWhileElseValue: "PLN211",
+  CannotInferArrayElementType: "PLN212",
+  CannotIndexNonArray: "PLN213",
+  UnknownProperty: "PLN214",
 } as const;

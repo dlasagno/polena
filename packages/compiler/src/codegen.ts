@@ -27,12 +27,17 @@ type LoopEmitContext = {
 
 class JavaScriptEmitter {
   private tempCounter = 0;
+  private usesIndexHelper = false;
 
   public emitProgram(program: Program): string {
     const lines: string[] = [];
 
     for (const declaration of program.declarations) {
       lines.push(...this.emitTopLevelDeclaration(declaration));
+    }
+
+    if (this.usesIndexHelper) {
+      lines.unshift(...emitIndexHelper(), "");
     }
 
     return `${lines.join("\n")}\n`;
@@ -225,6 +230,10 @@ class JavaScriptEmitter {
         return this.emitStringLiteral(expression, indent, loopContext);
       case "BooleanLiteral":
         return expression.value ? "true" : "false";
+      case "ArrayLiteral":
+        return `[${expression.elements
+          .map((element) => this.emitExpression(element, indent, loopContext))
+          .join(", ")}]`;
       case "NameExpression":
         return expression.name;
       case "UnaryExpression":
@@ -239,6 +248,15 @@ class JavaScriptEmitter {
         return `${this.emitCallCallee(expression.callee, indent, loopContext)}(${expression.args
           .map((arg) => this.emitExpression(arg, indent, loopContext))
           .join(", ")})`;
+      case "IndexExpression":
+        this.usesIndexHelper = true;
+        return `__polenaIndex(${this.emitExpression(
+          expression.target,
+          indent,
+          loopContext,
+        )}, ${this.emitExpression(expression.index, indent, loopContext)})`;
+      case "MemberExpression":
+        return `${this.emitExpression(expression.target, indent, loopContext)}.${expression.name}`;
     }
   }
 
@@ -420,6 +438,18 @@ function emitBinaryOperator(operator: BinaryOperator): string {
     default:
       return operator;
   }
+}
+
+function emitIndexHelper(): string[] {
+  return [
+    "function __polenaIndex(array, index) {",
+    "  if (!Number.isInteger(index) || index < 0 || index >= array.length) {",
+    '    throw new RangeError("array index out of bounds");',
+    "  }",
+    "",
+    "  return array[index];",
+    "}",
+  ];
 }
 
 function escapeTemplateText(value: string): string {
