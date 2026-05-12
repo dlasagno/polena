@@ -24,6 +24,12 @@ import type {
 import { error, type Diagnostic } from "./diagnostic";
 import { DiagnosticCode } from "./diagnostic-codes";
 import { preludeFunctions } from "./prelude";
+import {
+  emptySemantics,
+  type DefinitionKind,
+  type ReferenceTarget,
+  type Semantics,
+} from "./semantics";
 import { Scope, type SymbolInfo } from "./symbols";
 import type { Span } from "./span";
 import {
@@ -47,6 +53,7 @@ import {
 
 export type CheckResult = {
   readonly diagnostics: readonly Diagnostic[];
+  readonly semantics: Semantics;
 };
 
 type LoopContext = {
@@ -74,6 +81,8 @@ type TypeSymbol = {
   readonly name: string;
   readonly value: TypeNode;
   readonly span: Span;
+  readonly definitionNodeId: number;
+  readonly fullSpan: Span;
 };
 
 export function check(program: Program): CheckResult {
@@ -140,6 +149,7 @@ function unionControlFlow(left: ControlFlowOutcome, right: ControlFlowOutcome): 
 
 class Checker {
   private readonly diagnostics: Diagnostic[] = [];
+  private readonly semantics = emptySemantics();
   private readonly typeSymbols = new Map<string, TypeSymbol>();
   private readonly resolvedTypeSymbols = new Map<string, Type>();
   private readonly resolvingTypeSymbols = new Set<string>();
@@ -200,7 +210,7 @@ class Checker {
       }
     }
 
-    return { diagnostics: this.diagnostics };
+    return { diagnostics: this.diagnostics, semantics: this.semantics };
   }
 
   private declarePrelude(scope: Scope, span: Span): void {
@@ -232,19 +242,23 @@ class Checker {
       name: declaration.name,
       value: declaration.value,
       span: declaration.nameSpan,
+      definitionNodeId: declaration.nodeId,
+      fullSpan: declaration.span,
     });
+    this.recordDefinition(
+      "TypeAlias",
+      declaration.nodeId,
+      declaration.name,
+      declaration.nameSpan,
+      declaration.span,
+    );
   }
 
   private resolveTypeDeclaration(declaration: TypeDeclaration): Type {
     return this.resolveNamedType(declaration.name, declaration.nameSpan);
   }
 
-  private resolveNamedType(name: string, span: Span): Type {
-    const resolved = this.resolvedTypeSymbols.get(name);
-    if (resolved !== undefined) {
-      return resolved;
-    }
-
+  private resolveNamedType(name: string, span: Span, referenceNodeId?: number): Type {
     const symbol = this.typeSymbols.get(name);
     if (symbol === undefined) {
       this.diagnostics.push(
@@ -255,6 +269,21 @@ class Checker {
         }),
       );
       return unknownType();
+    }
+
+    if (referenceNodeId !== undefined) {
+      this.recordReference(referenceNodeId, {
+        kind: "TypeAlias",
+        name,
+        definitionNodeId: symbol.definitionNodeId,
+        nameSpan: symbol.span,
+        fullSpan: symbol.fullSpan,
+      });
+    }
+
+    const resolved = this.resolvedTypeSymbols.get(name);
+    if (resolved !== undefined) {
+      return resolved;
     }
 
     if (this.resolvingTypeSymbols.has(name)) {
@@ -285,7 +314,7 @@ class Checker {
       case "EnumType":
         return this.typeFromEnumTypeNode(typeNode, declaredName ?? "<anonymous enum>");
       case "NamedType":
-        return this.resolveNamedType(typeNode.name, typeNode.nameSpan);
+        return this.resolveNamedType(typeNode.name, typeNode.nameSpan, typeNode.nodeId);
       case "UnknownType":
         return unknownType();
     }
@@ -311,10 +340,12 @@ class Checker {
       seenFields.add(field.name);
       fields.push({
         name: field.name,
+        nodeId: field.nodeId,
         nameSpan: field.nameSpan,
         type: this.typeFromNode(field.type),
         span: field.span,
       });
+      this.recordDefinition("Field", field.nodeId, field.name, field.nameSpan, field.span);
     }
 
     return objectType(fields);
@@ -341,8 +372,17 @@ class Checker {
       seenVariants.add(variant.name);
       variants.push({
         name: variant.name,
+        nodeId: variant.nodeId,
         nameSpan: variant.nameSpan,
+        span: variant.span,
       });
+      this.recordDefinition(
+        "EnumVariant",
+        variant.nodeId,
+        `${name}.${variant.name}`,
+        variant.nameSpan,
+        variant.span,
+      );
     }
 
     return enumType(name, variants);
@@ -360,8 +400,11 @@ class Checker {
         name: declaration.name,
         type,
         span: declaration.nameSpan,
+        definitionNodeId: declaration.nodeId,
+        fullSpan: declaration.span,
         assignability: "immutable-binding",
       },
+      "Function",
       {
         duplicateMessage: `Duplicate top-level name '${declaration.name}'.`,
         duplicateLabel: "this name is already defined",
@@ -477,8 +520,11 @@ class Checker {
         name: param.name,
         type: this.typeFromNode(param.type),
         span: param.nameSpan,
+        definitionNodeId: param.nodeId,
+        fullSpan: param.span,
         assignability: "immutable-binding",
       },
+      "Local",
       {
         duplicateMessage: `Duplicate parameter '${param.name}'.`,
         duplicateLabel: "this parameter name is already used",
@@ -517,8 +563,11 @@ class Checker {
         name: declaration.name,
         type: bindingType,
         span: declaration.nameSpan,
+        definitionNodeId: declaration.nodeId,
+        fullSpan: declaration.span,
         assignability: declaration.mutability === "let" ? "mutable-variable" : "immutable-binding",
       },
+      "Local",
       {
         duplicateMessage: `Duplicate name '${declaration.name}'.`,
         duplicateLabel: "this name is already defined in this scope",
@@ -529,6 +578,7 @@ class Checker {
   private declareName(
     scope: Scope,
     symbol: SymbolInfo,
+    definitionKind: DefinitionKind,
     messages: {
       readonly duplicateMessage: string;
       readonly duplicateLabel: string;
@@ -556,6 +606,15 @@ class Checker {
     }
 
     scope.declare(symbol);
+    if (symbol.definitionNodeId !== undefined) {
+      this.recordDefinition(
+        definitionKind,
+        symbol.definitionNodeId,
+        symbol.name,
+        symbol.span,
+        symbol.fullSpan ?? symbol.span,
+      );
+    }
   }
 
   private checkAssignmentStatement(
@@ -608,6 +667,8 @@ class Checker {
       );
       return;
     }
+
+    this.recordReference(statement.target.nodeId, this.referenceTargetFromSymbol(symbol));
 
     if (symbol.assignability !== "mutable-variable") {
       this.diagnostics.push(
@@ -694,6 +755,8 @@ class Checker {
       });
       return;
     }
+
+    this.recordFieldReference(target.nodeId, target.name, field);
 
     const valueType = this.inferExpression(value, scope, {
       ifAsValue: true,
@@ -883,6 +946,12 @@ class Checker {
     scope: Scope,
     options: InferOptions = { ifAsValue: true, whileAsValue: true },
   ): Type {
+    const type = this.inferExpressionType(expression, scope, options);
+    this.semantics.expressionTypes.set(expression.nodeId, type);
+    return type;
+  }
+
+  private inferExpressionType(expression: Expression, scope: Scope, options: InferOptions): Type {
     switch (expression.kind) {
       case "NumberLiteral":
         return primitiveType("number");
@@ -915,6 +984,7 @@ class Checker {
           );
           return unknownType();
         }
+        this.recordReference(expression.nodeId, this.referenceTargetFromSymbol(symbol));
         return symbol.type;
       }
       case "UnaryExpression":
@@ -959,6 +1029,7 @@ class Checker {
         expression.enumNameSpan ?? expression.span,
         expression.variantName,
         expression.variantNameSpan,
+        expression.nodeId,
       );
     }
 
@@ -984,6 +1055,7 @@ class Checker {
 
     this.expectEnumVariant(expectedType, expression.variantName, expression.variantNameSpan);
     this.resolveShorthandEnumVariant(expression, expectedType.name);
+    this.recordEnumVariantReference(expression.nodeId, expectedType, expression.variantName);
     return expectedType;
   }
 
@@ -1558,9 +1630,15 @@ class Checker {
     options: InferOptions,
   ): Type {
     if (expression.target.kind === "NameExpression") {
-      const enumType = this.resolveEnumTypeByName(expression.target.name, expression.target.span);
+      const enumType = this.resolveEnumTypeByName(
+        expression.target.name,
+        expression.target.span,
+        expression.target.nodeId,
+      );
       if (enumType !== undefined) {
-        this.expectEnumVariant(enumType, expression.name, expression.nameSpan);
+        if (this.expectEnumVariant(enumType, expression.name, expression.nameSpan)) {
+          this.recordEnumVariantReference(expression.nodeId, enumType, expression.name);
+        }
         return enumType;
       }
     }
@@ -1577,6 +1655,7 @@ class Checker {
     if (targetType.kind === "object") {
       const field = targetType.fields.find((candidate) => candidate.name === expression.name);
       if (field !== undefined) {
+        this.recordFieldReference(expression.nodeId, expression.name, field);
         return field.type;
       }
     }
@@ -1679,6 +1758,7 @@ class Checker {
         const patternEnum = this.resolveEnumTypeByName(
           arm.pattern.enumName,
           arm.pattern.enumNameSpan ?? arm.pattern.span,
+          arm.pattern.nodeId,
         );
         if (patternEnum === undefined) {
           this.diagnostics.push(
@@ -1710,6 +1790,7 @@ class Checker {
       }
 
       this.resolveShorthandMatchPattern(arm.pattern, scrutineeType.name);
+      this.recordEnumVariantReference(arm.pattern.nodeId, scrutineeType, arm.pattern.variantName);
 
       if (seenVariants.has(arm.pattern.variantName)) {
         this.diagnostics.push(
@@ -1836,13 +1917,14 @@ class Checker {
   private resolveEnumTypeByName(
     name: string,
     span: Span,
+    referenceNodeId?: number,
   ): Extract<Type, { readonly kind: "enum" }> | undefined {
     const symbol = this.typeSymbols.get(name);
     if (symbol === undefined) {
       return undefined;
     }
 
-    const type = this.resolveNamedType(name, span);
+    const type = this.resolveNamedType(name, span, referenceNodeId);
     if (type.kind !== "enum") {
       return undefined;
     }
@@ -1855,6 +1937,7 @@ class Checker {
     enumNameSpan: Span,
     variantName: string,
     variantNameSpan: Span,
+    referenceNodeId?: number,
   ): Type {
     const enumType = this.resolveEnumTypeByName(enumName, enumNameSpan);
     if (enumType === undefined) {
@@ -1867,7 +1950,12 @@ class Checker {
       return unknownType();
     }
 
-    this.expectEnumVariant(enumType, variantName, variantNameSpan);
+    if (
+      this.expectEnumVariant(enumType, variantName, variantNameSpan) &&
+      referenceNodeId !== undefined
+    ) {
+      this.recordEnumVariantReference(referenceNodeId, enumType, variantName);
+    }
     return enumType;
   }
 
@@ -1898,6 +1986,82 @@ class Checker {
     enumName: string,
   ): void {
     (pattern as { resolvedEnumName?: string }).resolvedEnumName = enumName;
+  }
+
+  private recordDefinition(
+    kind: DefinitionKind,
+    nodeId: number,
+    name: string,
+    nameSpan: Span,
+    fullSpan: Span,
+  ): void {
+    if (this.semantics.definitions.some((definition) => definition.nodeId === nodeId)) {
+      return;
+    }
+
+    this.semantics.definitions.push({
+      kind,
+      nodeId,
+      name,
+      nameSpan,
+      fullSpan,
+    });
+  }
+
+  private recordReference(nodeId: number, target: ReferenceTarget): void {
+    this.semantics.references.set(nodeId, target);
+  }
+
+  private referenceTargetFromSymbol(symbol: SymbolInfo): ReferenceTarget {
+    if (symbol.definitionNodeId === undefined) {
+      return { kind: "Prelude", name: symbol.name };
+    }
+
+    return {
+      kind: symbol.type.kind === "function" ? "Function" : "Local",
+      name: symbol.name,
+      definitionNodeId: symbol.definitionNodeId,
+      nameSpan: symbol.span,
+      fullSpan: symbol.fullSpan ?? symbol.span,
+    };
+  }
+
+  private recordFieldReference(nodeId: number, name: string, field: SemanticObjectTypeField): void {
+    if (field.nodeId === undefined || field.nameSpan === undefined || field.span === undefined) {
+      return;
+    }
+
+    this.recordReference(nodeId, {
+      kind: "Field",
+      name,
+      definitionNodeId: field.nodeId,
+      nameSpan: field.nameSpan,
+      fullSpan: field.span,
+    });
+  }
+
+  private recordEnumVariantReference(
+    nodeId: number,
+    enumType: Extract<Type, { readonly kind: "enum" }>,
+    variantName: string,
+  ): void {
+    const variant = enumType.variants.find((candidate) => candidate.name === variantName);
+    if (
+      variant?.nodeId === undefined ||
+      variant.nameSpan === undefined ||
+      variant.span === undefined
+    ) {
+      return;
+    }
+
+    this.recordReference(nodeId, {
+      kind: "EnumVariant",
+      enumName: enumType.name,
+      variantName,
+      definitionNodeId: variant.nodeId,
+      nameSpan: variant.nameSpan,
+      fullSpan: variant.span,
+    });
   }
 }
 

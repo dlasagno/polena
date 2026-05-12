@@ -1,3 +1,4 @@
+import type { NodeId } from "./ast";
 import type { Span } from "./span";
 import type { Type } from "./types";
 
@@ -5,6 +6,8 @@ export type SymbolInfo = {
   readonly name: string;
   readonly type: Type;
   readonly span: Span;
+  readonly definitionNodeId?: NodeId;
+  readonly fullSpan?: Span;
   readonly assignability: "mutable-variable" | "immutable-binding";
 };
 

@@ -1,4 +1,4 @@
-import type { PrimitiveType } from "./ast";
+import type { NodeId, PrimitiveType } from "./ast";
 import type { Span } from "./span";
 
 export type Type =
@@ -16,13 +16,16 @@ export type Type =
 export type ObjectTypeField = {
   readonly name: string;
   readonly type: Type;
+  readonly nodeId?: NodeId;
   readonly nameSpan?: Span;
   readonly span?: Span;
 };
 
 export type EnumVariantType = {
   readonly name: string;
+  readonly nodeId?: NodeId;
   readonly nameSpan?: Span;
+  readonly span?: Span;
 };
 
 export function primitiveType(name: PrimitiveType): Type {

@@ -12,6 +12,7 @@ import type {
   MatchArm,
   MatchExpression,
   MatchPattern,
+  NodeId,
   ObjectLiteralExpression,
   ObjectLiteralField,
   ObjectTypeField,
@@ -47,10 +48,12 @@ export function parse(tokens: readonly Token[]): ParseResult {
 class Parser {
   private readonly diagnostics: Diagnostic[] = [];
   private index = 0;
+  private nextNodeId = 0;
 
   public constructor(private readonly tokens: readonly Token[]) {}
 
   public parse(): ParseResult {
+    this.nextNodeId = 0;
     const declarations: TopLevelDeclaration[] = [];
 
     while (!this.check("Eof")) {
@@ -63,11 +66,11 @@ class Parser {
     const end = this.current().span.end;
 
     return {
-      program: {
+      program: this.node({
         kind: "Program",
         declarations,
         span: spanFrom(start, end),
-      },
+      }),
       diagnostics: this.diagnostics,
     };
   }
@@ -99,19 +102,19 @@ class Parser {
 
     const expression = this.parseExpression();
     if (this.shouldTreatExpressionAsStatement(expression, false)) {
-      return {
+      return this.node({
         kind: "ExpressionStatement",
         expression,
         span: expression.span,
-      };
+      });
     }
 
     const semicolon = this.expect("Semicolon", "Expected ';' after expression.");
-    return {
+    return this.node({
       kind: "ExpressionStatement",
       expression,
       span: mergeSpans(expression.span, semicolon.span),
-    };
+    });
   }
 
   private parseTypeDeclaration(): TypeDeclaration {
@@ -121,13 +124,13 @@ class Parser {
     const value = this.parseType();
     const semicolon = this.expect("Semicolon", "Expected ';' after type declaration.");
 
-    return {
+    return this.node({
       kind: "TypeDeclaration",
       name: name.text,
       nameSpan: name.span,
       value,
       span: mergeSpans(typeToken.span, semicolon.span),
-    };
+    });
   }
 
   private parseFunctionDeclaration(): FunctionDeclaration {
@@ -147,7 +150,7 @@ class Parser {
     const returnType = this.parseType();
     const body = this.parseBlock("function body");
 
-    return {
+    return this.node({
       kind: "FunctionDeclaration",
       name: name.text,
       nameSpan: name.span,
@@ -155,7 +158,7 @@ class Parser {
       returnType,
       body,
       span: mergeSpans(fnToken.span, body.span),
-    };
+    });
   }
 
   private parseParameter(): Parameter {
@@ -163,13 +166,13 @@ class Parser {
     this.expect("Colon", "Expected ':' after parameter name.");
     const type = this.parseType();
 
-    return {
+    return this.node({
       kind: "Parameter",
       name: name.text,
       nameSpan: name.span,
       type,
       span: mergeSpans(name.span, type.span),
-    };
+    });
   }
 
   private parseBlock(context: string): Block {
@@ -182,7 +185,7 @@ class Parser {
         }),
       );
       this.recoverMissingBlock();
-      return { kind: "Block", statements: [], span: token.span, isMissing: true };
+      return this.node({ kind: "Block", statements: [], span: token.span, isMissing: true });
     }
 
     const leftBrace = this.advance();
@@ -224,22 +227,26 @@ class Parser {
 
       const expression = this.parseExpression();
       if (this.shouldTreatExpressionAsStatement(expression, true)) {
-        statements.push({
-          kind: "ExpressionStatement",
-          expression,
-          span: expression.span,
-        });
+        statements.push(
+          this.node({
+            kind: "ExpressionStatement",
+            expression,
+            span: expression.span,
+          }),
+        );
         this.ensureProgress(startIndex);
         continue;
       }
 
       if (this.match("Semicolon")) {
         const semicolon = this.previous();
-        statements.push({
-          kind: "ExpressionStatement",
-          expression,
-          span: mergeSpans(expression.span, semicolon.span),
-        });
+        statements.push(
+          this.node({
+            kind: "ExpressionStatement",
+            expression,
+            span: mergeSpans(expression.span, semicolon.span),
+          }),
+        );
         this.ensureProgress(startIndex);
         continue;
       }
@@ -252,10 +259,10 @@ class Parser {
     const span = mergeSpans(leftBrace.span, rightBrace.span);
 
     if (finalExpression === undefined) {
-      return { kind: "Block", statements, span };
+      return this.node({ kind: "Block", statements, span });
     }
 
-    return { kind: "Block", statements, finalExpression, span };
+    return this.node({ kind: "Block", statements, finalExpression, span });
   }
 
   private parseVariableDeclaration(requireSemicolon: boolean): VariableDeclaration {
@@ -278,7 +285,7 @@ class Parser {
 
     const endSpan = semicolon?.span ?? initializer.span;
 
-    return {
+    return this.node({
       kind: "VariableDeclaration",
       mutability,
       name: name.text,
@@ -286,7 +293,7 @@ class Parser {
       ...(typeAnnotation === undefined ? {} : { typeAnnotation }),
       initializer,
       span: mergeSpans(keyword.span, endSpan),
-    };
+    });
   }
 
   private parseReturnStatement(): ReturnStatement {
@@ -294,39 +301,39 @@ class Parser {
     const expression = this.parseExpression();
     const semicolon = this.expect("Semicolon", "Expected ';' after return statement.");
 
-    return {
+    return this.node({
       kind: "ReturnStatement",
       expression,
       span: mergeSpans(returnToken.span, semicolon.span),
-    };
+    });
   }
 
   private parseBreakStatement(): BreakStatement {
     const breakToken = this.expect("Break", "Expected 'break'.");
 
     if (this.match("Semicolon")) {
-      return {
+      return this.node({
         kind: "BreakStatement",
         span: mergeSpans(breakToken.span, this.previous().span),
-      };
+      });
     }
 
     const expression = this.parseExpression();
     const semicolon = this.expect("Semicolon", "Expected ';' after break statement.");
-    return {
+    return this.node({
       kind: "BreakStatement",
       expression,
       span: mergeSpans(breakToken.span, semicolon.span),
-    };
+    });
   }
 
   private parseContinueStatement(): ContinueStatement {
     const continueToken = this.expect("Continue", "Expected 'continue'.");
     const semicolon = this.expect("Semicolon", "Expected ';' after continue statement.");
-    return {
+    return this.node({
       kind: "ContinueStatement",
       span: mergeSpans(continueToken.span, semicolon.span),
-    };
+    });
   }
 
   private parseAssignmentStatement(requireSemicolon = true): AssignmentStatement {
@@ -338,13 +345,13 @@ class Parser {
       ? this.expect("Semicolon", "Expected ';' after assignment statement.")
       : undefined;
 
-    return {
+    return this.node({
       kind: "AssignmentStatement",
       operator,
       target: this.assignmentTargetFromExpression(target),
       value,
       span: mergeSpans(target.span, semicolon?.span ?? value.span),
-    };
+    });
   }
 
   private assignmentTargetFromExpression(expression: Expression): AssignmentStatement["target"] {
@@ -360,11 +367,11 @@ class Parser {
             label: "assignments can target a name, object field, or array element",
           }),
         );
-        return {
+        return this.node({
           kind: "NameExpression",
           name: "<invalid>",
           span: expression.span,
-        };
+        });
     }
   }
 
@@ -373,11 +380,11 @@ class Parser {
       const leftBracket = this.previous();
       this.expect("RightBracket", "Expected ']' in array type.");
       const element = this.parseType();
-      return {
+      return this.node({
         kind: "ArrayType",
         element,
         span: mergeSpans(leftBracket.span, element.span),
-      };
+      });
     }
 
     if (this.match("LeftBrace")) {
@@ -404,13 +411,15 @@ class Parser {
           const name = this.advance();
           this.expect("Colon", "Expected ':' after object type field name.");
           const type = this.parseType();
-          fields.push({
-            kind: "ObjectTypeField" as const,
-            name: name.text,
-            nameSpan: name.span,
-            type,
-            span: mergeSpans(name.span, type.span),
-          });
+          fields.push(
+            this.node({
+              kind: "ObjectTypeField" as const,
+              name: name.text,
+              nameSpan: name.span,
+              type,
+              span: mergeSpans(name.span, type.span),
+            }),
+          );
         } while (this.match("Comma"));
       }
 
@@ -418,11 +427,11 @@ class Parser {
         "RightBrace",
         "Expected '}' after object type.",
       );
-      return {
+      return this.node({
         kind: "ObjectType",
         fields,
         span: mergeSpans(leftBrace.span, rightBrace.span),
-      };
+      });
     }
 
     if (this.check("Enum")) {
@@ -435,12 +444,12 @@ class Parser {
     if (type === undefined) {
       if (token.kind === "Identifier") {
         this.advance();
-        return {
+        return this.node({
           kind: "NamedType",
           name: token.text,
           nameSpan: token.span,
           span: token.span,
-        };
+        });
       }
 
       this.diagnostics.push(
@@ -452,11 +461,11 @@ class Parser {
       if (!this.isTypeRecoveryBoundary()) {
         this.advance();
       }
-      return { kind: "UnknownType", span: token.span };
+      return this.node({ kind: "UnknownType", span: token.span });
     }
 
     this.advance();
-    return { kind: "PrimitiveType", name: type, span: token.span };
+    return this.node({ kind: "PrimitiveType", name: type, span: token.span });
   }
 
   private parseExpression(): Expression {
@@ -492,21 +501,23 @@ class Parser {
           span = mergeSpans(name.span, rightParen.span);
         }
 
-        variants.push({
-          kind: "EnumVariantType" as const,
-          name: name.text,
-          nameSpan: name.span,
-          span,
-        });
+        variants.push(
+          this.node({
+            kind: "EnumVariantType" as const,
+            name: name.text,
+            nameSpan: name.span,
+            span,
+          }),
+        );
       } while (this.match("Comma"));
     }
 
     const rightBrace = this.expectClosingDelimiter("RightBrace", "Expected '}' after enum type.");
-    return {
+    return this.node({
       kind: "EnumType",
       variants,
       span: mergeSpans(enumToken.span, rightBrace.span),
-    };
+    });
   }
 
   private parseBinaryExpression(minPrecedence: number): Expression {
@@ -525,13 +536,13 @@ class Parser {
 
       this.advance();
       const right = this.parseBinaryExpression(precedence + 1);
-      left = {
+      left = this.node({
         kind: "BinaryExpression",
         operator,
         left,
         right,
         span: mergeSpans(left.span, right.span),
-      };
+      });
     }
 
     return left;
@@ -545,12 +556,12 @@ class Parser {
 
     const token = this.advance();
     const operand = this.parseUnaryExpression();
-    return {
+    return this.node({
       kind: "UnaryExpression",
       operator,
       operand,
       span: mergeSpans(token.span, operand.span),
-    };
+    });
   }
 
   private parsePostfixExpression(): Expression {
@@ -585,12 +596,12 @@ class Parser {
           "RightParen",
           "Expected ')' after arguments.",
         );
-        expression = {
+        expression = this.node({
           kind: "CallExpression",
           callee: expression,
           args,
           span: mergeSpans(expression.span, rightParen.span),
-        };
+        });
 
         void leftParen;
         continue;
@@ -602,24 +613,24 @@ class Parser {
           "RightBracket",
           "Expected ']' after array index.",
         );
-        expression = {
+        expression = this.node({
           kind: "IndexExpression",
           target: expression,
           index,
           span: mergeSpans(expression.span, rightBracket.span),
-        };
+        });
         continue;
       }
 
       if (this.match("Dot")) {
         const name = this.expect("Identifier", "Expected property name after '.'.");
-        expression = {
+        expression = this.node({
           kind: "MemberExpression",
           target: expression,
           name: name.text,
           nameSpan: name.span,
           span: mergeSpans(expression.span, name.span),
-        };
+        });
         continue;
       }
 
@@ -644,30 +655,30 @@ class Parser {
 
     if (this.match("Number")) {
       const token = this.previous();
-      return {
+      return this.node({
         kind: "NumberLiteral",
         value: Number(token.text.replaceAll("_", "")),
         text: token.text,
         span: token.span,
-      };
+      });
     }
 
     if (this.match("BigInt")) {
       const token = this.previous();
-      return {
+      return this.node({
         kind: "BigIntLiteral",
         text: token.text,
         span: token.span,
-      };
+      });
     }
 
     if (this.match("String") || this.match("MultilineString")) {
       const token = this.previous();
-      return {
+      return this.node({
         kind: "StringLiteral",
         parts: parseStringParts(token.text, token.span, this.diagnostics),
         span: token.span,
-      };
+      });
     }
 
     if (this.check("LeftBracket")) {
@@ -680,28 +691,28 @@ class Parser {
 
     if (this.match("True")) {
       const token = this.previous();
-      return { kind: "BooleanLiteral", value: true, span: token.span };
+      return this.node({ kind: "BooleanLiteral", value: true, span: token.span });
     }
 
     if (this.match("False")) {
       const token = this.previous();
-      return { kind: "BooleanLiteral", value: false, span: token.span };
+      return this.node({ kind: "BooleanLiteral", value: false, span: token.span });
     }
 
     if (this.match("Dot")) {
       const dot = this.previous();
       const variant = this.expect("Identifier", "Expected enum variant name after '.'.");
-      return {
+      return this.node({
         kind: "EnumVariantExpression",
         variantName: variant.text,
         variantNameSpan: variant.span,
         span: mergeSpans(dot.span, variant.span),
-      };
+      });
     }
 
     if (this.match("Identifier")) {
       const token = this.previous();
-      return { kind: "NameExpression", name: token.text, span: token.span };
+      return this.node({ kind: "NameExpression", name: token.text, span: token.span });
     }
 
     if (this.match("LeftParen")) {
@@ -720,12 +731,12 @@ class Parser {
     if (!this.isExpressionRecoveryBoundary()) {
       this.advance();
     }
-    return {
+    return this.node({
       kind: "NumberLiteral",
       value: 0,
       text: "0",
       span: token.span,
-    };
+    });
   }
 
   private parseArrayLiteral(): Expression {
@@ -746,11 +757,11 @@ class Parser {
       "RightBracket",
       "Expected ']' after array literal.",
     );
-    return {
+    return this.node({
       kind: "ArrayLiteral",
       elements,
       span: mergeSpans(leftBracket.span, rightBracket.span),
-    };
+    });
   }
 
   private parseObjectLiteral(): ObjectLiteralExpression {
@@ -766,13 +777,15 @@ class Parser {
         const name = this.expect("Identifier", "Expected field name in object literal.");
         this.expect("Colon", "Expected ':' after object literal field name.");
         const value = this.parseExpression();
-        fields.push({
-          kind: "ObjectLiteralField" as const,
-          name: name.text,
-          nameSpan: name.span,
-          value,
-          span: mergeSpans(name.span, value.span),
-        });
+        fields.push(
+          this.node({
+            kind: "ObjectLiteralField" as const,
+            name: name.text,
+            nameSpan: name.span,
+            value,
+            span: mergeSpans(name.span, value.span),
+          }),
+        );
       } while (this.match("Comma"));
     }
 
@@ -780,11 +793,11 @@ class Parser {
       "RightBrace",
       "Expected '}' after object literal.",
     );
-    return {
+    return this.node({
       kind: "ObjectLiteral",
       fields,
       span: mergeSpans(leftBrace.span, rightBrace.span),
-    };
+    });
   }
 
   private recoverToClosingBrace(): void {
@@ -809,13 +822,13 @@ class Parser {
       elseBlock = this.parseBlock("else block");
     }
 
-    return {
+    return this.node({
       kind: "IfExpression",
       condition,
       thenBlock,
       ...(elseBlock === undefined ? {} : { elseBlock }),
       span: mergeSpans(ifToken.span, elseBlock?.span ?? thenBlock.span),
-    };
+    });
   }
 
   private parseWhileExpression(): WhileExpression {
@@ -836,14 +849,14 @@ class Parser {
       elseBlock = this.parseBlock("else block");
     }
 
-    return {
+    return this.node({
       kind: "WhileExpression",
       condition,
       ...(continuation === undefined ? {} : { continuation }),
       body,
       ...(elseBlock === undefined ? {} : { elseBlock }),
       span: mergeSpans(whileToken.span, elseBlock?.span ?? body.span),
-    };
+    });
   }
 
   private parseMatchExpression(): MatchExpression {
@@ -857,12 +870,14 @@ class Parser {
       const pattern = this.parseMatchPattern();
       this.expect("Arrow", "Expected '=>' after match pattern.");
       const body = this.parseExpression();
-      arms.push({
-        kind: "MatchArm",
-        pattern,
-        body,
-        span: mergeSpans(pattern.span, body.span),
-      });
+      arms.push(
+        this.node({
+          kind: "MatchArm",
+          pattern,
+          body,
+          span: mergeSpans(pattern.span, body.span),
+        }),
+      );
 
       if (!this.match("Comma")) {
         break;
@@ -876,29 +891,29 @@ class Parser {
     }
 
     const rightBrace = this.expectClosingDelimiter("RightBrace", "Expected '}' after match arms.");
-    return {
+    return this.node({
       kind: "MatchExpression",
       scrutinee,
       arms,
       span: mergeSpans(matchToken.span, rightBrace.span),
-    };
+    });
   }
 
   private parseMatchPattern(): MatchPattern {
     if (this.check("Identifier") && this.current().text === "_") {
       const wildcard = this.advance();
-      return { kind: "WildcardPattern", span: wildcard.span };
+      return this.node({ kind: "WildcardPattern", span: wildcard.span });
     }
 
     if (this.match("Dot")) {
       const dot = this.previous();
       const variant = this.expect("Identifier", "Expected enum variant name after '.'.");
-      const pattern: MatchPattern = {
+      const pattern: MatchPattern = this.node({
         kind: "EnumVariantPattern",
         variantName: variant.text,
         variantNameSpan: variant.span,
         span: mergeSpans(dot.span, variant.span),
-      };
+      });
       this.rejectMatchPatternPayload();
       return pattern;
     }
@@ -907,14 +922,14 @@ class Parser {
       const enumName = this.previous();
       if (this.match("Dot")) {
         const variant = this.expect("Identifier", "Expected enum variant name after '.'.");
-        const pattern: MatchPattern = {
+        const pattern: MatchPattern = this.node({
           kind: "EnumVariantPattern",
           enumName: enumName.text,
           enumNameSpan: enumName.span,
           variantName: variant.text,
           variantNameSpan: variant.span,
           span: mergeSpans(enumName.span, variant.span),
-        };
+        });
         this.rejectMatchPatternPayload();
         return pattern;
       }
@@ -930,7 +945,7 @@ class Parser {
     if (!this.isMatchArmRecoveryBoundary()) {
       this.advance();
     }
-    return { kind: "WildcardPattern", span: token.span };
+    return this.node({ kind: "WildcardPattern", span: token.span });
   }
 
   private rejectMatchPatternPayload(): void {
@@ -1175,6 +1190,12 @@ class Parser {
       this.index += 1;
     }
     return token;
+  }
+
+  private node<T extends object>(node: T): T & { readonly nodeId: NodeId } {
+    const nodeId = this.nextNodeId;
+    this.nextNodeId += 1;
+    return { nodeId, ...node };
   }
 
   private ensureProgress(startIndex: number): void {

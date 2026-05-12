@@ -220,6 +220,39 @@ describe("parser", () => {
     expect(parseResult.program.declarations[0]?.kind).toBe("FunctionDeclaration");
   });
 
+  test("assigns deterministic node IDs to parsed AST nodes", () => {
+    const source = "type Score = []number; fn value(input: Score): number { input.length }";
+    const first = parse(lex(source).tokens);
+    const second = parse(lex(source).tokens);
+
+    expect(first.diagnostics).toHaveLength(0);
+    expect(first).toEqual(second);
+    expect(first.program).toMatchObject({ nodeId: expect.any(Number) });
+
+    const typeDeclaration = first.program.declarations[0];
+    expect(typeDeclaration).toMatchObject({
+      kind: "TypeDeclaration",
+      nodeId: expect.any(Number),
+      value: {
+        kind: "ArrayType",
+        nodeId: expect.any(Number),
+        element: { kind: "PrimitiveType", nodeId: expect.any(Number) },
+      },
+    });
+
+    const functionDeclaration = first.program.declarations[1];
+    expect(functionDeclaration).toMatchObject({
+      kind: "FunctionDeclaration",
+      nodeId: expect.any(Number),
+      params: [{ kind: "Parameter", nodeId: expect.any(Number) }],
+      body: {
+        kind: "Block",
+        nodeId: expect.any(Number),
+        finalExpression: { kind: "MemberExpression", nodeId: expect.any(Number) },
+      },
+    });
+  });
+
   test("parses if expressions", () => {
     const lexResult = lex("const value = if enabled { 1 } else { 0 };");
     const parseResult = parse(lexResult.tokens);

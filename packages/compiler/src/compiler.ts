@@ -4,10 +4,12 @@ import type { Program } from "./ast";
 import type { Diagnostic } from "./diagnostic";
 import { lex } from "./lexer";
 import { parse } from "./parser";
+import type { Semantics } from "./semantics";
 
 export type AnalyzeResult = {
   readonly program: Program;
   readonly diagnostics: readonly Diagnostic[];
+  readonly semantics: Semantics;
 };
 
 export type CompileResult =
@@ -34,6 +36,7 @@ export function analyze(source: string): AnalyzeResult {
   return {
     program: parseResult.program,
     diagnostics,
+    semantics: checkResult.semantics,
   };
 }
 
@@ -54,5 +57,7 @@ export function compile(source: string): CompileResult {
 export { generateJavaScript } from "./codegen";
 export { lex } from "./lexer";
 export { parse } from "./parser";
+export { findNodeAt } from "./query";
 export type { Diagnostic } from "./diagnostic";
-export type { Program } from "./ast";
+export type { NodeId, Program } from "./ast";
+export type { Definition, ReferenceTarget, Semantics } from "./semantics";
