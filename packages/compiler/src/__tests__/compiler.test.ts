@@ -65,6 +65,37 @@ describe("lexer", () => {
     ]);
   });
 
+  test("tokenizes enums, match arrows, and wildcard patterns", () => {
+    const result = lex("type Color = enum { Red, }; const label = match color { .Red => _, };");
+
+    expect(result.diagnostics).toHaveLength(0);
+    expect(result.tokens.map((token) => token.kind)).toEqual([
+      "Type",
+      "Identifier",
+      "Equal",
+      "Enum",
+      "LeftBrace",
+      "Identifier",
+      "Comma",
+      "RightBrace",
+      "Semicolon",
+      "Const",
+      "Identifier",
+      "Equal",
+      "Match",
+      "Identifier",
+      "LeftBrace",
+      "Dot",
+      "Identifier",
+      "Arrow",
+      "Identifier",
+      "Comma",
+      "RightBrace",
+      "Semicolon",
+      "Eof",
+    ]);
+  });
+
   test("tokenizes if and else keywords", () => {
     const result = lex("if enabled { 1 } else { 0 }");
 
@@ -222,6 +253,68 @@ describe("parser", () => {
         element: { kind: "NamedType", name: "Score" },
       },
     });
+  });
+
+  test("parses fieldless enum declarations", () => {
+    const lexResult = lex("type Color = enum { Red, Green, Blue, };");
+    const parseResult = parse(lexResult.tokens);
+
+    expect(parseResult.diagnostics).toHaveLength(0);
+    expect(parseResult.program.declarations[0]).toMatchObject({
+      kind: "TypeDeclaration",
+      value: {
+        kind: "EnumType",
+        variants: [
+          { kind: "EnumVariantType", name: "Red" },
+          { kind: "EnumVariantType", name: "Green" },
+          { kind: "EnumVariantType", name: "Blue" },
+        ],
+      },
+    });
+  });
+
+  test("parses enum shorthand values and match expressions", () => {
+    const lexResult = lex(`
+type Color = enum { Red, Green, Blue, };
+const blue: Color = .Blue;
+const label = match blue {
+  .Red => "red",
+  Color.Green => "green",
+  _ => "other",
+};
+`);
+    const parseResult = parse(lexResult.tokens);
+
+    expect(parseResult.diagnostics).toHaveLength(0);
+    expect(parseResult.program.declarations[1]).toMatchObject({
+      kind: "VariableDeclaration",
+      initializer: { kind: "EnumVariantExpression", variantName: "Blue" },
+    });
+    expect(parseResult.program.declarations[2]).toMatchObject({
+      kind: "VariableDeclaration",
+      initializer: {
+        kind: "MatchExpression",
+        arms: [
+          { pattern: { kind: "EnumVariantPattern", variantName: "Red" } },
+          { pattern: { kind: "EnumVariantPattern", enumName: "Color", variantName: "Green" } },
+          { pattern: { kind: "WildcardPattern" } },
+        ],
+      },
+    });
+  });
+
+  test("reports unsupported enum and match payload syntax", () => {
+    const enumResult = parse(lex("type Message = enum { Move(number), };").tokens);
+    expect(enumResult.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Enum variants with associated data are not supported yet.",
+    );
+
+    const matchResult = parse(
+      lex('const value = match message { .Move(x) => "move", _ => "other", };').tokens,
+    );
+    expect(matchResult.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Match patterns with associated data are not supported yet.",
+    );
   });
 
   test("parses object type declarations and object literals", () => {
@@ -1824,6 +1917,268 @@ const user: User = value;
     expect(result.ok).toBe(false);
     expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
       "Expected 1 argument(s), got 0.",
+    );
+  });
+
+  test("supports fieldless enum values and equality", () => {
+    const result = expectCompileOk(`
+type Color = enum {
+  Red,
+  Green,
+  Blue,
+};
+
+const red = Color.Red;
+const blue: Color = .Blue;
+const value = red != blue;
+`);
+
+    expect(executeValue(result.js)).toBe(true);
+    expect(result.js).not.toContain("const Color");
+    expect(result.js).toContain('"Color.Red"');
+    expect(result.js).toContain('"Color.Blue"');
+  });
+
+  test("supports exhaustive match expressions with dot and qualified patterns", () => {
+    const result = expectCompileOk(`
+type Color = enum {
+  Red,
+  Green,
+  Blue,
+};
+
+const color = Color.Green;
+const value = match color {
+  .Red => "red",
+  Color.Green => "green",
+  .Blue => "blue",
+};
+`);
+
+    expect(executeValue(result.js)).toBe("green");
+    expect(result.js).toContain("switch");
+    expect(result.js).toContain('case "Color.Green"');
+  });
+
+  test("supports wildcard match arms", () => {
+    const result = expectCompileOk(`
+type Color = enum {
+  Red,
+  Green,
+  Blue,
+};
+
+const color = Color.Blue;
+const value = match color {
+  .Red => "red",
+  _ => "other",
+};
+`);
+
+    expect(executeValue(result.js)).toBe("other");
+    expect(result.js).toContain("default:");
+  });
+
+  test("supports contextual enum shorthand in function arguments", () => {
+    const result = expectCompileOk(`
+type Color = enum {
+  Red,
+  Blue,
+};
+
+fn label(color: Color): string {
+  match color {
+    .Red => "red",
+    .Blue => "blue",
+  }
+}
+
+const value = label(.Blue);
+`);
+
+    expect(executeValue(result.js)).toBe("blue");
+  });
+
+  test("rejects duplicate enum variants", () => {
+    const result = compile(`
+type Color = enum {
+  Red,
+  Red,
+};
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Duplicate enum variant 'Red'.",
+    );
+  });
+
+  test("rejects unknown enum variants", () => {
+    const result = compile(`
+type Color = enum {
+  Red,
+};
+
+const value = Color.Blue;
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Unknown enum variant 'Color.Blue'.",
+    );
+  });
+
+  test("rejects enum shorthand without contextual type", () => {
+    const result = compile(`
+type Color = enum {
+  Red,
+};
+
+const value = .Red;
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Cannot infer enum type for '.Red'.",
+    );
+  });
+
+  test("rejects equality across different enum types", () => {
+    const result = compile(`
+type Color = enum {
+  Red,
+};
+
+type Status = enum {
+  Red,
+};
+
+const value = Color.Red == Status.Red;
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Operator '==' requires compatible operands, got 'Color' and 'Status'.",
+    );
+  });
+
+  test("rejects enum ordering", () => {
+    const result = compile(`
+type Color = enum {
+  Red,
+  Blue,
+};
+
+const value = Color.Red < Color.Blue;
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Operator '<' cannot order 'Color' values.",
+    );
+  });
+
+  test("rejects non-exhaustive enum matches", () => {
+    const result = compile(`
+type Color = enum {
+  Red,
+  Green,
+  Blue,
+};
+
+const color = Color.Red;
+const value = match color {
+  .Red => "red",
+  .Green => "green",
+};
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Non-exhaustive match; missing '.Blue'.",
+    );
+  });
+
+  test("rejects duplicate and unreachable match arms", () => {
+    const duplicateResult = compile(`
+type Color = enum {
+  Red,
+  Blue,
+};
+
+const color = Color.Red;
+const value = match color {
+  .Red => "red",
+  .Red => "again",
+  .Blue => "blue",
+};
+`);
+
+    expect(duplicateResult.ok).toBe(false);
+    expect(duplicateResult.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Duplicate match arm for '.Red'.",
+    );
+
+    const unreachableResult = compile(`
+type Color = enum {
+  Red,
+  Blue,
+};
+
+const color = Color.Red;
+const value = match color {
+  _ => "any",
+  .Blue => "blue",
+};
+`);
+
+    expect(unreachableResult.ok).toBe(false);
+    expect(unreachableResult.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Unreachable match arm.",
+    );
+  });
+
+  test("rejects qualified match patterns from another enum", () => {
+    const result = compile(`
+type Color = enum {
+  Red,
+  Blue,
+};
+
+type Status = enum {
+  Red,
+};
+
+const color = Color.Red;
+const value = match color {
+  Status.Red => "red",
+  .Blue => "blue",
+};
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Match pattern uses enum 'Status', but scrutinee has type 'Color'.",
+    );
+  });
+
+  test("rejects match arm result type mismatches", () => {
+    const result = compile(`
+type Color = enum {
+  Red,
+  Blue,
+};
+
+const color = Color.Red;
+const value = match color {
+  .Red => "red",
+  .Blue => 1,
+};
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Expected 'string', got 'number'.",
     );
   });
 });

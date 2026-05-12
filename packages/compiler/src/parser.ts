@@ -9,6 +9,9 @@ import type {
   FunctionDeclaration,
   IfExpression,
   LoopContinuation,
+  MatchArm,
+  MatchExpression,
+  MatchPattern,
   ObjectLiteralExpression,
   ObjectLiteralField,
   ObjectTypeField,
@@ -422,6 +425,10 @@ class Parser {
       };
     }
 
+    if (this.check("Enum")) {
+      return this.parseEnumType();
+    }
+
     const token = this.current();
     const type = primitiveTypeFromToken(token.kind);
 
@@ -454,6 +461,52 @@ class Parser {
 
   private parseExpression(): Expression {
     return this.parseBinaryExpression(1);
+  }
+
+  private parseEnumType(): TypeNode {
+    const enumToken = this.expect("Enum", "Expected 'enum'.");
+    this.expect("LeftBrace", "Expected '{' after 'enum'.");
+    const variants = [];
+
+    if (!this.check("RightBrace")) {
+      do {
+        if (this.check("RightBrace")) {
+          break;
+        }
+
+        const name = this.expect("Identifier", "Expected enum variant name.");
+        let span = name.span;
+        if (this.match("LeftParen")) {
+          const leftParen = this.previous();
+          this.diagnostics.push(
+            error("Enum variants with associated data are not supported yet.", leftParen.span, {
+              code: DiagnosticCode.UnsupportedEnumPayload,
+              label: "payload syntax is not implemented for enum variants",
+            }),
+          );
+          this.recoverToRightParen();
+          const rightParen = this.expectClosingDelimiter(
+            "RightParen",
+            "Expected ')' after enum variant payload.",
+          );
+          span = mergeSpans(name.span, rightParen.span);
+        }
+
+        variants.push({
+          kind: "EnumVariantType" as const,
+          name: name.text,
+          nameSpan: name.span,
+          span,
+        });
+      } while (this.match("Comma"));
+    }
+
+    const rightBrace = this.expectClosingDelimiter("RightBrace", "Expected '}' after enum type.");
+    return {
+      kind: "EnumType",
+      variants,
+      span: mergeSpans(enumToken.span, rightBrace.span),
+    };
   }
 
   private parseBinaryExpression(minPrecedence: number): Expression {
@@ -585,6 +638,10 @@ class Parser {
       return this.parseWhileExpression();
     }
 
+    if (this.check("Match")) {
+      return this.parseMatchExpression();
+    }
+
     if (this.match("Number")) {
       const token = this.previous();
       return {
@@ -629,6 +686,17 @@ class Parser {
     if (this.match("False")) {
       const token = this.previous();
       return { kind: "BooleanLiteral", value: false, span: token.span };
+    }
+
+    if (this.match("Dot")) {
+      const dot = this.previous();
+      const variant = this.expect("Identifier", "Expected enum variant name after '.'.");
+      return {
+        kind: "EnumVariantExpression",
+        variantName: variant.text,
+        variantNameSpan: variant.span,
+        span: mergeSpans(dot.span, variant.span),
+      };
     }
 
     if (this.match("Identifier")) {
@@ -725,6 +793,12 @@ class Parser {
     }
   }
 
+  private recoverToRightParen(): void {
+    while (!this.check("RightParen") && !this.check("Eof")) {
+      this.advance();
+    }
+  }
+
   private parseIfExpression(): IfExpression {
     const ifToken = this.expect("If", "Expected 'if'.");
     const condition = this.parseCondition("if");
@@ -770,6 +844,109 @@ class Parser {
       ...(elseBlock === undefined ? {} : { elseBlock }),
       span: mergeSpans(whileToken.span, elseBlock?.span ?? body.span),
     };
+  }
+
+  private parseMatchExpression(): MatchExpression {
+    const matchToken = this.expect("Match", "Expected 'match'.");
+    const scrutinee = this.parseExpression();
+    this.expect("LeftBrace", "Expected '{' before match arms.");
+    const arms: MatchArm[] = [];
+
+    while (!this.check("RightBrace") && !this.check("Eof")) {
+      const startIndex = this.index;
+      const pattern = this.parseMatchPattern();
+      this.expect("Arrow", "Expected '=>' after match pattern.");
+      const body = this.parseExpression();
+      arms.push({
+        kind: "MatchArm",
+        pattern,
+        body,
+        span: mergeSpans(pattern.span, body.span),
+      });
+
+      if (!this.match("Comma")) {
+        break;
+      }
+
+      if (this.check("RightBrace")) {
+        break;
+      }
+
+      this.ensureProgress(startIndex);
+    }
+
+    const rightBrace = this.expectClosingDelimiter("RightBrace", "Expected '}' after match arms.");
+    return {
+      kind: "MatchExpression",
+      scrutinee,
+      arms,
+      span: mergeSpans(matchToken.span, rightBrace.span),
+    };
+  }
+
+  private parseMatchPattern(): MatchPattern {
+    if (this.check("Identifier") && this.current().text === "_") {
+      const wildcard = this.advance();
+      return { kind: "WildcardPattern", span: wildcard.span };
+    }
+
+    if (this.match("Dot")) {
+      const dot = this.previous();
+      const variant = this.expect("Identifier", "Expected enum variant name after '.'.");
+      const pattern: MatchPattern = {
+        kind: "EnumVariantPattern",
+        variantName: variant.text,
+        variantNameSpan: variant.span,
+        span: mergeSpans(dot.span, variant.span),
+      };
+      this.rejectMatchPatternPayload();
+      return pattern;
+    }
+
+    if (this.match("Identifier")) {
+      const enumName = this.previous();
+      if (this.match("Dot")) {
+        const variant = this.expect("Identifier", "Expected enum variant name after '.'.");
+        const pattern: MatchPattern = {
+          kind: "EnumVariantPattern",
+          enumName: enumName.text,
+          enumNameSpan: enumName.span,
+          variantName: variant.text,
+          variantNameSpan: variant.span,
+          span: mergeSpans(enumName.span, variant.span),
+        };
+        this.rejectMatchPatternPayload();
+        return pattern;
+      }
+    }
+
+    const token = this.current();
+    this.diagnostics.push(
+      error("Expected a match pattern.", token.span, {
+        code: DiagnosticCode.ParseExpectedToken,
+        label: "expected '.Variant', 'Enum.Variant', or '_'",
+      }),
+    );
+    if (!this.isMatchArmRecoveryBoundary()) {
+      this.advance();
+    }
+    return { kind: "WildcardPattern", span: token.span };
+  }
+
+  private rejectMatchPatternPayload(): void {
+    if (!this.match("LeftParen")) {
+      return;
+    }
+
+    const leftParen = this.previous();
+    this.diagnostics.push(
+      error("Match patterns with associated data are not supported yet.", leftParen.span, {
+        code: DiagnosticCode.UnsupportedMatchPayload,
+        label: "payload pattern syntax is not implemented",
+      }),
+    );
+    this.recoverToRightParen();
+    this.expectClosingDelimiter("RightParen", "Expected ')' after match pattern payload.");
   }
 
   private parseLoopContinuation(): LoopContinuation {
@@ -939,6 +1116,18 @@ class Parser {
       case "RightParen":
       case "Comma":
       case "Semicolon":
+      case "Eof":
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  private isMatchArmRecoveryBoundary(): boolean {
+    switch (this.current().kind) {
+      case "Arrow":
+      case "Comma":
+      case "RightBrace":
       case "Eof":
         return true;
       default:

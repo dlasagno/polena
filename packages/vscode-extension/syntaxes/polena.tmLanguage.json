@@ -267,7 +267,7 @@
       "patterns": [
         {
           "name": "keyword.other.reserved.polena",
-          "match": "\\b(?:as|comptime|enum|impl|match|trait|unknown)\\b"
+          "match": "\\b(?:as|comptime|impl|trait|unknown)\\b"
         }
       ]
     },
@@ -275,7 +275,11 @@
       "patterns": [
         {
           "name": "keyword.control.polena",
-          "match": "\\b(?:break|continue|else|if|return|while)\\b"
+          "match": "\\b(?:break|continue|else|if|match|return|while)\\b"
+        },
+        {
+          "name": "keyword.declaration.enum.polena",
+          "match": "\\benum\\b"
         },
         {
           "name": "keyword.operator.word.polena",
@@ -315,7 +319,7 @@
       "patterns": [
         {
           "name": "keyword.operator.polena",
-          "match": "==|!=|<=|>=|\\+=|-=|\\*=|/=|%=|=|<|>|\\+|-|\\*|/|%|!"
+          "match": "=>|==|!=|<=|>=|\\+=|-=|\\*=|/=|%=|=|<|>|\\+|-|\\*|/|%|!"
         }
       ]
     },
@@ -340,6 +344,10 @@
         {
           "name": "punctuation.accessor.dot.polena",
           "match": "\\."
+        },
+        {
+          "name": "constant.language.wildcard.polena",
+          "match": "\\b_\\b"
         },
         {
           "name": "punctuation.terminator.statement.polena",

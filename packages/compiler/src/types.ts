@@ -5,6 +5,7 @@ export type Type =
   | { readonly kind: "primitive"; readonly name: PrimitiveType }
   | { readonly kind: "array"; readonly element: Type }
   | { readonly kind: "object"; readonly fields: readonly ObjectTypeField[] }
+  | { readonly kind: "enum"; readonly name: string; readonly variants: readonly EnumVariantType[] }
   | {
       readonly kind: "function";
       readonly params: readonly Type[];
@@ -19,6 +20,11 @@ export type ObjectTypeField = {
   readonly span?: Span;
 };
 
+export type EnumVariantType = {
+  readonly name: string;
+  readonly nameSpan?: Span;
+};
+
 export function primitiveType(name: PrimitiveType): Type {
   return { kind: "primitive", name };
 }
@@ -29,6 +35,10 @@ export function arrayType(element: Type): Type {
 
 export function objectType(fields: readonly ObjectTypeField[]): Type {
   return { kind: "object", fields };
+}
+
+export function enumType(name: string, variants: readonly EnumVariantType[]): Type {
+  return { kind: "enum", name, variants };
 }
 
 export function functionType(params: readonly Type[], returnType: Type): Type {
@@ -51,6 +61,8 @@ export function sameType(left: Type, right: Type): boolean {
       return right.kind === "array" && sameType(left.element, right.element);
     case "object":
       return right.kind === "object" && sameObjectFields(left.fields, right.fields);
+    case "enum":
+      return right.kind === "enum" && left.name === right.name;
     case "function":
       return (
         right.kind === "function" &&
@@ -88,6 +100,8 @@ export function formatType(type: Type): string {
       return `{ ${type.fields
         .map((field) => `${field.name}: ${formatType(field.type)}`)
         .join(", ")} }`;
+    case "enum":
+      return type.name;
     case "function":
       return "function";
     case "unknown":
@@ -106,7 +120,7 @@ export function isNumericPrimitiveName(name: PrimitiveType): name is "number" | 
 }
 
 export function isEqualityComparableType(type: Type): boolean {
-  return type.kind === "primitive" && type.name !== "void";
+  return (type.kind === "primitive" && type.name !== "void") || type.kind === "enum";
 }
 
 export function isOrderingComparableType(type: Type): boolean {

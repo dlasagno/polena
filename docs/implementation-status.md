@@ -139,7 +139,7 @@ Status values:
 |---|---|---|
 | Primitive type annotations | Implemented | `number`, `bigint`, `boolean`, `string`, `void`. |
 | Array type annotations | Implemented | `[]T`. |
-| `type Name = ...;` declarations | Partially implemented | Supports aliases to primitive, array, object, and named alias types. Enum type bodies are not implemented. |
+| `type Name = ...;` declarations | Partially implemented | Supports aliases to primitive, array, object, enum, and named alias types. |
 | Type aliases | Implemented | Transparent aliases; recursive aliases are rejected. |
 | Separate type/value namespaces | Implemented | Type aliases and value bindings may use the same name. |
 | Generics | Not implemented | Still TBD in the spec. |
@@ -151,11 +151,11 @@ Status values:
 
 | Feature | Status | Notes |
 |---|---|---|
-| Enum declarations | Not implemented | `enum` is not tokenized in the MVP. |
-| Enum values | Not implemented | Depends on enum declarations. |
-| Enum equality | Not implemented | Depends on enum types. |
-| Match expressions | Not implemented | `match` is not tokenized in the MVP. |
-| Exhaustiveness checking | Not implemented | Depends on enums and match. |
+| Enum declarations | Partially implemented | Fieldless enum declarations are implemented; associated-data variants are not. |
+| Enum values | Partially implemented | Supports `Color.Red` and contextual `.Red`; emitted JavaScript uses unique strings such as `"Color.Red"`. |
+| Enum equality | Implemented | `==` and `!=` are valid for values of the same enum type. |
+| Match expressions | Partially implemented | Supports expression arms over enum values with `.Variant`, `Enum.Variant`, and `_` patterns. Payload patterns and guards are not implemented. |
+| Exhaustiveness checking | Implemented | Enum matches must cover every variant unless a wildcard arm is present. Duplicate and unreachable arms are rejected. |
 | `Option<T>` | Not implemented | Referenced by the spec, but no generic/std library implementation exists. |
 | `Result<T, E>` | Not implemented | Referenced by the spec, but no generic/std library implementation exists. |
 | `try` operator | Not implemented | Depends on `Result`. |

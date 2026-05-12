@@ -29,10 +29,12 @@ programs end-to-end. It supports:
   index assignment
 - Object type aliases, exact object literal checking, structural object
   assignment, property access, and field assignment
+- Fieldless enum declarations, enum values, enum equality, and exhaustive
+  `match` expressions with wildcard arms
 
-It intentionally does not yet support object field readonly controls, enums,
-match expressions, modules/imports, or the full type system from the language
-draft.
+It intentionally does not yet support object field readonly controls, enum
+variants with associated data, modules/imports, or the full type system from the
+language draft.
 
 Example:
 

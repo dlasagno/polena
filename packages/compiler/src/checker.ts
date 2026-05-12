@@ -5,10 +5,13 @@ import type {
   Block,
   BreakStatement,
   ContinueStatement,
+  EnumVariantExpression,
   Expression,
   FunctionDeclaration,
   IfExpression,
   LoopContinuation,
+  MatchExpression,
+  MatchPattern,
   Parameter,
   Program,
   ReturnStatement,
@@ -25,6 +28,7 @@ import { Scope, type SymbolInfo } from "./symbols";
 import type { Span } from "./span";
 import {
   arrayType,
+  enumType,
   formatType,
   functionType,
   inferArithmeticType,
@@ -264,13 +268,13 @@ class Checker {
     }
 
     this.resolvingTypeSymbols.add(name);
-    const type = this.typeFromNode(symbol.value);
+    const type = this.typeFromNode(symbol.value, name);
     this.resolvingTypeSymbols.delete(name);
     this.resolvedTypeSymbols.set(name, type);
     return type;
   }
 
-  private typeFromNode(typeNode: TypeNode): Type {
+  private typeFromNode(typeNode: TypeNode, declaredName?: string): Type {
     switch (typeNode.kind) {
       case "PrimitiveType":
         return primitiveType(typeNode.name);
@@ -278,6 +282,8 @@ class Checker {
         return arrayType(this.typeFromNode(typeNode.element));
       case "ObjectType":
         return this.typeFromObjectTypeNode(typeNode);
+      case "EnumType":
+        return this.typeFromEnumTypeNode(typeNode, declaredName ?? "<anonymous enum>");
       case "NamedType":
         return this.resolveNamedType(typeNode.name, typeNode.nameSpan);
       case "UnknownType":
@@ -312,6 +318,34 @@ class Checker {
     }
 
     return objectType(fields);
+  }
+
+  private typeFromEnumTypeNode(
+    typeNode: Extract<TypeNode, { readonly kind: "EnumType" }>,
+    name: string,
+  ): Type {
+    const variants = [];
+    const seenVariants = new Set<string>();
+
+    for (const variant of typeNode.variants) {
+      if (seenVariants.has(variant.name)) {
+        this.diagnostics.push(
+          error(`Duplicate enum variant '${variant.name}'.`, variant.nameSpan, {
+            code: DiagnosticCode.DuplicateName,
+            label: "this variant is already defined in this enum",
+          }),
+        );
+        continue;
+      }
+
+      seenVariants.add(variant.name);
+      variants.push({
+        name: variant.name,
+        nameSpan: variant.nameSpan,
+      });
+    }
+
+    return enumType(name, variants);
   }
 
   private declareFunction(scope: Scope, declaration: FunctionDeclaration): void {
@@ -862,6 +896,8 @@ class Checker {
         return this.inferArrayLiteral(expression, scope, options);
       case "ObjectLiteral":
         return this.inferObjectLiteral(expression, scope, options);
+      case "EnumVariantExpression":
+        return this.inferEnumVariantExpression(expression, options.expectedType);
       case "NameExpression": {
         const symbol = scope.lookup(expression.name);
         if (symbol === undefined) {
@@ -908,7 +944,47 @@ class Checker {
         return this.inferIndexExpression(expression, scope, options);
       case "MemberExpression":
         return this.inferMemberExpression(expression, scope, options);
+      case "MatchExpression":
+        return this.inferMatchExpression(expression, scope, options);
     }
+  }
+
+  private inferEnumVariantExpression(
+    expression: EnumVariantExpression,
+    expectedType: Type | undefined,
+  ): Type {
+    if (expression.enumName !== undefined) {
+      return this.resolveQualifiedEnumVariant(
+        expression.enumName,
+        expression.enumNameSpan ?? expression.span,
+        expression.variantName,
+        expression.variantNameSpan,
+      );
+    }
+
+    if (expectedType === undefined || expectedType.kind === "unknown") {
+      this.diagnostics.push(
+        error(`Cannot infer enum type for '.${expression.variantName}'.`, expression.span, {
+          code: DiagnosticCode.CannotInferEnumVariant,
+          label: "this shorthand enum variant needs an expected enum type",
+        }),
+      );
+      return unknownType();
+    }
+
+    if (expectedType.kind !== "enum") {
+      this.diagnostics.push(
+        error(`Expected an enum type for '.${expression.variantName}'.`, expression.span, {
+          code: DiagnosticCode.TypeMismatch,
+          label: `expected enum type, got '${formatType(expectedType)}'`,
+        }),
+      );
+      return unknownType();
+    }
+
+    this.expectEnumVariant(expectedType, expression.variantName, expression.variantNameSpan);
+    this.resolveShorthandEnumVariant(expression, expectedType.name);
+    return expectedType;
   }
 
   private inferUnaryExpression(
@@ -1355,12 +1431,21 @@ class Checker {
           this.blockControlFlow(expression.thenBlock),
           this.blockControlFlow(expression.elseBlock),
         );
+      case "MatchExpression":
+        if (expression.arms.length === 0) {
+          return fallThroughOutcome();
+        }
+
+        return expression.arms
+          .map((arm) => this.expressionControlFlow(arm.body))
+          .reduce(unionControlFlow);
       case "NumberLiteral":
       case "BigIntLiteral":
       case "StringLiteral":
       case "BooleanLiteral":
       case "ArrayLiteral":
       case "ObjectLiteral":
+      case "EnumVariantExpression":
       case "NameExpression":
       case "UnaryExpression":
       case "BinaryExpression":
@@ -1418,7 +1503,14 @@ class Checker {
         continue;
       }
 
-      this.expectType(this.inferExpression(arg, scope, options), expected, arg.span);
+      this.expectType(
+        this.inferExpression(arg, scope, {
+          ...options,
+          expectedType: expected,
+        }),
+        expected,
+        arg.span,
+      );
     }
 
     for (let index = count; index < expression.args.length; index += 1) {
@@ -1465,6 +1557,14 @@ class Checker {
     scope: Scope,
     options: InferOptions,
   ): Type {
+    if (expression.target.kind === "NameExpression") {
+      const enumType = this.resolveEnumTypeByName(expression.target.name, expression.target.span);
+      if (enumType !== undefined) {
+        this.expectEnumVariant(enumType, expression.name, expression.nameSpan);
+        return enumType;
+      }
+    }
+
     const targetType = this.inferExpression(expression.target, scope, options);
     if (targetType.kind === "unknown") {
       return unknownType();
@@ -1492,6 +1592,158 @@ class Checker {
       ),
     );
     return unknownType();
+  }
+
+  private inferMatchExpression(
+    expression: MatchExpression,
+    scope: Scope,
+    options: InferOptions,
+  ): Type {
+    const scrutineeType = this.inferExpression(expression.scrutinee, scope, {
+      ifAsValue: true,
+      whileAsValue: true,
+      ...(options.returnType === undefined ? {} : { returnType: options.returnType }),
+      ...(options.loopContext === undefined ? {} : { loopContext: options.loopContext }),
+    });
+
+    if (expression.arms.length === 0) {
+      this.diagnostics.push(
+        error("Match expression must have at least one arm.", expression.span, {
+          code: DiagnosticCode.ParseExpectedToken,
+          label: "add a match arm",
+        }),
+      );
+      return unknownType();
+    }
+
+    const enumScrutinee = scrutineeType.kind === "enum" ? scrutineeType : undefined;
+    if (scrutineeType.kind !== "unknown" && enumScrutinee === undefined) {
+      this.diagnostics.push(
+        error(
+          `Cannot match on non-enum type '${formatType(scrutineeType)}'.`,
+          expression.scrutinee.span,
+          {
+            code: DiagnosticCode.MatchScrutineeNotEnum,
+            label: "match currently supports enum values only",
+          },
+        ),
+      );
+    }
+
+    if (enumScrutinee !== undefined) {
+      this.checkMatchPatterns(expression, enumScrutinee);
+    }
+
+    let resultType: Type | undefined;
+    for (const arm of expression.arms) {
+      const armType = this.inferExpression(arm.body, scope, {
+        ...options,
+        expectedType: options.expectedType ?? resultType,
+      });
+
+      if (resultType === undefined || resultType.kind === "unknown") {
+        resultType = armType;
+        continue;
+      }
+
+      this.expectType(armType, resultType, arm.body.span);
+    }
+
+    return resultType ?? unknownType();
+  }
+
+  private checkMatchPatterns(
+    expression: MatchExpression,
+    scrutineeType: Extract<Type, { kind: "enum" }>,
+  ): void {
+    const seenVariants = new Set<string>();
+    let sawWildcard = false;
+
+    for (const arm of expression.arms) {
+      if (sawWildcard) {
+        this.diagnostics.push(
+          error("Unreachable match arm.", arm.pattern.span, {
+            code: DiagnosticCode.UnreachableMatchArm,
+            label: "a previous wildcard arm already matches this value",
+          }),
+        );
+        continue;
+      }
+
+      if (arm.pattern.kind === "WildcardPattern") {
+        sawWildcard = true;
+        continue;
+      }
+
+      if (arm.pattern.enumName !== undefined && arm.pattern.enumName !== scrutineeType.name) {
+        const patternEnum = this.resolveEnumTypeByName(
+          arm.pattern.enumName,
+          arm.pattern.enumNameSpan ?? arm.pattern.span,
+        );
+        if (patternEnum === undefined) {
+          this.diagnostics.push(
+            error(`Unknown enum type '${arm.pattern.enumName}'.`, arm.pattern.enumNameSpan, {
+              code: DiagnosticCode.UnknownType,
+              label: "no enum type with this name is in scope",
+            }),
+          );
+          continue;
+        }
+
+        this.diagnostics.push(
+          error(
+            `Match pattern uses enum '${arm.pattern.enumName}', but scrutinee has type '${scrutineeType.name}'.`,
+            arm.pattern.enumNameSpan ?? arm.pattern.span,
+            {
+              code: DiagnosticCode.TypeMismatch,
+              label: "this enum does not match the matched value",
+            },
+          ),
+        );
+        continue;
+      }
+
+      if (
+        !this.expectEnumVariant(scrutineeType, arm.pattern.variantName, arm.pattern.variantNameSpan)
+      ) {
+        continue;
+      }
+
+      this.resolveShorthandMatchPattern(arm.pattern, scrutineeType.name);
+
+      if (seenVariants.has(arm.pattern.variantName)) {
+        this.diagnostics.push(
+          error(`Duplicate match arm for '.${arm.pattern.variantName}'.`, arm.pattern.span, {
+            code: DiagnosticCode.DuplicateMatchArm,
+            label: "this variant was already matched earlier",
+          }),
+        );
+        continue;
+      }
+
+      seenVariants.add(arm.pattern.variantName);
+    }
+
+    if (sawWildcard) {
+      return;
+    }
+
+    const missingVariants = scrutineeType.variants
+      .map((variant) => variant.name)
+      .filter((variant) => !seenVariants.has(variant));
+
+    if (missingVariants.length > 0) {
+      this.diagnostics.push(
+        error(
+          `Non-exhaustive match; missing ${missingVariants.map((name) => `'.${name}'`).join(", ")}.`,
+          expression.span,
+          {
+            code: DiagnosticCode.NonExhaustiveMatch,
+            label: "this match does not cover every enum variant",
+          },
+        ),
+      );
+    }
   }
 
   private checkIgnoredBlock(block: Block, parentScope: Scope, options: InferOptions): void {
@@ -1579,6 +1831,73 @@ class Checker {
         ],
       }),
     );
+  }
+
+  private resolveEnumTypeByName(
+    name: string,
+    span: Span,
+  ): Extract<Type, { readonly kind: "enum" }> | undefined {
+    const symbol = this.typeSymbols.get(name);
+    if (symbol === undefined) {
+      return undefined;
+    }
+
+    const type = this.resolveNamedType(name, span);
+    if (type.kind !== "enum") {
+      return undefined;
+    }
+
+    return type;
+  }
+
+  private resolveQualifiedEnumVariant(
+    enumName: string,
+    enumNameSpan: Span,
+    variantName: string,
+    variantNameSpan: Span,
+  ): Type {
+    const enumType = this.resolveEnumTypeByName(enumName, enumNameSpan);
+    if (enumType === undefined) {
+      this.diagnostics.push(
+        error(`Unknown enum type '${enumName}'.`, enumNameSpan, {
+          code: DiagnosticCode.UnknownType,
+          label: "no enum type with this name is in scope",
+        }),
+      );
+      return unknownType();
+    }
+
+    this.expectEnumVariant(enumType, variantName, variantNameSpan);
+    return enumType;
+  }
+
+  private expectEnumVariant(
+    enumType: Extract<Type, { readonly kind: "enum" }>,
+    variantName: string,
+    variantNameSpan: Span,
+  ): boolean {
+    if (enumType.variants.some((variant) => variant.name === variantName)) {
+      return true;
+    }
+
+    this.diagnostics.push(
+      error(`Unknown enum variant '${enumType.name}.${variantName}'.`, variantNameSpan, {
+        code: DiagnosticCode.UnknownEnumVariant,
+        label: "this variant is not defined for the enum",
+      }),
+    );
+    return false;
+  }
+
+  private resolveShorthandEnumVariant(expression: EnumVariantExpression, enumName: string): void {
+    (expression as { resolvedEnumName?: string }).resolvedEnumName = enumName;
+  }
+
+  private resolveShorthandMatchPattern(
+    pattern: Extract<MatchPattern, { readonly kind: "EnumVariantPattern" }>,
+    enumName: string,
+  ): void {
+    (pattern as { resolvedEnumName?: string }).resolvedEnumName = enumName;
   }
 }
 

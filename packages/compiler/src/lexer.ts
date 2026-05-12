@@ -8,6 +8,8 @@ const keywords = new Map<string, TokenKind>([
   ["let", "Let"],
   ["type", "Type"],
   ["fn", "Fn"],
+  ["enum", "Enum"],
+  ["match", "Match"],
   ["return", "Return"],
   ["if", "If"],
   ["else", "Else"],
@@ -115,7 +117,7 @@ class Lexer {
         this.addToken(this.match("=") ? "BangEqual" : "Bang", start);
         return;
       case "=":
-        this.addToken(this.match("=") ? "EqualEqual" : "Equal", start);
+        this.addToken(this.match(">") ? "Arrow" : this.match("=") ? "EqualEqual" : "Equal", start);
         return;
       case ">":
         this.addToken(this.match("=") ? "GreaterEqual" : "Greater", start);

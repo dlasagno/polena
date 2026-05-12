@@ -25,6 +25,11 @@ export type TypeNode =
       readonly span: Span;
     }
   | {
+      readonly kind: "EnumType";
+      readonly variants: readonly EnumVariantTypeNode[];
+      readonly span: Span;
+    }
+  | {
       readonly kind: "UnknownType";
       readonly span: Span;
     };
@@ -34,6 +39,13 @@ export type ObjectTypeField = {
   readonly name: string;
   readonly nameSpan: Span;
   readonly type: TypeNode;
+  readonly span: Span;
+};
+
+export type EnumVariantTypeNode = {
+  readonly kind: "EnumVariantType";
+  readonly name: string;
+  readonly nameSpan: Span;
   readonly span: Span;
 };
 
@@ -148,9 +160,11 @@ export type Expression =
   | BinaryExpression
   | IfExpression
   | WhileExpression
+  | MatchExpression
   | CallExpression
   | IndexExpression
-  | MemberExpression;
+  | MemberExpression
+  | EnumVariantExpression;
 
 export type LiteralExpression =
   | {
@@ -262,6 +276,35 @@ export type WhileExpression = {
   readonly span: Span;
 };
 
+export type MatchExpression = {
+  readonly kind: "MatchExpression";
+  readonly scrutinee: Expression;
+  readonly arms: readonly MatchArm[];
+  readonly span: Span;
+};
+
+export type MatchArm = {
+  readonly kind: "MatchArm";
+  readonly pattern: MatchPattern;
+  readonly body: Expression;
+  readonly span: Span;
+};
+
+export type MatchPattern =
+  | {
+      readonly kind: "EnumVariantPattern";
+      readonly enumName?: string;
+      readonly enumNameSpan?: Span;
+      readonly variantName: string;
+      readonly variantNameSpan: Span;
+      readonly resolvedEnumName?: string;
+      readonly span: Span;
+    }
+  | {
+      readonly kind: "WildcardPattern";
+      readonly span: Span;
+    };
+
 export type CallExpression = {
   readonly kind: "CallExpression";
   readonly callee: Expression;
@@ -281,5 +324,15 @@ export type MemberExpression = {
   readonly target: Expression;
   readonly name: string;
   readonly nameSpan: Span;
+  readonly span: Span;
+};
+
+export type EnumVariantExpression = {
+  readonly kind: "EnumVariantExpression";
+  readonly enumName?: string;
+  readonly enumNameSpan?: Span;
+  readonly variantName: string;
+  readonly variantNameSpan: Span;
+  readonly resolvedEnumName?: string;
   readonly span: Span;
 };

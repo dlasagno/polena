@@ -1196,6 +1196,10 @@ const red = Color.Red;
 preferred direction is that `Color` itself does not automatically become a
 runtime metadata object.
 
+The current JavaScript compiler implementation emits fieldless enum values as
+unique strings such as `"Color.Red"`. It does not emit a runtime metadata object
+for the enum type.
+
 When the enum type is known and there is no ambiguity, the enum name may be omitted:
 
 ```tsx
@@ -1205,6 +1209,9 @@ const blue: Color = .Blue;
 ---
 
 ## 20.1 Enums With Associated Data
+
+Associated-data variants are specified as language direction, but are not yet
+implemented by the current compiler.
 
 Enum variants may carry data:
 
@@ -1238,6 +1245,9 @@ Named associated fields are **TBD**.
 
 It is primarily used with enums, `Option`, and `Result`.
 
+The current compiler supports expression-valued match arms over fieldless enum
+variants. Block arms, payload patterns, and guards are not implemented yet.
+
 ```tsx
 const label = match color {
 	.Red => "red",
@@ -1246,7 +1256,17 @@ const label = match color {
 };
 ```
 
-For variants with associated data:
+Qualified enum variant patterns are also supported:
+
+```tsx
+const label = match color {
+	Color.Red => "red",
+	Color.Green => "green",
+	Color.Blue => "blue",
+};
+```
+
+For variants with associated data, the intended future syntax is:
 
 ```tsx
 const text = match message {
@@ -1276,13 +1296,11 @@ const label = match color {
 };
 ```
 
-A wildcard pattern may be supported later.
+The wildcard pattern `_` matches any remaining value:
 
 ```tsx
 _ => "unknown"
 ```
-
-Wildcard syntax is **TBD**.
 
 ---
 

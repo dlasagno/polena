@@ -6,6 +6,8 @@ import type {
   FunctionDeclaration,
   IfExpression,
   LoopContinuation,
+  MatchExpression,
+  MatchPattern,
   Program,
   Statement,
   TopLevelDeclaration,
@@ -30,9 +32,19 @@ class JavaScriptEmitter {
   private usesIndexHelper = false;
   private usesIndexSetHelper = false;
   private usesIndexUpdateHelper = false;
+  private readonly enumTypes = new Map<string, Set<string>>();
 
   public emitProgram(program: Program): string {
     const lines: string[] = [];
+
+    for (const declaration of program.declarations) {
+      if (declaration.kind === "TypeDeclaration" && declaration.value.kind === "EnumType") {
+        this.enumTypes.set(
+          declaration.name,
+          new Set(declaration.value.variants.map((variant) => variant.name)),
+        );
+      }
+    }
 
     for (const declaration of program.declarations) {
       lines.push(...this.emitTopLevelDeclaration(declaration));
@@ -294,6 +306,10 @@ class JavaScriptEmitter {
         return `{ ${expression.fields
           .map((field) => `${field.name}: ${this.emitExpression(field.value, indent, loopContext)}`)
           .join(", ")} }`;
+      case "EnumVariantExpression":
+        return JSON.stringify(
+          `${expression.enumName ?? expression.resolvedEnumName ?? ""}.${expression.variantName}`,
+        );
       case "NameExpression":
         return emitIdentifier(expression.name);
       case "UnaryExpression":
@@ -304,6 +320,8 @@ class JavaScriptEmitter {
         return this.emitIfExpression(expression, indent, loopContext);
       case "WhileExpression":
         return this.emitWhileExpression(expression, indent, loopContext);
+      case "MatchExpression":
+        return this.emitMatchExpression(expression, indent, loopContext);
       case "CallExpression":
         return `${this.emitCallCallee(expression.callee, indent, loopContext)}(${expression.args
           .map((arg) => this.emitExpression(arg, indent, loopContext))
@@ -316,6 +334,12 @@ class JavaScriptEmitter {
           loopContext,
         )}, ${this.emitExpression(expression.index, indent, loopContext)})`;
       case "MemberExpression":
+        if (
+          expression.target.kind === "NameExpression" &&
+          this.enumTypes.get(expression.target.name)?.has(expression.name) === true
+        ) {
+          return JSON.stringify(`${expression.target.name}.${expression.name}`);
+        }
         return `${this.emitExpression(expression.target, indent, loopContext)}.${expression.name}`;
     }
   }
@@ -458,6 +482,40 @@ class JavaScriptEmitter {
 
     lines.push(`${indent}  return ${resultVar};`, `${indent}})()`);
     return lines.join("\n");
+  }
+
+  private emitMatchExpression(
+    expression: MatchExpression,
+    indent: string,
+    loopContext?: LoopEmitContext,
+  ): string {
+    const lines = [
+      "(() => {",
+      `${indent}  switch (${this.emitExpression(expression.scrutinee, `${indent}  `, loopContext)}) {`,
+    ];
+
+    for (const arm of expression.arms) {
+      if (arm.pattern.kind === "WildcardPattern") {
+        lines.push(`${indent}    default:`);
+      } else {
+        lines.push(`${indent}    case ${this.emitMatchPatternValue(arm.pattern)}:`);
+      }
+
+      lines.push(
+        `${indent}      return ${this.emitExpression(arm.body, `${indent}      `, loopContext)};`,
+      );
+    }
+
+    lines.push(`${indent}  }`, `${indent}})()`);
+    return lines.join("\n");
+  }
+
+  private emitMatchPatternValue(
+    pattern: Extract<MatchPattern, { readonly kind: "EnumVariantPattern" }>,
+  ): string {
+    return JSON.stringify(
+      `${pattern.enumName ?? pattern.resolvedEnumName ?? ""}.${pattern.variantName}`,
+    );
   }
 
   private nextTemp(prefix: string): string {

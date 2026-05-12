@@ -1,0 +1,13 @@
+type Color = enum {
+  Red,
+  Green,
+  Blue,
+};
+
+const red = Color.Red;
+const green = Color.Green;
+const blue = Color.Blue;
+
+println("${red}");
+println("${green}");
+println("${blue}");

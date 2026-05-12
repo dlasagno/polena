@@ -27,4 +27,12 @@ export const DiagnosticCode = {
   CannotInferArrayElementType: "PLN212",
   CannotIndexNonArray: "PLN213",
   UnknownProperty: "PLN214",
+  UnknownEnumVariant: "PLN215",
+  CannotInferEnumVariant: "PLN216",
+  MatchScrutineeNotEnum: "PLN217",
+  NonExhaustiveMatch: "PLN218",
+  DuplicateMatchArm: "PLN219",
+  UnreachableMatchArm: "PLN220",
+  UnsupportedEnumPayload: "PLN221",
+  UnsupportedMatchPayload: "PLN222",
 } as const;
