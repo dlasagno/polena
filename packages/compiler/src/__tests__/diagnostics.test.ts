@@ -198,6 +198,24 @@ const value = add(1,);
     expect(result.diagnostics).toHaveLength(1);
   });
 
+  test("recovers after match arms with missing arrows without checker noise", () => {
+    const result = analyze(`
+type Color = enum { Red, Blue };
+const value: number = match Color.Red {
+  .Red 1,
+  .Blue => 2,
+};
+`);
+
+    expectDiagnostic(result.diagnostics[0], {
+      code: DiagnosticCode.ParseExpectedToken,
+      message: "Expected '=>' after match pattern.",
+      label: "parser was looking here",
+      span: span(81, 4, 8, 82, 4, 9),
+    });
+    expect(result.diagnostics).toHaveLength(1);
+  });
+
   test("reports unknown names with stable help text", () => {
     const result = analyze("const value = missing;");
 

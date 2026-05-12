@@ -26,6 +26,55 @@ describe("LSP diagnostics", () => {
     });
   });
 
+  test("moves spanned diagnostic notes into related information", () => {
+    const diagnostics: PolenaDiagnostic[] = [
+      {
+        severity: "error",
+        code: "PLN202",
+        message: "Expected 'number', got 'string'.",
+        span: {
+          start: { offset: 20, line: 1, column: 21 },
+          end: { offset: 23, line: 1, column: 24 },
+        },
+        notes: [
+          {
+            kind: "note",
+            message: "expected type declared here",
+            span: {
+              start: { offset: 7, line: 1, column: 8 },
+              end: { offset: 13, line: 1, column: 14 },
+            },
+          },
+          {
+            kind: "help",
+            message: "make this expression produce the expected type explicitly",
+          },
+        ],
+      },
+    ];
+
+    const diagnostic = toLspDiagnostics(diagnostics, "file:///example.plna")[0];
+
+    if (diagnostic === undefined) {
+      throw new Error("expected one LSP diagnostic");
+    }
+    expect(diagnostic.message).toBe(
+      "Expected 'number', got 'string'.\nhelp: make this expression produce the expected type explicitly",
+    );
+    expect(diagnostic.relatedInformation).toEqual([
+      {
+        location: {
+          uri: "file:///example.plna",
+          range: {
+            start: { line: 0, character: 7 },
+            end: { line: 0, character: 13 },
+          },
+        },
+        message: "note: expected type declared here",
+      },
+    ]);
+  });
+
   test("surfaces object semantic diagnostics from the compiler", () => {
     const result = analyze(
       'type User = { id: string, name: string }; const named = { name: "Ada" }; const user: User = named;',

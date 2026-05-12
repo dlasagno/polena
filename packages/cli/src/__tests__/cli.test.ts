@@ -75,9 +75,38 @@ describe("CLI commands", () => {
     expect(harness.stderr.join("\n")).toContain("--> example.plna:1:15");
     expect(harness.stderr.join("\n")).toContain("help: declare it before using it");
   });
+
+  test("reports read failures without claiming compilation succeeded", async () => {
+    const harness = createCliHarness();
+    const exitCode = await runCli({ args: ["missing.plna"], version: "0.1.0", io: harness.io });
+
+    expect(exitCode).toBe(1);
+    expect(harness.stdout).toHaveLength(0);
+    expect(harness.stderr).toEqual(["error: could not read 'missing.plna': file not found"]);
+    expect(harness.writes.size).toBe(0);
+  });
+
+  test("reports write failures after successful compilation", async () => {
+    const harness = createCliHarness(new Map([["example.plna", "const value = 42;"]]), {
+      failWrites: true,
+    });
+    const exitCode = await runCli({
+      args: ["compile", "example.plna", "--out", "example.js"],
+      version: "0.1.0",
+      io: harness.io,
+    });
+
+    expect(exitCode).toBe(1);
+    expect(harness.stdout).toHaveLength(0);
+    expect(harness.stderr).toEqual(["error: could not write 'example.js': disk full"]);
+    expect(harness.writes.size).toBe(0);
+  });
 });
 
-function createCliHarness(files: ReadonlyMap<string, string> = new Map()): {
+function createCliHarness(
+  files: ReadonlyMap<string, string> = new Map(),
+  options: { readonly failWrites?: boolean } = {},
+): {
   readonly io: CliIo;
   readonly stdout: string[];
   readonly stderr: string[];
@@ -97,6 +126,9 @@ function createCliHarness(files: ReadonlyMap<string, string> = new Map()): {
         return source;
       },
       writeTextFile: async (path, contents) => {
+        if (options.failWrites === true) {
+          throw new Error("disk full");
+        }
         writes.set(path, contents);
       },
       stdout: (text) => stdout.push(text),
