@@ -56,7 +56,7 @@ Status values:
 | Reassignment of `const` bindings rejected | Implemented | Diagnostics are emitted. |
 | Compound assignment | Implemented | `+=`, `-=`, `*=`, `/=`, `%=` for numeric `let` bindings. |
 | Assignment to array elements | Not implemented | Spec direction allows checked index assignment. |
-| Assignment to object fields | Not implemented | Objects are not implemented. |
+| Assignment to object fields | Not implemented | Object field reads are implemented, but field assignment depends on mutability rules. |
 | Shadowing rules | Partially implemented | The MVP rejects duplicate names in the same scope and shadowing names from outer scopes; future redeclaration shadowing remains TBD in the spec. |
 
 ---
@@ -127,8 +127,8 @@ Status values:
 | Object literals | Partially implemented | Parsed, checked, and emitted. Contextual object literals require exact fields. |
 | Object type declarations | Partially implemented | Supported through `type Name = { ... };`. |
 | Structural object typing | Not implemented | The language specifies structural typing, but the MVP currently requires exact object assignability. |
-| Object property access | Not implemented | Only array `.length` is supported as a member expression. |
-| Object field assignment | Not implemented | Depends on object support. |
+| Object property access | Implemented | Known fields can be read from object values; unknown fields are rejected. |
+| Object field assignment | Not implemented | Depends on object mutability and assignment rules. |
 | Object introspection directives | Not implemented | Depends on directives and object types. |
 
 ---

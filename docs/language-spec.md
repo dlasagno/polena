@@ -943,9 +943,10 @@ Fresh object literals assigned directly to an annotated object type may be
 checked more strictly than non-literal values. The exact excess-property rules
 are **TBD**.
 
-The current compiler MVP parses and checks object type declarations and object
-literals, but general structural assignability is not implemented yet. For now,
-assigning one object-typed value to another requires the same exact object shape.
+The current compiler MVP parses and checks object type declarations, object
+literals, and known-field property access, but general structural assignability
+is not implemented yet. For now, assigning one object-typed value to another
+requires the same exact object shape.
 
 ---
 

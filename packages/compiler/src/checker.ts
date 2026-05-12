@@ -1154,6 +1154,13 @@ class Checker {
       return primitiveType("number");
     }
 
+    if (targetType.kind === "object") {
+      const field = targetType.fields.find((candidate) => candidate.name === expression.name);
+      if (field !== undefined) {
+        return field.type;
+      }
+    }
+
     this.diagnostics.push(
       error(
         `Unknown property '${expression.name}' on type '${formatType(targetType)}'.`,

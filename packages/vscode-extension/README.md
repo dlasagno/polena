@@ -27,3 +27,10 @@ To create an installable VSIX:
 ```sh
 bun run --cwd packages/vscode-extension build:vsix
 ```
+
+To build and install the VSIX into Cursor or VS Code:
+
+```sh
+bun run --cwd packages/vscode-extension install:vsix:cursor
+bun run --cwd packages/vscode-extension install:vsix:vscode
+```

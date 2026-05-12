@@ -634,6 +634,30 @@ const value: User = {
     expect(execute()).toBe(90);
   });
 
+  test("supports object property access", () => {
+    const result = expectCompileOk(`
+type User = {
+  name: string,
+  score: number,
+};
+
+const user: User = { name: "Ada", score: 42 };
+const value = user.name;
+`);
+
+    expect(result.js).toContain("user.name");
+    expect(executeValue(result.js)).toBe("Ada");
+  });
+
+  test("supports object property access on inferred object types", () => {
+    const result = expectCompileOk(`
+const point = { x: 20, y: 22 };
+const value = point.x + point.y;
+`);
+
+    expect(executeValue(result.js)).toBe(42);
+  });
+
   test("infers exact object literal types", () => {
     const result = expectCompileOk(`
 const user = {
@@ -1135,6 +1159,22 @@ const value = values.size;
     expect(result.ok).toBe(false);
     expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
       "Unknown property 'length' on type 'number'.",
+    );
+  });
+
+  test("rejects unknown object properties", () => {
+    const result = compile(`
+type User = {
+  name: string,
+};
+
+const user: User = { name: "Ada" };
+const value = user.email;
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Unknown property 'email' on type '{ name: string }'.",
     );
   });
 

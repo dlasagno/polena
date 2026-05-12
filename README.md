@@ -26,10 +26,10 @@ programs end-to-end. It supports:
 - `while` loops, `break`/`continue`, and expression-valued `while ... else ...`
 - Array type syntax such as `[]number` and named aliases for array types
 - Array literals, typed empty arrays, `.length`, and checked indexing
-- Object type aliases and exact object literals
+- Object type aliases, exact object literals, and property access
 
-It intentionally does not yet support object property access, structural object
-assignability, enums, match expressions, modules/imports, or the full type
+It intentionally does not yet support structural object assignability, object
+field assignment, enums, match expressions, modules/imports, or the full type
 system from the language draft.
 
 Example:
@@ -77,6 +77,13 @@ Create an installable VSIX:
 
 ```sh
 bun run --cwd packages/vscode-extension build:vsix
+```
+
+Build and install the VSIX into Cursor or VS Code:
+
+```sh
+bun run cursor:install
+bun run vscode:install
 ```
 
 Compile a file to JavaScript:

@@ -12,8 +12,11 @@
   "main": "./dist/extension.js",
   "scripts": {
     "build": "bun build ../language-server/src/index.ts --outfile ./dist/server.js --target node && bun build ./src/extension.ts --outfile ./dist/extension.js --target node --external vscode",
-    "build:vsix": "bun run build && vsce package --no-dependencies",
+    "build:vsix": "bun run build && vsce package --no-dependencies --out polena-vscode.vsix",
     "check": "bun run build",
+    "install:vsix": "bun run install:vsix:cursor",
+    "install:vsix:cursor": "bun run build:vsix && cursor --install-extension polena-vscode.vsix --force",
+    "install:vsix:vscode": "bun run build:vsix && code --install-extension polena-vscode.vsix --force",
     "package": "bun run build:vsix"
   },
   "categories": [

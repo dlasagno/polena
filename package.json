@@ -17,11 +17,13 @@
     "build:binary": "bun build ./packages/cli/src/index.ts --compile --outfile ./dist/polena",
     "check": "bun run typecheck && bun run lint && bun run format:check && bun run test",
     "compile": "bun run ./packages/cli/src/index.ts compile",
+    "cursor:install": "bun run --cwd packages/vscode-extension install:vsix:cursor",
     "format": "biome format --write .",
     "format:check": "biome format .",
     "lint": "biome lint .",
     "test": "bun test --pass-with-no-tests",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "vscode:install": "bun run --cwd packages/vscode-extension install:vsix:vscode"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.14",
