@@ -1222,6 +1222,10 @@ class Checker {
     const leftType = this.inferExpression(left, scope, options);
     const rightType = this.inferExpression(right, scope, options);
 
+    if (operator === "++") {
+      return this.inferConcatenationExpression(leftType, rightType, span);
+    }
+
     if (isArithmeticOperator(operator)) {
       const arithmeticType = inferArithmeticType(leftType, rightType);
       if (arithmeticType !== undefined) {
@@ -1342,6 +1346,54 @@ class Checker {
     }
 
     return primitiveType("boolean");
+  }
+
+  private inferConcatenationExpression(leftType: Type, rightType: Type, span: Span): Type {
+    if (
+      leftType.kind === "primitive" &&
+      leftType.name === "string" &&
+      rightType.kind === "primitive" &&
+      rightType.name === "string"
+    ) {
+      return primitiveType("string");
+    }
+
+    if (leftType.kind === "array" && rightType.kind === "array") {
+      if (sameType(leftType.element, rightType.element)) {
+        return leftType;
+      }
+
+      this.diagnostics.push(
+        error(
+          `Operator '++' requires compatible array element types, got '${formatType(
+            leftType.element,
+          )}' and '${formatType(rightType.element)}'.`,
+          span,
+          {
+            code: DiagnosticCode.IncompatibleOperands,
+            label: "these arrays do not have compatible element types",
+          },
+        ),
+      );
+      return arrayType(unknownType());
+    }
+
+    if (leftType.kind !== "unknown" && rightType.kind !== "unknown") {
+      this.diagnostics.push(
+        error(
+          `Operator '++' requires string or array operands, got '${formatType(
+            leftType,
+          )}' and '${formatType(rightType)}'.`,
+          span,
+          {
+            code: DiagnosticCode.IncompatibleOperands,
+            label: "these operands cannot be concatenated",
+          },
+        ),
+      );
+    }
+
+    return unknownType();
   }
 
   private inferIfExpression(expression: IfExpression, scope: Scope, options: InferOptions): Type {

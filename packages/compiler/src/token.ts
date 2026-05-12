@@ -40,6 +40,7 @@ export type TokenKind =
   | "Equal"
   | "Arrow"
   | "Plus"
+  | "PlusPlus"
   | "PlusEqual"
   | "Minus"
   | "MinusEqual"

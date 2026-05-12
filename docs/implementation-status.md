@@ -70,8 +70,8 @@ Status values:
 | Arithmetic operators | Implemented | Numeric operands only; `number` and `bigint` cannot be mixed. |
 | Comparison operators | Implemented | Equality supports primitive values and rejects arrays and functions; ordering supports same-type `number` and `bigint` operands only. |
 | Logical `and` / `or` | Implemented | Operands must be `boolean`. |
-| String concatenation with `++` | Not implemented | Spec includes `++`, but the MVP does not tokenize or parse it. |
-| Array concatenation with `++` | Not implemented | Spec includes `++`, but the MVP does not tokenize or parse it. |
+| String concatenation with `++` | Implemented | Both operands must be `string`; emitted JavaScript uses `.concat`. |
+| Array concatenation with `++` | Implemented | Both operands must be arrays with the same element type; emitted JavaScript uses `.concat`. |
 
 ---
 

@@ -132,7 +132,7 @@ describe("lexer", () => {
   });
 
   test("tokenizes compound assignment operators", () => {
-    const result = lex("value += 1; value %= 2;");
+    const result = lex("value += 1; value %= 2; left ++ right;");
 
     expect(result.diagnostics).toHaveLength(0);
     expect(result.tokens.map((token) => token.kind)).toEqual([
@@ -143,6 +143,10 @@ describe("lexer", () => {
       "Identifier",
       "PercentEqual",
       "Number",
+      "Semicolon",
+      "Identifier",
+      "PlusPlus",
+      "Identifier",
       "Semicolon",
       "Eof",
     ]);
@@ -213,11 +217,20 @@ describe("lexer", () => {
 
 describe("parser", () => {
   test("parses function declarations and operator precedence", () => {
-    const lexResult = lex("fn value(): number { 1 + 2 * 3 }");
+    const lexResult = lex('fn value(): string { "a" ++ "b" + "c" }');
     const parseResult = parse(lexResult.tokens);
 
     expect(parseResult.diagnostics).toHaveLength(0);
-    expect(parseResult.program.declarations[0]?.kind).toBe("FunctionDeclaration");
+    expect(parseResult.program.declarations[0]).toMatchObject({
+      kind: "FunctionDeclaration",
+      body: {
+        finalExpression: {
+          kind: "BinaryExpression",
+          operator: "+",
+          left: { kind: "BinaryExpression", operator: "++" },
+        },
+      },
+    });
   });
 
   test("assigns deterministic node IDs to parsed AST nodes", () => {
@@ -609,6 +622,16 @@ const value = "line\nnext\tindent";
     expect(executeValue(result.js)).toBe("line\nnext\tindent");
   });
 
+  test("supports string concatenation", () => {
+    const result = expectCompileOk(`
+const first = "Ada";
+const value = "Hello, " ++ first ++ "!";
+`);
+
+    expect(result.js).toContain('"Hello, ".concat(first)');
+    expect(executeValue(result.js)).toBe("Hello, Ada!");
+  });
+
   test("supports if statements without else branches", () => {
     const result = expectCompileOk(`
 fn choose(enabled: boolean): number {
@@ -941,6 +964,18 @@ const value = values[0] + values[1];
 `);
 
     expect(result.js).toContain("function __polenaIndex");
+    expect(executeValue(result.js)).toBe(42);
+  });
+
+  test("supports array concatenation", () => {
+    const result = expectCompileOk(`
+const left = [20];
+const right = [22];
+const values = left ++ right;
+const value = values[0] + values[1];
+`);
+
+    expect(result.js).toContain("left.concat(right)");
     expect(executeValue(result.js)).toBe(42);
   });
 
@@ -1278,6 +1313,24 @@ const value = if true {
     expect(result.ok).toBe(false);
     expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
       "Operator '+' requires compatible operands, got 'number' and 'bigint'.",
+    );
+  });
+
+  test("rejects concatenating unsupported operand types", () => {
+    const result = compile("const value = 1 ++ 2;");
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Operator '++' requires string or array operands, got 'number' and 'number'.",
+    );
+  });
+
+  test("rejects array concatenation with incompatible element types", () => {
+    const result = compile('const value = [1] ++ ["x"];');
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Operator '++' requires compatible array element types, got 'number' and 'string'.",
     );
   });
 

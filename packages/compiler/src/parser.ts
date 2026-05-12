@@ -1281,6 +1281,8 @@ function binaryOperatorFromToken(kind: TokenKind): BinaryOperator | undefined {
   switch (kind) {
     case "Plus":
       return "+";
+    case "PlusPlus":
+      return "++";
     case "Minus":
       return "-";
     case "Star":
@@ -1325,6 +1327,7 @@ function binaryPrecedence(operator: BinaryOperator): number {
     case "<=":
       return 4;
     case "+":
+    case "++":
     case "-":
       return 5;
     case "*":

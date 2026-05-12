@@ -315,6 +315,9 @@ class JavaScriptEmitter {
       case "UnaryExpression":
         return `(${expression.operator}${this.emitExpression(expression.operand, indent, loopContext)})`;
       case "BinaryExpression":
+        if (expression.operator === "++") {
+          return `(${this.emitExpression(expression.left, indent, loopContext)}.concat(${this.emitExpression(expression.right, indent, loopContext)}))`;
+        }
         return `(${this.emitExpression(expression.left, indent, loopContext)} ${emitBinaryOperator(expression.operator)} ${this.emitExpression(expression.right, indent, loopContext)})`;
       case "IfExpression":
         return this.emitIfExpression(expression, indent, loopContext);

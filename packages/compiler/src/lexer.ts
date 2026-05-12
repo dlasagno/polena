@@ -102,7 +102,7 @@ class Lexer {
         this.addToken("Semicolon", start);
         return;
       case "+":
-        this.addToken(this.match("=") ? "PlusEqual" : "Plus", start);
+        this.addToken(this.match("+") ? "PlusPlus" : this.match("=") ? "PlusEqual" : "Plus", start);
         return;
       case "-":
         this.addToken(this.match("=") ? "MinusEqual" : "Minus", start);

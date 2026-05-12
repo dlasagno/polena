@@ -21,6 +21,7 @@ programs end-to-end. It supports:
 - A provisional prelude with `println(message: string): void`
 - Unary `!` and `-`
 - Binary arithmetic, comparison, `and`, and `or` expressions
+- String and array concatenation with `++`
 - `if` expressions and statement-position `if` without `else`
 - `while` loops, `break`/`continue`, and expression-valued `while ... else ...`
 - Numeric compound assignment for bindings, object fields, and array elements
