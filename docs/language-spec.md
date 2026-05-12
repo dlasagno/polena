@@ -606,6 +606,9 @@ x /= 2;
 x %= 2;
 ```
 
+Compound assignment may target bindings, object fields, or array elements when
+the target value and right-hand side have the same numeric type.
+
 Additional compound operators are **TBD**.
 
 ---

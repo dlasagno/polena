@@ -451,32 +451,25 @@ class Checker {
     scope: Scope,
     returnType?: Type,
   ): void {
-    if (statement.target.kind !== "NameExpression" && statement.operator !== "=") {
-      this.diagnostics.push(
-        error(
-          "Compound assignment is only supported for mutable bindings.",
-          statement.target.span,
-          {
-            code: DiagnosticCode.CannotAssign,
-            label: "this assignment target does not support compound assignment",
-          },
-        ),
-      );
-      this.inferExpression(statement.value, scope, {
-        ifAsValue: true,
-        whileAsValue: true,
-        ...(returnType === undefined ? {} : { returnType }),
-      });
-      return;
-    }
-
     if (statement.target.kind === "MemberExpression") {
-      this.checkMemberAssignment(statement.target, statement.value, scope, returnType);
+      this.checkMemberAssignment(
+        statement.target,
+        statement.operator,
+        statement.value,
+        scope,
+        returnType,
+      );
       return;
     }
 
     if (statement.target.kind === "IndexExpression") {
-      this.checkIndexAssignment(statement.target, statement.value, scope, returnType);
+      this.checkIndexAssignment(
+        statement.target,
+        statement.operator,
+        statement.value,
+        scope,
+        returnType,
+      );
       return;
     }
 
@@ -531,6 +524,7 @@ class Checker {
 
   private checkMemberAssignment(
     target: Extract<Expression, { readonly kind: "MemberExpression" }>,
+    operator: AssignmentOperator,
     value: Expression,
     scope: Scope,
     returnType?: Type,
@@ -595,11 +589,12 @@ class Checker {
       ...(returnType === undefined ? {} : { returnType }),
       expectedType: field.type,
     });
-    this.expectType(valueType, field.type, value.span);
+    this.expectAssignmentValueType(field.type, valueType, operator, target.nameSpan, value.span);
   }
 
   private checkIndexAssignment(
     target: Extract<Expression, { readonly kind: "IndexExpression" }>,
+    operator: AssignmentOperator,
     value: Expression,
     scope: Scope,
     returnType?: Type,
@@ -647,7 +642,34 @@ class Checker {
       ...(returnType === undefined ? {} : { returnType }),
       expectedType: targetType.element,
     });
-    this.expectType(valueType, targetType.element, value.span);
+    this.expectAssignmentValueType(
+      targetType.element,
+      valueType,
+      operator,
+      target.target.span,
+      value.span,
+    );
+  }
+
+  private expectAssignmentValueType(
+    targetType: Type,
+    valueType: Type,
+    operator: AssignmentOperator,
+    targetSpan: Span,
+    valueSpan: Span,
+  ): void {
+    if (!isCompoundAssignmentOperator(operator)) {
+      this.expectType(valueType, targetType, valueSpan);
+      return;
+    }
+
+    if (isNumericType(targetType)) {
+      this.expectType(valueType, targetType, valueSpan);
+      return;
+    }
+
+    this.expectType(targetType, primitiveType("number"), targetSpan);
+    this.expectType(valueType, primitiveType("number"), valueSpan);
   }
 
   private checkReturnStatement(statement: ReturnStatement, scope: Scope, returnType: Type): void {

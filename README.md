@@ -24,6 +24,7 @@ programs end-to-end. It supports:
 - Binary arithmetic, comparison, `and`, and `or` expressions
 - `if` expressions and statement-position `if` without `else`
 - `while` loops, `break`/`continue`, and expression-valued `while ... else ...`
+- Numeric compound assignment for bindings, object fields, and array elements
 - Array type syntax such as `[]number` and named aliases for array types
 - Array literals, typed empty arrays, `.length`, checked indexing, and checked
   index assignment

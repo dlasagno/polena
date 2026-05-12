@@ -29,6 +29,7 @@ class JavaScriptEmitter {
   private tempCounter = 0;
   private usesIndexHelper = false;
   private usesIndexSetHelper = false;
+  private usesIndexUpdateHelper = false;
 
   public emitProgram(program: Program): string {
     const lines: string[] = [];
@@ -43,6 +44,10 @@ class JavaScriptEmitter {
 
     if (this.usesIndexSetHelper) {
       lines.unshift(...emitIndexSetHelper(), "");
+    }
+
+    if (this.usesIndexUpdateHelper) {
+      lines.unshift(...emitIndexUpdateHelper(), "");
     }
 
     return `${lines.join("\n")}\n`;
@@ -215,6 +220,17 @@ class JavaScriptEmitter {
         indent,
         loopContext,
       )});`;
+    }
+
+    if (statement.target.kind === "IndexExpression") {
+      this.usesIndexUpdateHelper = true;
+      return `${indent}__polenaIndexUpdate(${this.emitExpression(
+        statement.target.target,
+        indent,
+        loopContext,
+      )}, ${this.emitExpression(statement.target.index, indent, loopContext)}, ${JSON.stringify(
+        statement.operator,
+      )}, ${this.emitExpression(statement.value, indent, loopContext)});`;
     }
 
     return `${indent}${this.emitAssignmentTarget(
@@ -504,6 +520,34 @@ function emitIndexSetHelper(): string[] {
     "  }",
     "",
     "  array[index] = value;",
+    "}",
+  ];
+}
+
+function emitIndexUpdateHelper(): string[] {
+  return [
+    "function __polenaIndexUpdate(array, index, operator, value) {",
+    "  if (!Number.isInteger(index) || index < 0 || index >= array.length) {",
+    '    throw new RangeError("array index out of bounds");',
+    "  }",
+    "",
+    "  switch (operator) {",
+    '    case "+=":',
+    "      array[index] += value;",
+    "      return;",
+    '    case "-=":',
+    "      array[index] -= value;",
+    "      return;",
+    '    case "*=":',
+    "      array[index] *= value;",
+    "      return;",
+    '    case "/=":',
+    "      array[index] /= value;",
+    "      return;",
+    '    case "%=":',
+    "      array[index] %= value;",
+    "      return;",
+    "  }",
     "}",
   ];
 }

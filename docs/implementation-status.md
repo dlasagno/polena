@@ -54,9 +54,9 @@ Status values:
 | Type inference from initializers | Implemented | Supported for MVP expression types. |
 | Reassignment of `let` bindings | Implemented | Simple name assignment only. |
 | Reassignment of `const` bindings rejected | Implemented | Diagnostics are emitted. |
-| Compound assignment | Implemented | `+=`, `-=`, `*=`, `/=`, `%=` for numeric `let` bindings. |
-| Assignment to array elements | Implemented | Index assignment uses the same checked runtime index rules as index reads. |
-| Assignment to object fields | Implemented | Known fields may be assigned when the value type is compatible. |
+| Compound assignment | Implemented | `+=`, `-=`, `*=`, `/=`, `%=` for numeric `let` bindings, object fields, and array elements. |
+| Assignment to array elements | Implemented | Index assignment and compound assignment use the same checked runtime index rules as index reads. |
+| Assignment to object fields | Implemented | Known fields may be assigned when the value type is compatible; numeric fields support compound assignment. |
 | Shadowing rules | Partially implemented | The MVP rejects duplicate names in the same scope and shadowing names from outer scopes; future redeclaration shadowing remains TBD in the spec. |
 
 ---

@@ -684,6 +684,17 @@ const value = user.name;
     expect(executeValue(result.js)).toBe("Grace");
   });
 
+  test("supports compound assignment on object fields", () => {
+    const result = expectCompileOk(`
+const user = { score: 40 };
+user.score += 2;
+const value = user.score;
+`);
+
+    expect(result.js).toContain("user.score += 2;");
+    expect(executeValue(result.js)).toBe(42);
+  });
+
   test("supports object field assignment through function parameters", () => {
     const result = expectCompileOk(`
 type User = {
@@ -829,6 +840,27 @@ const value = values[0] + values[1];
     expect(executeValue(result.js)).toBe(42);
   });
 
+  test("supports checked compound assignment on array elements", () => {
+    const result = expectCompileOk(`
+const values = [40, 2];
+values[0] += values[1];
+const value = values[0];
+`);
+
+    expect(result.js).toContain("function __polenaIndexUpdate");
+    expect(executeValue(result.js)).toBe(42);
+  });
+
+  test("supports checked compound assignment on bigint array elements", () => {
+    const result = expectCompileOk(`
+const values = [40n, 2n];
+values[0] += values[1];
+const value = values[0];
+`);
+
+    expect(executeValue(result.js)).toBe(42n);
+  });
+
   test("throws on out-of-bounds array indexes", () => {
     const result = expectCompileOk(`
 const values = [1];
@@ -851,6 +883,16 @@ const value = values[0.5];
     const result = expectCompileOk(`
 const values = [1];
 values[1] = 2;
+const value = values[0];
+`);
+
+    expect(() => executeValue(result.js)).toThrow(RangeError);
+  });
+
+  test("throws on out-of-bounds array compound assignment indexes", () => {
+    const result = expectCompileOk(`
+const values = [1];
+values[1] += 2;
 const value = values[0];
 `);
 
@@ -1280,15 +1322,27 @@ values[0] = "no";
     );
   });
 
-  test("rejects compound assignment to object fields", () => {
+  test("rejects compound assignment on non-numeric object fields", () => {
     const result = compile(`
-const user = { score: 1 };
-user.score += 1;
+const user = { name: "Ada" };
+user.name += 1;
 `);
 
     expect(result.ok).toBe(false);
     expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
-      "Compound assignment is only supported for mutable bindings.",
+      "Expected 'number', got 'string'.",
+    );
+  });
+
+  test("rejects compound assignment on non-numeric array elements", () => {
+    const result = compile(`
+const values = ["Ada"];
+values[0] += 1;
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Expected 'number', got 'string'.",
     );
   });
 
