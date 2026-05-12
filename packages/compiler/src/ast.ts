@@ -126,11 +126,12 @@ export type AssignmentOperator = "=" | "+=" | "-=" | "*=" | "/=" | "%=";
 export type AssignmentStatement = {
   readonly kind: "AssignmentStatement";
   readonly operator: AssignmentOperator;
-  readonly name: string;
-  readonly nameSpan: Span;
+  readonly target: AssignmentTarget;
   readonly value: Expression;
   readonly span: Span;
 };
+
+export type AssignmentTarget = NameExpression | MemberExpression | IndexExpression;
 
 export type ExpressionStatement = {
   readonly kind: "ExpressionStatement";

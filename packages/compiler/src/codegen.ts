@@ -28,6 +28,7 @@ type LoopEmitContext = {
 class JavaScriptEmitter {
   private tempCounter = 0;
   private usesIndexHelper = false;
+  private usesIndexSetHelper = false;
 
   public emitProgram(program: Program): string {
     const lines: string[] = [];
@@ -38,6 +39,10 @@ class JavaScriptEmitter {
 
     if (this.usesIndexHelper) {
       lines.unshift(...emitIndexHelper(), "");
+    }
+
+    if (this.usesIndexSetHelper) {
+      lines.unshift(...emitIndexSetHelper(), "");
     }
 
     return `${lines.join("\n")}\n`;
@@ -199,11 +204,44 @@ class JavaScriptEmitter {
     indent: string,
     loopContext?: LoopEmitContext,
   ): string {
-    return `${indent}${statement.name} ${statement.operator} ${this.emitExpression(
-      statement.value,
+    if (statement.target.kind === "IndexExpression" && statement.operator === "=") {
+      this.usesIndexSetHelper = true;
+      return `${indent}__polenaIndexSet(${this.emitExpression(
+        statement.target.target,
+        indent,
+        loopContext,
+      )}, ${this.emitExpression(statement.target.index, indent, loopContext)}, ${this.emitExpression(
+        statement.value,
+        indent,
+        loopContext,
+      )});`;
+    }
+
+    return `${indent}${this.emitAssignmentTarget(
+      statement.target,
       indent,
       loopContext,
-    )};`;
+    )} ${statement.operator} ${this.emitExpression(statement.value, indent, loopContext)};`;
+  }
+
+  private emitAssignmentTarget(
+    target: AssignmentStatement["target"],
+    indent: string,
+    loopContext: LoopEmitContext | undefined,
+  ): string {
+    switch (target.kind) {
+      case "NameExpression":
+        return target.name;
+      case "MemberExpression":
+        return `${this.emitExpression(target.target, indent, loopContext)}.${target.name}`;
+      case "IndexExpression":
+        this.usesIndexHelper = true;
+        return `__polenaIndex(${this.emitExpression(
+          target.target,
+          indent,
+          loopContext,
+        )}, ${this.emitExpression(target.index, indent, loopContext)})`;
+    }
   }
 
   private emitLoopContinuation(
@@ -454,6 +492,18 @@ function emitIndexHelper(): string[] {
     "  }",
     "",
     "  return array[index];",
+    "}",
+  ];
+}
+
+function emitIndexSetHelper(): string[] {
+  return [
+    "function __polenaIndexSet(array, index, value) {",
+    "  if (!Number.isInteger(index) || index < 0 || index >= array.length) {",
+    '    throw new RangeError("array index out of bounds");',
+    "  }",
+    "",
+    "  array[index] = value;",
     "}",
   ];
 }

@@ -327,7 +327,7 @@ class Parser {
   }
 
   private parseAssignmentStatement(requireSemicolon = true): AssignmentStatement {
-    const name = this.expect("Identifier", "Expected assignment target.");
+    const target = this.parseExpression();
     const operatorToken = this.advanceAssignmentOperator();
     const operator = assignmentOperatorFromToken(operatorToken.kind) ?? "=";
     const value = this.parseExpression();
@@ -338,11 +338,31 @@ class Parser {
     return {
       kind: "AssignmentStatement",
       operator,
-      name: name.text,
-      nameSpan: name.span,
+      target: this.assignmentTargetFromExpression(target),
       value,
-      span: mergeSpans(name.span, semicolon?.span ?? value.span),
+      span: mergeSpans(target.span, semicolon?.span ?? value.span),
     };
+  }
+
+  private assignmentTargetFromExpression(expression: Expression): AssignmentStatement["target"] {
+    switch (expression.kind) {
+      case "NameExpression":
+      case "MemberExpression":
+      case "IndexExpression":
+        return expression;
+      default:
+        this.diagnostics.push(
+          error("Invalid assignment target.", expression.span, {
+            code: DiagnosticCode.ParseExpectedToken,
+            label: "assignments can target a name, object field, or array element",
+          }),
+        );
+        return {
+          kind: "NameExpression",
+          name: "<invalid>",
+          span: expression.span,
+        };
+    }
   }
 
   private parseType(): TypeNode {
@@ -848,7 +868,44 @@ class Parser {
   }
 
   private isAssignmentStatementStart(): boolean {
-    return this.check("Identifier") && assignmentOperatorFromToken(this.peek().kind) !== undefined;
+    if (!this.check("Identifier")) {
+      return false;
+    }
+
+    let offset = 1;
+    let bracketDepth = 0;
+    let parenDepth = 0;
+    while (true) {
+      const token = this.peek(offset);
+      if (token.kind === "Eof" || token.kind === "Semicolon" || token.kind === "RightBrace") {
+        return false;
+      }
+
+      if (
+        bracketDepth === 0 &&
+        parenDepth === 0 &&
+        assignmentOperatorFromToken(token.kind) !== undefined
+      ) {
+        return true;
+      }
+
+      switch (token.kind) {
+        case "LeftBracket":
+          bracketDepth += 1;
+          break;
+        case "RightBracket":
+          bracketDepth = Math.max(0, bracketDepth - 1);
+          break;
+        case "LeftParen":
+          parenDepth += 1;
+          break;
+        case "RightParen":
+          parenDepth = Math.max(0, parenDepth - 1);
+          break;
+      }
+
+      offset += 1;
+    }
   }
 
   private isExpressionRecoveryBoundary(): boolean {
@@ -945,8 +1002,8 @@ class Parser {
     return this.tokens[this.index] ?? this.tokens[this.tokens.length - 1] ?? syntheticEof();
   }
 
-  private peek(): Token {
-    return this.tokens[this.index + 1] ?? this.current();
+  private peek(offset = 1): Token {
+    return this.tokens[this.index + offset] ?? this.current();
   }
 
   public parseInterpolationExpression(): {

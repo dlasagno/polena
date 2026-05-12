@@ -25,12 +25,14 @@ programs end-to-end. It supports:
 - `if` expressions and statement-position `if` without `else`
 - `while` loops, `break`/`continue`, and expression-valued `while ... else ...`
 - Array type syntax such as `[]number` and named aliases for array types
-- Array literals, typed empty arrays, `.length`, and checked indexing
-- Object type aliases, exact object literals, and property access
+- Array literals, typed empty arrays, `.length`, checked indexing, and checked
+  index assignment
+- Object type aliases, exact object literals, property access, and field
+  assignment
 
 It intentionally does not yet support structural object assignability, object
-field assignment, enums, match expressions, modules/imports, or the full type
-system from the language draft.
+field readonly controls, enums, match expressions, modules/imports, or the full
+type system from the language draft.
 
 Example:
 

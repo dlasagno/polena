@@ -451,7 +451,36 @@ class Checker {
     scope: Scope,
     returnType?: Type,
   ): void {
-    const symbol = scope.lookup(statement.name);
+    if (statement.target.kind !== "NameExpression" && statement.operator !== "=") {
+      this.diagnostics.push(
+        error(
+          "Compound assignment is only supported for mutable bindings.",
+          statement.target.span,
+          {
+            code: DiagnosticCode.CannotAssign,
+            label: "this assignment target does not support compound assignment",
+          },
+        ),
+      );
+      this.inferExpression(statement.value, scope, {
+        ifAsValue: true,
+        whileAsValue: true,
+        ...(returnType === undefined ? {} : { returnType }),
+      });
+      return;
+    }
+
+    if (statement.target.kind === "MemberExpression") {
+      this.checkMemberAssignment(statement.target, statement.value, scope, returnType);
+      return;
+    }
+
+    if (statement.target.kind === "IndexExpression") {
+      this.checkIndexAssignment(statement.target, statement.value, scope, returnType);
+      return;
+    }
+
+    const symbol = scope.lookup(statement.target.name);
     const valueType = this.inferExpression(statement.value, scope, {
       ifAsValue: true,
       whileAsValue: true,
@@ -461,7 +490,7 @@ class Checker {
 
     if (symbol === undefined) {
       this.diagnostics.push(
-        error(`Unknown name '${statement.name}'.`, statement.nameSpan, {
+        error(`Unknown name '${statement.target.name}'.`, statement.target.span, {
           code: DiagnosticCode.UnknownName,
           label: "no value with this name is in scope",
           notes: [
@@ -477,7 +506,7 @@ class Checker {
 
     if (symbol.assignability !== "mutable-variable") {
       this.diagnostics.push(
-        error(`Cannot assign to '${statement.name}'.`, statement.nameSpan, {
+        error(`Cannot assign to '${statement.target.name}'.`, statement.target.span, {
           code: DiagnosticCode.CannotAssign,
           label: "this binding is not mutable",
           notes: [{ kind: "help", message: "only 'let' bindings may be reassigned" }],
@@ -492,12 +521,133 @@ class Checker {
         return;
       }
 
-      this.expectType(symbol.type, primitiveType("number"), statement.nameSpan);
+      this.expectType(symbol.type, primitiveType("number"), statement.target.span);
       this.expectType(valueType, primitiveType("number"), statement.value.span);
       return;
     }
 
     this.expectType(valueType, symbol.type, statement.value.span);
+  }
+
+  private checkMemberAssignment(
+    target: Extract<Expression, { readonly kind: "MemberExpression" }>,
+    value: Expression,
+    scope: Scope,
+    returnType?: Type,
+  ): void {
+    const targetType = this.inferExpression(target.target, scope, {
+      ifAsValue: true,
+      whileAsValue: true,
+      ...(returnType === undefined ? {} : { returnType }),
+    });
+
+    if (targetType.kind === "unknown") {
+      this.inferExpression(value, scope, {
+        ifAsValue: true,
+        whileAsValue: true,
+        ...(returnType === undefined ? {} : { returnType }),
+      });
+      return;
+    }
+
+    if (targetType.kind !== "object") {
+      this.diagnostics.push(
+        error(
+          `Unknown property '${target.name}' on type '${formatType(targetType)}'.`,
+          target.nameSpan,
+          {
+            code: DiagnosticCode.UnknownProperty,
+            label: "this property is not available",
+          },
+        ),
+      );
+      this.inferExpression(value, scope, {
+        ifAsValue: true,
+        whileAsValue: true,
+        ...(returnType === undefined ? {} : { returnType }),
+      });
+      return;
+    }
+
+    const field = targetType.fields.find((candidate) => candidate.name === target.name);
+    if (field === undefined) {
+      this.diagnostics.push(
+        error(
+          `Unknown property '${target.name}' on type '${formatType(targetType)}'.`,
+          target.nameSpan,
+          {
+            code: DiagnosticCode.UnknownProperty,
+            label: "this property is not available",
+          },
+        ),
+      );
+      this.inferExpression(value, scope, {
+        ifAsValue: true,
+        whileAsValue: true,
+        ...(returnType === undefined ? {} : { returnType }),
+      });
+      return;
+    }
+
+    const valueType = this.inferExpression(value, scope, {
+      ifAsValue: true,
+      whileAsValue: true,
+      ...(returnType === undefined ? {} : { returnType }),
+      expectedType: field.type,
+    });
+    this.expectType(valueType, field.type, value.span);
+  }
+
+  private checkIndexAssignment(
+    target: Extract<Expression, { readonly kind: "IndexExpression" }>,
+    value: Expression,
+    scope: Scope,
+    returnType?: Type,
+  ): void {
+    const targetType = this.inferExpression(target.target, scope, {
+      ifAsValue: true,
+      whileAsValue: true,
+      ...(returnType === undefined ? {} : { returnType }),
+    });
+    const indexType = this.inferExpression(target.index, scope, {
+      ifAsValue: true,
+      whileAsValue: true,
+      ...(returnType === undefined ? {} : { returnType }),
+      expectedType: primitiveType("number"),
+    });
+    this.expectType(indexType, primitiveType("number"), target.index.span);
+
+    if (targetType.kind === "unknown") {
+      this.inferExpression(value, scope, {
+        ifAsValue: true,
+        whileAsValue: true,
+        ...(returnType === undefined ? {} : { returnType }),
+      });
+      return;
+    }
+
+    if (targetType.kind !== "array") {
+      this.diagnostics.push(
+        error(`Cannot index value of type '${formatType(targetType)}'.`, target.target.span, {
+          code: DiagnosticCode.CannotIndexNonArray,
+          label: "this value is not an array",
+        }),
+      );
+      this.inferExpression(value, scope, {
+        ifAsValue: true,
+        whileAsValue: true,
+        ...(returnType === undefined ? {} : { returnType }),
+      });
+      return;
+    }
+
+    const valueType = this.inferExpression(value, scope, {
+      ifAsValue: true,
+      whileAsValue: true,
+      ...(returnType === undefined ? {} : { returnType }),
+      expectedType: targetType.element,
+    });
+    this.expectType(valueType, targetType.element, value.span);
   }
 
   private checkReturnStatement(statement: ReturnStatement, scope: Scope, returnType: Type): void {

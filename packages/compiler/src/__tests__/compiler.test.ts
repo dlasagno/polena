@@ -287,6 +287,21 @@ describe("parser", () => {
     expect(parseResult.program.declarations[1]?.kind).toBe("AssignmentStatement");
   });
 
+  test("parses field and index assignment statements", () => {
+    const lexResult = lex('user.name = "Grace";\nvalues[0] = 42;');
+    const parseResult = parse(lexResult.tokens);
+
+    expect(parseResult.diagnostics).toHaveLength(0);
+    expect(parseResult.program.declarations[0]).toMatchObject({
+      kind: "AssignmentStatement",
+      target: { kind: "MemberExpression", name: "name" },
+    });
+    expect(parseResult.program.declarations[1]).toMatchObject({
+      kind: "AssignmentStatement",
+      target: { kind: "IndexExpression" },
+    });
+  });
+
   test("parses compound assignment statements", () => {
     const lexResult = lex("let count = 0;\ncount += 1;");
     const parseResult = parse(lexResult.tokens);
@@ -658,6 +673,35 @@ const value = point.x + point.y;
     expect(executeValue(result.js)).toBe(42);
   });
 
+  test("supports object field assignment through const bindings", () => {
+    const result = expectCompileOk(`
+const user = { name: "Ada", score: 1 };
+user.name = "Grace";
+const value = user.name;
+`);
+
+    expect(result.js).toContain('user.name = "Grace";');
+    expect(executeValue(result.js)).toBe("Grace");
+  });
+
+  test("supports object field assignment through function parameters", () => {
+    const result = expectCompileOk(`
+type User = {
+  name: string,
+};
+
+fn rename(user: User): void {
+  user.name = "Grace";
+}
+
+const user: User = { name: "Ada" };
+rename(user);
+const value = user.name;
+`);
+
+    expect(executeValue(result.js)).toBe("Grace");
+  });
+
   test("infers exact object literal types", () => {
     const result = expectCompileOk(`
 const user = {
@@ -773,6 +817,18 @@ const value = values[1][0];
     expect(executeValue(result.js)).toBe(42);
   });
 
+  test("supports checked array element assignment", () => {
+    const result = expectCompileOk(`
+const values = [1, 2];
+values[0] = 40;
+values[1] = 2;
+const value = values[0] + values[1];
+`);
+
+    expect(result.js).toContain("function __polenaIndexSet");
+    expect(executeValue(result.js)).toBe(42);
+  });
+
   test("throws on out-of-bounds array indexes", () => {
     const result = expectCompileOk(`
 const values = [1];
@@ -786,6 +842,16 @@ const value = values[1];
     const result = expectCompileOk(`
 const values = [1];
 const value = values[0.5];
+`);
+
+    expect(() => executeValue(result.js)).toThrow(RangeError);
+  });
+
+  test("throws on out-of-bounds array assignment indexes", () => {
+    const result = expectCompileOk(`
+const values = [1];
+values[1] = 2;
+const value = values[0];
 `);
 
     expect(() => executeValue(result.js)).toThrow(RangeError);
@@ -1175,6 +1241,54 @@ const value = user.email;
     expect(result.ok).toBe(false);
     expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
       "Unknown property 'email' on type '{ name: string }'.",
+    );
+  });
+
+  test("rejects unknown object properties in assignments", () => {
+    const result = compile(`
+const user = { name: "Ada" };
+user.email = "a@example.com";
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Unknown property 'email' on type '{ name: string }'.",
+    );
+  });
+
+  test("rejects incompatible object field assignment values", () => {
+    const result = compile(`
+const user = { name: "Ada" };
+user.name = 42;
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Expected 'string', got 'number'.",
+    );
+  });
+
+  test("rejects incompatible array element assignment values", () => {
+    const result = compile(`
+const values = [1];
+values[0] = "no";
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Expected 'number', got 'string'.",
+    );
+  });
+
+  test("rejects compound assignment to object fields", () => {
+    const result = compile(`
+const user = { score: 1 };
+user.score += 1;
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Compound assignment is only supported for mutable bindings.",
     );
   });
 
