@@ -51,6 +51,13 @@ type LoopContext = {
   sawValueBreak: boolean;
 };
 
+type ControlFlowOutcome = {
+  readonly canFallThrough: boolean;
+  readonly canReturn: boolean;
+  readonly canBreak: boolean;
+  readonly canContinue: boolean;
+};
+
 type InferOptions = {
   readonly ifAsValue: boolean;
   readonly whileAsValue: boolean;
@@ -68,6 +75,63 @@ type TypeSymbol = {
 export function check(program: Program): CheckResult {
   const checker = new Checker();
   return checker.check(program);
+}
+
+function fallThroughOutcome(): ControlFlowOutcome {
+  return {
+    canFallThrough: true,
+    canReturn: false,
+    canBreak: false,
+    canContinue: false,
+  };
+}
+
+function returnOutcome(): ControlFlowOutcome {
+  return {
+    canFallThrough: false,
+    canReturn: true,
+    canBreak: false,
+    canContinue: false,
+  };
+}
+
+function breakOutcome(): ControlFlowOutcome {
+  return {
+    canFallThrough: false,
+    canReturn: false,
+    canBreak: true,
+    canContinue: false,
+  };
+}
+
+function continueOutcome(): ControlFlowOutcome {
+  return {
+    canFallThrough: false,
+    canReturn: false,
+    canBreak: false,
+    canContinue: true,
+  };
+}
+
+function sequenceControlFlow(
+  before: ControlFlowOutcome,
+  after: ControlFlowOutcome,
+): ControlFlowOutcome {
+  return {
+    canFallThrough: before.canFallThrough && after.canFallThrough,
+    canReturn: before.canReturn || (before.canFallThrough && after.canReturn),
+    canBreak: before.canBreak || (before.canFallThrough && after.canBreak),
+    canContinue: before.canContinue || (before.canFallThrough && after.canContinue),
+  };
+}
+
+function unionControlFlow(left: ControlFlowOutcome, right: ControlFlowOutcome): ControlFlowOutcome {
+  return {
+    canFallThrough: left.canFallThrough || right.canFallThrough,
+    canReturn: left.canReturn || right.canReturn,
+    canBreak: left.canBreak || right.canBreak,
+    canContinue: left.canContinue || right.canContinue,
+  };
 }
 
 class Checker {
@@ -283,9 +347,10 @@ class Checker {
       return;
     }
 
-    const explicitReturns = this.checkBlock(declaration.body, scope, returnType);
+    const bodyOutcome = this.checkBlock(declaration.body, scope, returnType);
     if (declaration.body.finalExpression !== undefined) {
-      if (this.expressionAlwaysReturns(declaration.body.finalExpression)) {
+      const finalOutcome = this.expressionControlFlow(declaration.body.finalExpression);
+      if (!finalOutcome.canFallThrough) {
         this.inferExpression(declaration.body.finalExpression, scope, {
           ifAsValue: false,
           whileAsValue: false,
@@ -304,11 +369,7 @@ class Checker {
       return;
     }
 
-    if (
-      !sameType(returnType, primitiveType("void")) &&
-      explicitReturns === 0 &&
-      !this.blockAlwaysReturns(declaration.body)
-    ) {
+    if (!sameType(returnType, primitiveType("void")) && bodyOutcome.canFallThrough) {
       this.diagnostics.push(
         error(
           `Function '${declaration.name}' must return '${formatType(returnType)}'.`,
@@ -322,7 +383,7 @@ class Checker {
     }
   }
 
-  private checkBlock(block: Block, scope: Scope, returnType: Type): number {
+  private checkBlock(block: Block, scope: Scope, returnType: Type): ControlFlowOutcome {
     return this.checkBlockInLoop(block, scope, returnType);
   }
 
@@ -331,16 +392,15 @@ class Checker {
     scope: Scope,
     returnType: Type,
     loopContext?: LoopContext,
-  ): number {
-    let explicitReturns = 0;
+  ): ControlFlowOutcome {
+    let outcome = fallThroughOutcome();
 
     for (const statement of block.statements) {
-      if (this.checkStatement(statement, scope, returnType, loopContext)) {
-        explicitReturns += 1;
-      }
+      const statementOutcome = this.checkStatement(statement, scope, returnType, loopContext);
+      outcome = sequenceControlFlow(outcome, statementOutcome);
     }
 
-    return explicitReturns;
+    return outcome;
   }
 
   private checkStatement(
@@ -348,14 +408,14 @@ class Checker {
     scope: Scope,
     returnType: Type,
     loopContext?: LoopContext,
-  ): boolean {
+  ): ControlFlowOutcome {
     switch (statement.kind) {
       case "VariableDeclaration":
         this.checkVariableDeclaration(statement, scope, returnType);
-        return false;
+        return fallThroughOutcome();
       case "AssignmentStatement":
         this.checkAssignmentStatement(statement, scope, returnType);
-        return false;
+        return fallThroughOutcome();
       case "ExpressionStatement":
         this.inferExpression(statement.expression, scope, {
           ifAsValue: false,
@@ -363,16 +423,16 @@ class Checker {
           returnType,
           ...(loopContext === undefined ? {} : { loopContext }),
         });
-        return false;
+        return this.expressionControlFlow(statement.expression);
       case "ReturnStatement":
         this.checkReturnStatement(statement, scope, returnType);
-        return true;
+        return returnOutcome();
       case "BreakStatement":
         this.checkBreakStatement(statement, scope, returnType, loopContext);
-        return false;
+        return breakOutcome();
       case "ContinueStatement":
         this.checkContinueStatement(statement, scope, loopContext);
-        return false;
+        return continueOutcome();
     }
   }
 
@@ -1251,39 +1311,49 @@ class Checker {
     return this.inferExpression(block.finalExpression, scope, options);
   }
 
-  private blockAlwaysReturns(block: Block): boolean {
+  private blockControlFlow(block: Block): ControlFlowOutcome {
+    let outcome = fallThroughOutcome();
+
     for (const statement of block.statements) {
-      if (this.statementAlwaysReturns(statement)) {
-        return true;
-      }
+      outcome = sequenceControlFlow(outcome, this.statementControlFlow(statement));
     }
 
-    return (
-      block.finalExpression !== undefined && this.expressionAlwaysReturns(block.finalExpression)
-    );
+    if (block.finalExpression !== undefined) {
+      outcome = sequenceControlFlow(outcome, this.expressionControlFlow(block.finalExpression));
+    }
+
+    return outcome;
   }
 
-  private statementAlwaysReturns(statement: Statement): boolean {
+  private statementControlFlow(statement: Statement): ControlFlowOutcome {
     switch (statement.kind) {
       case "ReturnStatement":
-        return true;
+        return returnOutcome();
+      case "BreakStatement":
+        return breakOutcome();
+      case "ContinueStatement":
+        return continueOutcome();
       case "ExpressionStatement":
-        return this.expressionAlwaysReturns(statement.expression);
+        return this.expressionControlFlow(statement.expression);
       case "VariableDeclaration":
       case "AssignmentStatement":
-      case "BreakStatement":
-      case "ContinueStatement":
-        return false;
+        return fallThroughOutcome();
     }
   }
 
-  private expressionAlwaysReturns(expression: Expression): boolean {
+  private expressionControlFlow(expression: Expression): ControlFlowOutcome {
     switch (expression.kind) {
       case "IfExpression":
-        return (
-          expression.elseBlock !== undefined &&
-          this.blockAlwaysReturns(expression.thenBlock) &&
-          this.blockAlwaysReturns(expression.elseBlock)
+        if (expression.elseBlock === undefined) {
+          return unionControlFlow(
+            fallThroughOutcome(),
+            this.blockControlFlow(expression.thenBlock),
+          );
+        }
+
+        return unionControlFlow(
+          this.blockControlFlow(expression.thenBlock),
+          this.blockControlFlow(expression.elseBlock),
         );
       case "NumberLiteral":
       case "BigIntLiteral":
@@ -1298,7 +1368,7 @@ class Checker {
       case "CallExpression":
       case "IndexExpression":
       case "MemberExpression":
-        return false;
+        return fallThroughOutcome();
     }
   }
 

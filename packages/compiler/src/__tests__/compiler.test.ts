@@ -1481,6 +1481,52 @@ count += "Ada";
     );
   });
 
+  test("rejects malformed numeric separator placement", () => {
+    const sources = ["const value = 1_;", "const value = 1__2;", "const value = 1e_2;"];
+
+    for (const source of sources) {
+      const result = compile(source);
+      expect(result.ok).toBe(false);
+      expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+        "Malformed number literal.",
+      );
+    }
+  });
+
+  test("rejects malformed exponent number literals", () => {
+    const result = compile("const value = 1e;");
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Malformed number literal.",
+    );
+  });
+
+  test("rejects trailing text after decimal bigint suffixes", () => {
+    const result = compile("const value = 1number;");
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Malformed bigint literal.",
+    );
+  });
+
+  test("rejects invalid digits in base-prefixed number literals", () => {
+    const binaryResult = compile("const value = 0b102;");
+
+    expect(binaryResult.ok).toBe(false);
+    expect(binaryResult.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Malformed binary literal.",
+    );
+
+    const separatorResult = compile("const value = 0x_FF;");
+
+    expect(separatorResult.ok).toBe(false);
+    expect(separatorResult.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Malformed hexadecimal literal.",
+    );
+  });
+
   test("rejects wrong function call arity", () => {
     const result = compile(`
 fn add(a: number, b: number): number {
@@ -1662,6 +1708,21 @@ const value = choose(true);
 `);
 
     expect(executeValue(result.js)).toBe(40);
+  });
+
+  test("rejects functions where an if branch can fall through", () => {
+    const result = compile(`
+fn choose(enabled: boolean): number {
+  if enabled {
+    return 42;
+  };
+}
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Function 'choose' must return 'number'.",
+    );
   });
 
   test("supports nested structural object assignment", () => {

@@ -168,33 +168,21 @@ class Lexer {
       const basePrefix = this.peek().toLowerCase();
       if (basePrefix === "x" || basePrefix === "o" || basePrefix === "b") {
         this.advance();
-        const isBaseDigit =
-          basePrefix === "x" ? isHexDigit : basePrefix === "o" ? isOctalDigit : isBinaryDigit;
-        let sawDigit = false;
-        while (isBaseDigit(this.peek()) || this.peek() === "_") {
-          if (isBaseDigit(this.peek())) {
-            sawDigit = true;
-          }
+        while (isIdentifierPart(this.peek())) {
           this.advance();
         }
 
-        if (!sawDigit) {
-          const span = spanFrom(start, this.location());
-          const text = this.source.slice(start.offset, this.offset);
-          this.tokens.push({ kind: "Invalid", text, span });
-          this.diagnostics.push(
-            error(`Malformed ${numberBaseName(basePrefix)} literal.`, span, {
-              code: DiagnosticCode.MalformedLiteralOrEscape,
-              label: "expected at least one digit after the base prefix",
-            }),
-          );
+        const text = this.source.slice(start.offset, this.offset);
+        const validation = validateBaseNumberLiteral(text, basePrefix);
+        if (validation !== undefined) {
+          this.addMalformedNumberLiteral(start, text, validation);
           return;
         }
 
-        if (this.match("n")) {
+        if (text.endsWith("n")) {
           this.tokens.push({
             kind: "BigInt",
-            text: this.source.slice(start.offset, this.offset),
+            text,
             span: spanFrom(start, this.location()),
           });
           return;
@@ -219,28 +207,29 @@ class Lexer {
     }
 
     if (this.peek().toLowerCase() === "e") {
-      const exponentOffset = this.offset;
-      const exponentLine = this.line;
-      const exponentColumn = this.column;
       this.advance();
       if (this.peek() === "+" || this.peek() === "-") {
         this.advance();
       }
 
-      if (isDigit(this.peek())) {
-        while (isDigit(this.peek()) || this.peek() === "_") {
-          this.advance();
-        }
-      } else {
-        this.offset = exponentOffset;
-        this.line = exponentLine;
-        this.column = exponentColumn;
+      while (isDigit(this.peek()) || this.peek() === "_") {
+        this.advance();
+      }
+    }
+
+    if (isIdentifierStart(this.peek()) && this.peek() !== "n") {
+      while (isIdentifierPart(this.peek())) {
+        this.advance();
       }
     }
 
     if (this.match("n")) {
-      const span = spanFrom(start, this.location());
+      while (isIdentifierPart(this.peek())) {
+        this.advance();
+      }
+
       const text = this.source.slice(start.offset, this.offset);
+      const span = spanFrom(start, this.location());
 
       if (sawFraction) {
         this.tokens.push({ kind: "Invalid", text, span });
@@ -253,11 +242,36 @@ class Lexer {
         return;
       }
 
+      if (!text.endsWith("n")) {
+        this.addMalformedNumberLiteral(start, text, {
+          message: "Malformed bigint literal.",
+          label: "bigint suffix must end the literal",
+        });
+        return;
+      }
+
+      const validation = validateDecimalNumberLiteral(text.slice(0, -1));
+      if (validation !== undefined) {
+        this.addMalformedNumberLiteral(start, text, validation);
+        return;
+      }
+
       this.tokens.push({ kind: "BigInt", text, span });
       return;
     }
 
-    this.addToken("Number", start);
+    const text = this.source.slice(start.offset, this.offset);
+    const validation = validateDecimalNumberLiteral(text);
+    if (validation !== undefined) {
+      this.addMalformedNumberLiteral(start, text, validation);
+      return;
+    }
+
+    this.tokens.push({
+      kind: "Number",
+      text,
+      span: spanFrom(start, this.location()),
+    });
   }
 
   private scanIdentifier(start: SourceLocation): void {
@@ -380,6 +394,21 @@ class Lexer {
     });
   }
 
+  private addMalformedNumberLiteral(
+    start: SourceLocation,
+    text: string,
+    validation: NumberLiteralValidation,
+  ): void {
+    const span = spanFrom(start, this.location());
+    this.tokens.push({ kind: "Invalid", text, span });
+    this.diagnostics.push(
+      error(validation.message, span, {
+        code: DiagnosticCode.MalformedLiteralOrEscape,
+        label: validation.label,
+      }),
+    );
+  }
+
   private advance(): string {
     const char = this.source.charAt(this.offset);
     this.offset += 1;
@@ -434,6 +463,134 @@ function isOctalDigit(char: string): boolean {
 
 function isHexDigit(char: string): boolean {
   return isDigit(char) || (char >= "a" && char <= "f") || (char >= "A" && char <= "F");
+}
+
+type NumberLiteralValidation = {
+  readonly message: string;
+  readonly label: string;
+};
+
+function validateBaseNumberLiteral(
+  text: string,
+  prefix: "x" | "o" | "b",
+): NumberLiteralValidation | undefined {
+  const baseName = numberBaseName(prefix);
+  const isBaseDigit = prefix === "x" ? isHexDigit : prefix === "o" ? isOctalDigit : isBinaryDigit;
+  const body = text.endsWith("n") ? text.slice(2, -1) : text.slice(2);
+
+  if (body.length === 0) {
+    return {
+      message: `Malformed ${baseName} literal.`,
+      label: "expected at least one digit after the base prefix",
+    };
+  }
+
+  if (body.startsWith("_") || body.endsWith("_") || body.includes("__")) {
+    return {
+      message: `Malformed ${baseName} literal.`,
+      label: "numeric separators must appear between digits",
+    };
+  }
+
+  for (const char of body) {
+    if (char !== "_" && !isBaseDigit(char)) {
+      return {
+        message: `Malformed ${baseName} literal.`,
+        label: `this character is not valid in a ${baseName} literal`,
+      };
+    }
+  }
+
+  return undefined;
+}
+
+function validateDecimalNumberLiteral(text: string): NumberLiteralValidation | undefined {
+  const exponentIndex = findExponentIndex(text);
+  const significand = exponentIndex === undefined ? text : text.slice(0, exponentIndex);
+  const exponent = exponentIndex === undefined ? undefined : text.slice(exponentIndex + 1);
+
+  if (hasInvalidDecimalCharacters(significand)) {
+    return {
+      message: "Malformed number literal.",
+      label: "this character is not valid in a number literal",
+    };
+  }
+
+  if (hasInvalidSeparatorPlacement(significand)) {
+    return {
+      message: "Malformed number literal.",
+      label: "numeric separators must appear between digits",
+    };
+  }
+
+  if (exponent !== undefined) {
+    const exponentDigits =
+      exponent.startsWith("+") || exponent.startsWith("-") ? exponent.slice(1) : exponent;
+
+    if (exponentDigits.length === 0) {
+      return {
+        message: "Malformed number literal.",
+        label: "expected at least one digit after the exponent marker",
+      };
+    }
+
+    if (hasInvalidDecimalCharacters(exponentDigits)) {
+      return {
+        message: "Malformed number literal.",
+        label: "this character is not valid in a number literal exponent",
+      };
+    }
+
+    if (hasInvalidSeparatorPlacement(exponentDigits)) {
+      return {
+        message: "Malformed number literal.",
+        label: "numeric separators must appear between digits",
+      };
+    }
+  }
+
+  return undefined;
+}
+
+function findExponentIndex(text: string): number | undefined {
+  const lowerIndex = text.indexOf("e");
+  const upperIndex = text.indexOf("E");
+
+  if (lowerIndex === -1) {
+    return upperIndex === -1 ? undefined : upperIndex;
+  }
+
+  if (upperIndex === -1) {
+    return lowerIndex;
+  }
+
+  return Math.min(lowerIndex, upperIndex);
+}
+
+function hasInvalidDecimalCharacters(text: string): boolean {
+  for (const char of text) {
+    if (char !== "." && char !== "_" && !isDigit(char)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function hasInvalidSeparatorPlacement(text: string): boolean {
+  for (let index = 0; index < text.length; index += 1) {
+    if (text[index] !== "_") {
+      continue;
+    }
+
+    const previous = text[index - 1] ?? "";
+    const next = text[index + 1] ?? "";
+    if (!isDigit(previous) || !isDigit(next)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function numberBaseName(prefix: string): string {
