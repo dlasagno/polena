@@ -1,4 +1,5 @@
 import type { PrimitiveType } from "./ast";
+import type { Span } from "./span";
 
 export type Type =
   | { readonly kind: "primitive"; readonly name: PrimitiveType }
@@ -14,6 +15,8 @@ export type Type =
 export type ObjectTypeField = {
   readonly name: string;
   readonly type: Type;
+  readonly nameSpan?: Span;
+  readonly span?: Span;
 };
 
 export function primitiveType(name: PrimitiveType): Type {

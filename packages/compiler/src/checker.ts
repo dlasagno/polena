@@ -241,7 +241,9 @@ class Checker {
       seenFields.add(field.name);
       fields.push({
         name: field.name,
+        nameSpan: field.nameSpan,
         type: this.typeFromNode(field.type),
+        span: field.span,
       });
     }
 
@@ -395,7 +397,10 @@ class Checker {
     });
     const bindingType = declaredType ?? initializerType;
 
-    if (declaration.typeAnnotation !== undefined) {
+    if (
+      declaration.typeAnnotation !== undefined &&
+      !isContextuallyCheckedObjectLiteral(declaration.initializer, bindingType)
+    ) {
       this.expectType(initializerType, bindingType, declaration.initializer.span);
     }
 
@@ -921,7 +926,7 @@ class Checker {
   ): Type {
     const expectedFields =
       options.expectedType?.kind === "object" ? options.expectedType.fields : undefined;
-    const fields: { name: string; type: Type }[] = [];
+    const fields: SemanticObjectTypeField[] = [];
     const seenFields = new Set<string>();
 
     for (const field of expression.fields) {
@@ -955,7 +960,12 @@ class Checker {
         this.expectType(fieldType, expectedField.type, field.value.span);
       }
 
-      fields.push({ name: field.name, type: fieldType });
+      fields.push({
+        name: field.name,
+        nameSpan: field.nameSpan,
+        type: fieldType,
+        span: field.span,
+      });
     }
 
     if (expectedFields !== undefined) {
@@ -965,10 +975,14 @@ class Checker {
         }
 
         this.diagnostics.push(
-          error(`Missing object field '${expectedField.name}'.`, expression.span, {
-            code: DiagnosticCode.TypeMismatch,
-            label: "this object literal is missing a required field",
-          }),
+          error(
+            `Missing object field '${expectedField.name}'.`,
+            expectedField.nameSpan ?? expression.span,
+            {
+              code: DiagnosticCode.TypeMismatch,
+              label: "this object literal is missing a required field",
+            },
+          ),
         );
       }
     }
@@ -1405,7 +1419,7 @@ class Checker {
     const objectMismatch = objectAssignabilityMismatch(actual, expected);
     if (objectMismatch !== undefined) {
       this.diagnostics.push(
-        error(objectMismatch.message, span, {
+        error(objectMismatch.message, objectMismatch.span ?? span, {
           code: DiagnosticCode.TypeMismatch,
           label: objectMismatch.label,
           notes: [
@@ -1434,9 +1448,14 @@ class Checker {
   }
 }
 
+function isContextuallyCheckedObjectLiteral(expression: Expression, expectedType: Type): boolean {
+  return expression.kind === "ObjectLiteral" && expectedType.kind === "object";
+}
+
 type ObjectAssignabilityMismatch = {
   readonly message: string;
   readonly label: string;
+  readonly span?: Span;
 };
 
 function objectAssignabilityMismatch(
@@ -1455,6 +1474,7 @@ function objectAssignabilityMismatch(
       return {
         message: `Missing object field '${fieldPath}'.`,
         label: "this object value is missing a required field",
+        ...(expectedField.nameSpan === undefined ? {} : { span: expectedField.nameSpan }),
       };
     }
 
@@ -1473,6 +1493,7 @@ function objectAssignabilityMismatch(
           actualField.type,
         )}', expected '${formatType(expectedField.type)}'.`,
         label: "this object field has the wrong type",
+        ...(actualField.nameSpan === undefined ? {} : { span: actualField.nameSpan }),
       };
     }
   }

@@ -232,6 +232,43 @@ const value = add(1,);
     });
   });
 
+  test("reports missing fresh object literal fields at the expected field name", () => {
+    const result = analyze('const user: { id: string, name: string } = { name: "Ada" };');
+
+    expectDiagnostic(result.diagnostics[0], {
+      code: DiagnosticCode.TypeMismatch,
+      message: "Missing object field 'id'.",
+      label: "this object literal is missing a required field",
+      span: span(14, 1, 15, 16, 1, 17),
+    });
+  });
+
+  test("reports missing structural object fields at the expected field name", () => {
+    const result = analyze(
+      'type User = { id: string, name: string }; const named = { name: "Ada" }; const user: User = named;',
+    );
+
+    expectDiagnostic(result.diagnostics[0], {
+      code: DiagnosticCode.TypeMismatch,
+      message: "Missing object field 'id'.",
+      label: "this object value is missing a required field",
+      span: span(14, 1, 15, 16, 1, 17),
+    });
+  });
+
+  test("reports structural object field type mismatches at the actual field name", () => {
+    const result = analyze(
+      "type User = { id: string }; const value = { id: 1 }; const user: User = value;",
+    );
+
+    expectDiagnostic(result.diagnostics[0], {
+      code: DiagnosticCode.TypeMismatch,
+      message: "Object field 'id' has type 'number', expected 'string'.",
+      label: "this object field has the wrong type",
+      span: span(44, 1, 45, 46, 1, 47),
+    });
+  });
+
   test("reports assignment to const bindings at the assigned name", () => {
     const result = analyze("const count = 1;\ncount = 2;");
 
