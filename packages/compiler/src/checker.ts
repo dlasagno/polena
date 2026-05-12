@@ -1380,6 +1380,23 @@ class Checker {
       return;
     }
 
+    const objectMismatch = objectAssignabilityMismatch(actual, expected);
+    if (objectMismatch !== undefined) {
+      this.diagnostics.push(
+        error(objectMismatch.message, span, {
+          code: DiagnosticCode.TypeMismatch,
+          label: objectMismatch.label,
+          notes: [
+            {
+              kind: "help",
+              message: "provide the required object shape explicitly",
+            },
+          ],
+        }),
+      );
+      return;
+    }
+
     this.diagnostics.push(
       error(`Expected '${formatType(expected)}', got '${formatType(actual)}'.`, span, {
         code: DiagnosticCode.TypeMismatch,
@@ -1393,6 +1410,52 @@ class Checker {
       }),
     );
   }
+}
+
+type ObjectAssignabilityMismatch = {
+  readonly message: string;
+  readonly label: string;
+};
+
+function objectAssignabilityMismatch(
+  actual: Type,
+  expected: Type,
+  path = "",
+): ObjectAssignabilityMismatch | undefined {
+  if (actual.kind !== "object" || expected.kind !== "object") {
+    return undefined;
+  }
+
+  for (const expectedField of expected.fields) {
+    const fieldPath = path === "" ? expectedField.name : `${path}.${expectedField.name}`;
+    const actualField = actual.fields.find((field) => field.name === expectedField.name);
+    if (actualField === undefined) {
+      return {
+        message: `Missing object field '${fieldPath}'.`,
+        label: "this object value is missing a required field",
+      };
+    }
+
+    const nestedMismatch = objectAssignabilityMismatch(
+      actualField.type,
+      expectedField.type,
+      fieldPath,
+    );
+    if (nestedMismatch !== undefined) {
+      return nestedMismatch;
+    }
+
+    if (!isAssignableTo(actualField.type, expectedField.type)) {
+      return {
+        message: `Object field '${fieldPath}' has type '${formatType(
+          actualField.type,
+        )}', expected '${formatType(expectedField.type)}'.`,
+        label: "this object field has the wrong type",
+      };
+    }
+  }
+
+  return undefined;
 }
 
 function isArithmeticOperator(operator: BinaryOperator): boolean {

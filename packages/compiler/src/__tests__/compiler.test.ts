@@ -1574,7 +1574,49 @@ const user: User = named;
 
     expect(result.ok).toBe(false);
     expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
-      "Expected '{ id: string, name: string }', got '{ name: string }'.",
+      "Missing object field 'id'.",
+    );
+  });
+
+  test("rejects nested structural object assignment with missing fields", () => {
+    const result = compile(`
+type NamedBox = {
+  value: {
+    name: string,
+  },
+};
+
+const box = {
+  value: {
+    id: "ada",
+  },
+};
+
+const namedBox: NamedBox = box;
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Missing object field 'value.name'.",
+    );
+  });
+
+  test("rejects structural object assignment with incompatible field types", () => {
+    const result = compile(`
+type User = {
+  id: string,
+};
+
+const value = {
+  id: 1,
+};
+
+const user: User = value;
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Object field 'id' has type 'number', expected 'string'.",
     );
   });
 
