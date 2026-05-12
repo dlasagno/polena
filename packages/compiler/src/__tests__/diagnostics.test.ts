@@ -215,6 +215,23 @@ const value = add(1,);
     });
   });
 
+  test("reports interpolation diagnostics at the source expression span", () => {
+    const result = analyze(['const value = "Hello ', "$", '{missing}";'].join(""));
+
+    expectDiagnostic(result.diagnostics[0], {
+      code: DiagnosticCode.UnknownName,
+      message: "Unknown name 'missing'.",
+      label: "no value with this name is in scope",
+      span: span(23, 1, 24, 30, 1, 31),
+      notes: [
+        {
+          kind: "help",
+          message: "declare it before using it, or check for a spelling mistake",
+        },
+      ],
+    });
+  });
+
   test("reports type mismatches at the expression that produced the wrong type", () => {
     const result = analyze('const value: number = "x";');
 

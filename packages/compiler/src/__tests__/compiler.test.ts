@@ -36,6 +36,21 @@ describe("lexer", () => {
     ]);
   });
 
+  test("tokenizes supported number literal forms", () => {
+    const result = lex("0xff 0o70 0b1100 1e9 1.5e-3 0xffn");
+
+    expect(result.diagnostics).toHaveLength(0);
+    expect(result.tokens.map((token) => `${token.kind}:${token.text}`)).toEqual([
+      "Number:0xff",
+      "Number:0o70",
+      "Number:0b1100",
+      "Number:1e9",
+      "Number:1.5e-3",
+      "BigInt:0xffn",
+      "Eof:",
+    ]);
+  });
+
   test("tokenizes type declarations", () => {
     const result = lex("type Score = number;");
 
@@ -787,6 +802,12 @@ const value = double(total);
     expect(executeValue(result.js)).toBe(true);
   });
 
+  test("supports non-decimal and exponent number literals", () => {
+    const result = expectCompileOk("const value = 0xff + 0o70 + 0b10 + 1e3 + 1.5e1;");
+
+    expect(executeValue(result.js)).toBe(1328);
+  });
+
   test("supports array literals and checked indexing", () => {
     const result = expectCompileOk(`
 const values = [20, 22];
@@ -859,6 +880,18 @@ const value = values[0];
 `);
 
     expect(executeValue(result.js)).toBe(42n);
+  });
+
+  test("emits JavaScript-safe names for reserved identifiers and compiler helper names", () => {
+    const result = expectCompileOk(`
+const default = 40;
+const __polenaIndex = [2];
+const value = default + __polenaIndex[0];
+`);
+
+    expect(result.js).toContain("const $polena$default = 40;");
+    expect(result.js).toContain("const $polena$__polenaIndex = [2];");
+    expect(executeValue(result.js)).toBe(42);
   });
 
   test("throws on out-of-bounds array indexes", () => {
@@ -1439,6 +1472,15 @@ count += "Ada";
     );
   });
 
+  test("rejects base-prefixed number literals without digits", () => {
+    const result = compile("const value = 0x;");
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Malformed hexadecimal literal.",
+    );
+  });
+
   test("rejects wrong function call arity", () => {
     const result = compile(`
 fn add(a: number, b: number): number {
@@ -1588,6 +1630,38 @@ const value = greet(user);
 `);
 
     expect(executeValue(result.js)).toBe("Hello Ada");
+  });
+
+  test("accepts functions where all if branches return explicitly", () => {
+    const result = expectCompileOk(`
+fn choose(enabled: boolean): number {
+  if enabled {
+    return 40;
+  } else {
+    return 42;
+  };
+}
+
+const value = choose(false);
+`);
+
+    expect(executeValue(result.js)).toBe(42);
+  });
+
+  test("accepts final if expressions where all branches return explicitly", () => {
+    const result = expectCompileOk(`
+fn choose(enabled: boolean): number {
+  if enabled {
+    return 40;
+  } else {
+    return 42;
+  }
+}
+
+const value = choose(true);
+`);
+
+    expect(executeValue(result.js)).toBe(40);
   });
 
   test("supports nested structural object assignment", () => {

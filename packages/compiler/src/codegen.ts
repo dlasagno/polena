@@ -72,9 +72,9 @@ class JavaScriptEmitter {
   }
 
   private emitFunctionDeclaration(declaration: FunctionDeclaration): string[] {
-    const params = declaration.params.map((param) => param.name).join(", ");
+    const params = declaration.params.map((param) => emitIdentifier(param.name)).join(", ");
     return [
-      `function ${declaration.name}(${params}) {`,
+      `function ${emitIdentifier(declaration.name)}(${params}) {`,
       ...this.emitValueBlock(declaration.body, "  "),
       "}",
     ];
@@ -197,7 +197,7 @@ class JavaScriptEmitter {
     indent: string,
     loopContext?: LoopEmitContext,
   ): string {
-    return `${indent}${declaration.mutability} ${declaration.name} = ${this.emitExpression(
+    return `${indent}${declaration.mutability} ${emitIdentifier(declaration.name)} = ${this.emitExpression(
       declaration.initializer,
       indent,
       loopContext,
@@ -247,7 +247,7 @@ class JavaScriptEmitter {
   ): string {
     switch (target.kind) {
       case "NameExpression":
-        return target.name;
+        return emitIdentifier(target.name);
       case "MemberExpression":
         return `${this.emitExpression(target.target, indent, loopContext)}.${target.name}`;
       case "IndexExpression":
@@ -295,7 +295,7 @@ class JavaScriptEmitter {
           .map((field) => `${field.name}: ${this.emitExpression(field.value, indent, loopContext)}`)
           .join(", ")} }`;
       case "NameExpression":
-        return expression.name;
+        return emitIdentifier(expression.name);
       case "UnaryExpression":
         return `(${expression.operator}${this.emitExpression(expression.operand, indent, loopContext)})`;
       case "BinaryExpression":
@@ -326,7 +326,7 @@ class JavaScriptEmitter {
     loopContext?: LoopEmitContext,
   ): string {
     if (callee.kind === "NameExpression") {
-      return getPreludeFunction(callee.name)?.jsEmitName ?? callee.name;
+      return getPreludeFunction(callee.name)?.jsEmitName ?? emitIdentifier(callee.name);
     }
 
     return this.emitExpression(callee, indent, loopContext);
@@ -554,4 +554,70 @@ function emitIndexUpdateHelper(): string[] {
 
 function escapeTemplateText(value: string): string {
   return value.replaceAll("\\", "\\\\").replaceAll("`", "\\`").replaceAll("${", "\\${");
+}
+
+const javascriptReservedWords = new Set([
+  "await",
+  "break",
+  "case",
+  "catch",
+  "class",
+  "const",
+  "continue",
+  "debugger",
+  "default",
+  "delete",
+  "do",
+  "else",
+  "enum",
+  "export",
+  "extends",
+  "false",
+  "finally",
+  "for",
+  "function",
+  "if",
+  "import",
+  "in",
+  "instanceof",
+  "new",
+  "null",
+  "return",
+  "super",
+  "switch",
+  "this",
+  "throw",
+  "true",
+  "try",
+  "typeof",
+  "var",
+  "void",
+  "while",
+  "with",
+  "yield",
+  "let",
+  "static",
+  "implements",
+  "interface",
+  "package",
+  "private",
+  "protected",
+  "public",
+]);
+
+function emitIdentifier(name: string): string {
+  if (
+    javascriptReservedWords.has(name) ||
+    name.startsWith("$polena$") ||
+    name.startsWith("__polena") ||
+    name.startsWith("__while")
+  ) {
+    return `$polena$${encodeIdentifier(name)}`;
+  }
+
+  return name;
+}
+
+function encodeIdentifier(name: string): string {
+  return name.replaceAll("$", "$d");
 }

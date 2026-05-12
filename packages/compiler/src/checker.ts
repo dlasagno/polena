@@ -285,6 +285,15 @@ class Checker {
 
     const explicitReturns = this.checkBlock(declaration.body, scope, returnType);
     if (declaration.body.finalExpression !== undefined) {
+      if (this.expressionAlwaysReturns(declaration.body.finalExpression)) {
+        this.inferExpression(declaration.body.finalExpression, scope, {
+          ifAsValue: false,
+          whileAsValue: false,
+          returnType,
+        });
+        return;
+      }
+
       const finalType = this.inferExpression(declaration.body.finalExpression, scope, {
         ifAsValue: !sameType(returnType, primitiveType("void")),
         whileAsValue: !sameType(returnType, primitiveType("void")),
@@ -295,7 +304,11 @@ class Checker {
       return;
     }
 
-    if (!sameType(returnType, primitiveType("void")) && explicitReturns === 0) {
+    if (
+      !sameType(returnType, primitiveType("void")) &&
+      explicitReturns === 0 &&
+      !this.blockAlwaysReturns(declaration.body)
+    ) {
       this.diagnostics.push(
         error(
           `Function '${declaration.name}' must return '${formatType(returnType)}'.`,
@@ -1236,6 +1249,57 @@ class Checker {
     }
 
     return this.inferExpression(block.finalExpression, scope, options);
+  }
+
+  private blockAlwaysReturns(block: Block): boolean {
+    for (const statement of block.statements) {
+      if (this.statementAlwaysReturns(statement)) {
+        return true;
+      }
+    }
+
+    return (
+      block.finalExpression !== undefined && this.expressionAlwaysReturns(block.finalExpression)
+    );
+  }
+
+  private statementAlwaysReturns(statement: Statement): boolean {
+    switch (statement.kind) {
+      case "ReturnStatement":
+        return true;
+      case "ExpressionStatement":
+        return this.expressionAlwaysReturns(statement.expression);
+      case "VariableDeclaration":
+      case "AssignmentStatement":
+      case "BreakStatement":
+      case "ContinueStatement":
+        return false;
+    }
+  }
+
+  private expressionAlwaysReturns(expression: Expression): boolean {
+    switch (expression.kind) {
+      case "IfExpression":
+        return (
+          expression.elseBlock !== undefined &&
+          this.blockAlwaysReturns(expression.thenBlock) &&
+          this.blockAlwaysReturns(expression.elseBlock)
+        );
+      case "NumberLiteral":
+      case "BigIntLiteral":
+      case "StringLiteral":
+      case "BooleanLiteral":
+      case "ArrayLiteral":
+      case "ObjectLiteral":
+      case "NameExpression":
+      case "UnaryExpression":
+      case "BinaryExpression":
+      case "WhileExpression":
+      case "CallExpression":
+      case "IndexExpression":
+      case "MemberExpression":
+        return false;
+    }
   }
 
   private inferCallExpression(

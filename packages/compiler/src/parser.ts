@@ -1152,8 +1152,16 @@ function parseStringParts(
         break;
       }
 
-      const expressionSource = source.slice(index + 2, interpolationEnd).trim();
-      const expression = parseInterpolationSource(expressionSource, span, diagnostics);
+      const rawExpressionSource = source.slice(index + 2, interpolationEnd);
+      const leadingWhitespace = rawExpressionSource.length - rawExpressionSource.trimStart().length;
+      const expressionSource = rawExpressionSource.trim();
+      const expressionStart = locationInStringContent(span, source, index + 2 + leadingWhitespace);
+      const expression = parseInterpolationSource(
+        expressionSource,
+        expressionStart,
+        span,
+        diagnostics,
+      );
       if (expression !== undefined) {
         parts.push({ kind: "StringInterpolation", expression });
       }
@@ -1200,6 +1208,7 @@ function parseStringParts(
 
 function parseInterpolationSource(
   source: string,
+  sourceStart: Token["span"]["start"],
   span: Token["span"],
   diagnostics: Diagnostic[],
 ): Expression | undefined {
@@ -1227,7 +1236,7 @@ function parseInterpolationSource(
     return undefined;
   }
 
-  const parser = new Parser(lexResult.tokens);
+  const parser = new Parser(remapTokenSpans(lexResult.tokens, sourceStart));
   const result = parser.parseInterpolationExpression();
   if (result.diagnostics.length > 0 || !result.consumedAll) {
     diagnostics.push(
@@ -1246,6 +1255,47 @@ function parseInterpolationSource(
   }
 
   return result.expression;
+}
+
+function remapTokenSpans(tokens: readonly Token[], sourceStart: Token["span"]["start"]): Token[] {
+  return tokens.map((token) => ({
+    ...token,
+    span: {
+      start: remapLocation(token.span.start, sourceStart),
+      end: remapLocation(token.span.end, sourceStart),
+    },
+  }));
+}
+
+function remapLocation(
+  location: Token["span"]["start"],
+  sourceStart: Token["span"]["start"],
+): Token["span"]["start"] {
+  return {
+    offset: sourceStart.offset + location.offset,
+    line: sourceStart.line + location.line - 1,
+    column: location.line === 1 ? sourceStart.column + location.column - 1 : location.column,
+  };
+}
+
+function locationInStringContent(
+  span: Token["span"],
+  source: string,
+  contentOffset: number,
+): Token["span"]["start"] {
+  let line = span.start.line;
+  let column = span.start.column + 1;
+
+  for (let index = 0; index < contentOffset; index += 1) {
+    if (source[index] === "\n") {
+      line += 1;
+      column = 1;
+    } else {
+      column += 1;
+    }
+  }
+
+  return makeLocation(span.start.offset + 1 + contentOffset, line, column);
 }
 
 function findInterpolationEnd(source: string, start: number): number | undefined {

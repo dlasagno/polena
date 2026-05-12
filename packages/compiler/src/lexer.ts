@@ -164,6 +164,47 @@ class Lexer {
   }
 
   private scanNumber(start: SourceLocation): void {
+    if (this.source[start.offset] === "0") {
+      const basePrefix = this.peek().toLowerCase();
+      if (basePrefix === "x" || basePrefix === "o" || basePrefix === "b") {
+        this.advance();
+        const isBaseDigit =
+          basePrefix === "x" ? isHexDigit : basePrefix === "o" ? isOctalDigit : isBinaryDigit;
+        let sawDigit = false;
+        while (isBaseDigit(this.peek()) || this.peek() === "_") {
+          if (isBaseDigit(this.peek())) {
+            sawDigit = true;
+          }
+          this.advance();
+        }
+
+        if (!sawDigit) {
+          const span = spanFrom(start, this.location());
+          const text = this.source.slice(start.offset, this.offset);
+          this.tokens.push({ kind: "Invalid", text, span });
+          this.diagnostics.push(
+            error(`Malformed ${numberBaseName(basePrefix)} literal.`, span, {
+              code: DiagnosticCode.MalformedLiteralOrEscape,
+              label: "expected at least one digit after the base prefix",
+            }),
+          );
+          return;
+        }
+
+        if (this.match("n")) {
+          this.tokens.push({
+            kind: "BigInt",
+            text: this.source.slice(start.offset, this.offset),
+            span: spanFrom(start, this.location()),
+          });
+          return;
+        }
+
+        this.addToken("Number", start);
+        return;
+      }
+    }
+
     while (isDigit(this.peek()) || this.peek() === "_") {
       this.advance();
     }
@@ -174,6 +215,26 @@ class Lexer {
       this.advance();
       while (isDigit(this.peek()) || this.peek() === "_") {
         this.advance();
+      }
+    }
+
+    if (this.peek().toLowerCase() === "e") {
+      const exponentOffset = this.offset;
+      const exponentLine = this.line;
+      const exponentColumn = this.column;
+      this.advance();
+      if (this.peek() === "+" || this.peek() === "-") {
+        this.advance();
+      }
+
+      if (isDigit(this.peek())) {
+        while (isDigit(this.peek()) || this.peek() === "_") {
+          this.advance();
+        }
+      } else {
+        this.offset = exponentOffset;
+        this.line = exponentLine;
+        this.column = exponentColumn;
       }
     }
 
@@ -361,6 +422,31 @@ class Lexer {
 
 function isDigit(char: string): boolean {
   return char >= "0" && char <= "9";
+}
+
+function isBinaryDigit(char: string): boolean {
+  return char === "0" || char === "1";
+}
+
+function isOctalDigit(char: string): boolean {
+  return char >= "0" && char <= "7";
+}
+
+function isHexDigit(char: string): boolean {
+  return isDigit(char) || (char >= "a" && char <= "f") || (char >= "A" && char <= "F");
+}
+
+function numberBaseName(prefix: string): string {
+  switch (prefix) {
+    case "x":
+      return "hexadecimal";
+    case "o":
+      return "octal";
+    case "b":
+      return "binary";
+    default:
+      return "number";
+  }
 }
 
 function isIdentifierStart(char: string): boolean {
