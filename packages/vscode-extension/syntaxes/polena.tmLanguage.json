@@ -31,6 +31,9 @@
       "include": "#types"
     },
     {
+      "include": "#object-field-name"
+    },
+    {
       "include": "#booleans"
     },
     {
@@ -145,6 +148,9 @@
           "include": "#types"
         },
         {
+          "include": "#object-field-name"
+        },
+        {
           "include": "#booleans"
         },
         {
@@ -246,6 +252,14 @@
               "name": "entity.name.type.polena"
             }
           }
+        }
+      ]
+    },
+    "object-field-name": {
+      "patterns": [
+        {
+          "name": "variable.other.member.polena",
+          "match": "\\b[A-Za-z_$][A-Za-z0-9_$]*\\b(?=\\s*:)"
         }
       ]
     },

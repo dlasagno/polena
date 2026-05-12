@@ -116,7 +116,7 @@ Status values:
 | Safe `.get(index)` access | Not implemented | Spec describes it, but there is no standard library array method yet. |
 | Unsafe array access | Not implemented | Still TBD in the spec. |
 | Dedicated `Index` type | Not implemented | Still TBD in the spec. |
-| Array element assignment | Not implemented | Spec direction is checked runtime index assignment. |
+| Array element assignment | Implemented | Assignment and compound assignment use checked runtime index rules. |
 
 ---
 

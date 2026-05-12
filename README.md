@@ -12,7 +12,6 @@ programs end-to-end. It supports:
 - String interpolation and multiline strings
 - `const` and `let` declarations with required initializers
 - Basic reassignment for `let` bindings
-- Numeric compound assignment: `+=`, `-=`, `*=`, `/=`, `%=` for `let` bindings
 - Optional variable type annotations
 - Transparent type aliases with `type Name = ExistingType;`
 - Function declarations with typed parameters and explicit return types

@@ -11,6 +11,9 @@ type Student = {
   name: StudentName,
   active: boolean,
 };
+type NamedStudent = {
+  name: StudentName,
+};
 type Review = {
   score: Score,
   credits: Credits,
@@ -48,6 +51,7 @@ const student: Student = {
   active: true,
 };
 const studentCopy: Student = student;
+const namedStudent: NamedStudent = student;
 const enabled = true;
 const base: Score = 40 + 2;
 const offset = abs(-8);
@@ -93,6 +97,8 @@ if enabled and !(studentName == "") {
 
 const passed = ready and reviewCount >= 8;
 const thresholds: Scores = [70, 90];
+thresholds[0] += 1;
+thresholds[0] -= 1;
 const scoreRows: ScoreRows = [thresholds, [adjusted, reviewCount]];
 const minimumPassingScore: Score = firstScore(scoreRows[0]);
 const excellentScore = scoreRows[0][1];
@@ -106,10 +112,12 @@ const review: Review = {
   credits: totalCredits,
   labels: [label, "reviewed"],
 };
+review.score += 1;
+review.score -= 1;
 const reviewCopy: Review = review;
 
 const greeting = "Hello ${studentName}!";
-const summary = "Score ${adjusted}, reviews ${reviewCount}, next step ${firstLargeStep}, pass ${minimumPassingScore}, excellent ${excellentScore}";
+const summary = "Student ${namedStudent.name}, score ${review.score}, reviews ${reviewCount}, next step ${firstLargeStep}, pass ${minimumPassingScore}, excellent ${excellentScore}";
 const credits = "Credits ${totalCredits}";
 const escaped = "Ready:\n\t${ready}";
 const report =

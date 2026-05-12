@@ -269,6 +269,70 @@ const value = add(1,);
     });
   });
 
+  test("reports excess fresh object literal fields at the extra field name", () => {
+    const result = analyze('const user: { id: string } = { id: "ada", score: 90 };');
+
+    expectDiagnostic(result.diagnostics[0], {
+      code: DiagnosticCode.UnknownProperty,
+      message: "Unknown object field 'score'.",
+      label: "this field is not part of the expected object type",
+      span: span(42, 1, 43, 47, 1, 48),
+    });
+  });
+
+  test("reports nested structural object field type mismatches at the actual field name", () => {
+    const result = analyze(
+      "type Box = { value: { id: string } }; const box = { value: { id: 1 } }; const value: Box = box;",
+    );
+
+    expectDiagnostic(result.diagnostics[0], {
+      code: DiagnosticCode.TypeMismatch,
+      message: "Object field 'value.id' has type 'number', expected 'string'.",
+      label: "this object field has the wrong type",
+      span: span(61, 1, 62, 63, 1, 64),
+      notes: [
+        {
+          kind: "help",
+          message: "provide the required object shape explicitly",
+        },
+      ],
+    });
+  });
+
+  test("reports invalid field compound assignment at the field name", () => {
+    const result = analyze('const user = { name: "Ada" }; user.name += 1;');
+
+    expectDiagnostic(result.diagnostics[0], {
+      code: DiagnosticCode.TypeMismatch,
+      message: "Expected 'number', got 'string'.",
+      label: "expected 'number' here",
+      span: span(35, 1, 36, 39, 1, 40),
+      notes: [
+        {
+          kind: "help",
+          message: "make this expression produce the expected type explicitly",
+        },
+      ],
+    });
+  });
+
+  test("reports invalid index compound assignment at the indexed value", () => {
+    const result = analyze('const values = ["Ada"]; values[0] += 1;');
+
+    expectDiagnostic(result.diagnostics[0], {
+      code: DiagnosticCode.TypeMismatch,
+      message: "Expected 'number', got 'string'.",
+      label: "expected 'number' here",
+      span: span(24, 1, 25, 30, 1, 31),
+      notes: [
+        {
+          kind: "help",
+          message: "make this expression produce the expected type explicitly",
+        },
+      ],
+    });
+  });
+
   test("reports assignment to const bindings at the assigned name", () => {
     const result = analyze("const count = 1;\ncount = 2;");
 
