@@ -11,3 +11,11 @@ const blue = Color.Blue;
 println("${red}");
 println("${green}");
 println("${blue}");
+
+const color: Color = .Red;
+const value = match color {
+  .Red => "red",
+  .Green => "green",
+  .Blue => "blue",
+};
+println("${value}");
