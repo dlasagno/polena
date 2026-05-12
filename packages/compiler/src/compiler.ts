@@ -57,7 +57,8 @@ export function compile(source: string): CompileResult {
 export { generateJavaScript } from "./codegen";
 export { lex } from "./lexer";
 export { parse } from "./parser";
-export { findNodeAt } from "./query";
+export { findHoverTarget, findNodeAt } from "./query";
 export type { Diagnostic } from "./diagnostic";
 export type { NodeId, Program } from "./ast";
 export type { Definition, ReferenceTarget, Semantics } from "./semantics";
+export type { HoverTarget, HoverTargetKind } from "./query";

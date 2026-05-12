@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { Expression, Program, TypeNode } from "../ast";
-import { findNodeAt, lex, parse } from "../compiler";
+import { findHoverTarget, findNodeAt, lex, parse } from "../compiler";
 
 describe("query", () => {
   test("finds an identifier inside a function body", () => {
@@ -46,6 +46,37 @@ describe("query", () => {
 
     expect(annotation).toMatchObject({ kind: "NamedType" });
     expect(findNodeAt(program, source.lastIndexOf("User"))).toBe((annotation as TypeNode).nodeId);
+  });
+
+  test("does not resolve operators, keywords, or interior whitespace as hover targets", () => {
+    const source = "const value = if ready { a and b } else { a + b };";
+    const program = parseProgram(source);
+
+    expect(findHoverTarget(program, source.indexOf("if"))).toBeUndefined();
+    expect(findHoverTarget(program, source.indexOf("and"))).toBeUndefined();
+    expect(findHoverTarget(program, source.indexOf("+"))).toBeUndefined();
+    expect(findHoverTarget(program, source.indexOf(" {") + 1)).toBeUndefined();
+  });
+
+  test("classifies declaration, parameter, field, and type hover targets", () => {
+    const source = "type User = { name: string }; fn greet(user: User): string { user.name }";
+    const program = parseProgram(source);
+
+    expect(findHoverTarget(program, source.indexOf("User"))).toMatchObject({
+      kind: "Declaration",
+    });
+    expect(findHoverTarget(program, source.indexOf("user"))).toMatchObject({
+      kind: "Parameter",
+    });
+    expect(findHoverTarget(program, source.indexOf("name"))).toMatchObject({
+      kind: "FieldDefinition",
+    });
+    expect(findHoverTarget(program, source.lastIndexOf("User"))).toMatchObject({
+      kind: "TypeReference",
+    });
+    expect(findHoverTarget(program, source.lastIndexOf("name"))).toMatchObject({
+      kind: "MemberName",
+    });
   });
 });
 
