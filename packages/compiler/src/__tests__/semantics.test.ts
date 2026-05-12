@@ -72,6 +72,49 @@ describe("semantics", () => {
     );
   });
 
+  test("records enum variant references and pattern binding types for payload enums", () => {
+    const result = analyze(`
+type Message = enum { Move(number, number), Quit };
+const message = Message.Move(1, 2);
+const label = match message {
+  .Move(x, y) => x,
+  .Quit => 0,
+};
+`);
+    const constructorCall = findExpression(result.program, "CallExpression");
+    if (constructorCall.callee.kind !== "MemberExpression") {
+      throw new Error("expected enum constructor callee");
+    }
+    const match = findExpression(result.program, "MatchExpression");
+    const movePattern = match.arms[0]?.pattern;
+    if (movePattern?.kind !== "EnumVariantPattern") {
+      throw new Error("expected enum variant pattern");
+    }
+    const xPattern = movePattern.payload?.[0];
+    const xReference = match.arms[0]?.body;
+
+    expect(result.diagnostics).toHaveLength(0);
+    expect(result.semantics.references.get(constructorCall.callee.nodeId)).toMatchObject({
+      kind: "EnumVariant",
+      enumName: "Message",
+      variantName: "Move",
+    });
+    expect(result.semantics.references.get(movePattern.nodeId)).toMatchObject({
+      kind: "EnumVariant",
+      enumName: "Message",
+      variantName: "Move",
+    });
+    expect(xPattern).toMatchObject({ kind: "BindingPattern", name: "x" });
+    expect(result.semantics.patternBindingTypes.get(xPattern?.nodeId ?? -1)).toEqual(
+      primitiveType("number"),
+    );
+    expect(xReference).toMatchObject({ kind: "NameExpression", name: "x" });
+    expect(result.semantics.references.get(xReference?.nodeId ?? -1)).toMatchObject({
+      kind: "Local",
+      definitionNodeId: xPattern?.nodeId,
+    });
+  });
+
   test("records type annotation references", () => {
     const result = analyze('type User = { name: string }; const user: User = { name: "Ada" };');
     const userType = findTypeNode(result.program, "NamedType");

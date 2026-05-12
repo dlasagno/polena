@@ -59,6 +59,30 @@ describe("LSP hover", () => {
       "```polena\nColor.Red: Color\n```",
     );
   });
+
+  test("returns enum payload and pattern binding hovers", () => {
+    const source = [
+      "type Message = enum { Move(number, number), Quit };",
+      "const message = Message.Move(1, 2);",
+      "const label = match message {",
+      "  .Move(x, y) => x,",
+      "  .Quit => 0,",
+      "};",
+    ].join("\n");
+    const document = TextDocument.create("file:///example.plna", "polena", 1, source);
+    const analysis = analyze(source);
+
+    expect(hoverText(document, analysis, source.indexOf("Message"))).toBe(
+      "```polena\ntype Message = enum { Move(number, number), Quit }\n```",
+    );
+    expect(hoverText(document, analysis, source.indexOf("Move"))).toBe(
+      "```polena\nMessage.Move(number, number): Message\n```",
+    );
+    expect(hoverText(document, analysis, source.indexOf("x,"))).toBe("```polena\nx: number\n```");
+    expect(hoverText(document, analysis, source.lastIndexOf("x"))).toBe(
+      "```polena\nx: number\n```",
+    );
+  });
 });
 
 function hoverText(

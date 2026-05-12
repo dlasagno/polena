@@ -151,10 +151,10 @@ Status values:
 
 | Feature | Status | Notes |
 |---|---|---|
-| Enum declarations | Partially implemented | Fieldless enum declarations are implemented; associated-data variants are not. |
-| Enum values | Partially implemented | Supports `Color.Red` and contextual `.Red`; emitted JavaScript uses unique strings such as `"Color.Red"`. |
-| Enum equality | Implemented | `==` and `!=` are valid for values of the same enum type. |
-| Match expressions | Partially implemented | Supports expression arms over enum values with `.Variant`, `Enum.Variant`, and `_` patterns. Payload patterns and guards are not implemented. |
+| Enum declarations | Implemented | Supports fieldless variants and positional associated-data variants. Named associated fields are intentionally unsupported. |
+| Enum values | Implemented | Supports `Color.Red`, `Message.Move(1, 2)`, contextual `.Red`, and contextual `.Move(1, 2)`. Runtime representation is implementation-defined. |
+| Enum equality | Implemented | `==` and `!=` are valid for fieldless enum values of the same enum type. Equality for enums with associated data is not implemented. |
+| Match expressions | Partially implemented | Supports expression arms over enum values with `.Variant`, `Enum.Variant`, payload patterns, and `_` patterns. Guards are not implemented. |
 | Exhaustiveness checking | Implemented | Enum matches must cover every variant unless a wildcard arm is present. Duplicate and unreachable arms are rejected. |
 | `Option<T>` | Not implemented | Referenced by the spec, but no generic/std library implementation exists. |
 | `Result<T, E>` | Not implemented | Referenced by the spec, but no generic/std library implementation exists. |

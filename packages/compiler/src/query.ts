@@ -21,6 +21,7 @@ export type HoverTargetKind =
   | "TypeReference"
   | "Declaration"
   | "Parameter"
+  | "PatternBinding"
   | "FieldDefinition"
   | "EnumVariantDefinition";
 
@@ -209,6 +210,13 @@ function findInTypeNode(typeNode: TypeNode, offset: number): HoverTarget | undef
         if (contains(variant.nameSpan, offset)) {
           return target("EnumVariantDefinition", variant.nodeId, variant.nameSpan);
         }
+
+        for (const payloadType of variant.payload) {
+          const found = findInTypeNode(payloadType, offset);
+          if (found !== undefined) {
+            return found;
+          }
+        }
       }
       return undefined;
     case "NamedType":
@@ -386,9 +394,16 @@ function findInMatchPattern(pattern: MatchPattern, offset: number): HoverTarget 
       if (pattern.enumNameSpan !== undefined && contains(pattern.enumNameSpan, offset)) {
         return target("TypeReference", pattern.nodeId, pattern.enumNameSpan);
       }
-      return contains(pattern.variantNameSpan, offset)
-        ? target("Expression", pattern.nodeId, pattern.variantNameSpan)
-        : undefined;
+      if (contains(pattern.variantNameSpan, offset)) {
+        return target("Expression", pattern.nodeId, pattern.variantNameSpan);
+      }
+
+      for (const payloadPattern of pattern.payload ?? []) {
+        if (payloadPattern.kind === "BindingPattern" && contains(payloadPattern.nameSpan, offset)) {
+          return target("PatternBinding", payloadPattern.nodeId, payloadPattern.nameSpan);
+        }
+      }
+      return undefined;
     case "WildcardPattern":
       return undefined;
   }

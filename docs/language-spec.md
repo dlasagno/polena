@@ -515,12 +515,13 @@ Ordering support for future user-defined types is **TBD**.
 Equality support is type-specific:
 
 - primitive values may be compared with `==` and `!=`,
-- enum values may be compared with `==` and `!=` when both operands have the
-  same enum type,
+- fieldless enum values may be compared with `==` and `!=` when both operands
+  have the same enum type,
 - object values cannot be compared with `==` or `!=`,
 - array values cannot be compared with `==` or `!=`,
 - function values cannot be compared with `==` or `!=`,
-- equality for `Option`, `Result`, and other user-defined types is **TBD**.
+- equality for enums with associated data, `Option`, `Result`, and other
+  user-defined types is **TBD**.
 
 For primitive values, comparisons follow the language's own semantics.
 
@@ -1027,6 +1028,9 @@ type Option<T> = enum {
 ```
 
 Generic syntax is still **TBD**, but `Option` is considered a fundamental standard-library type.
+Until user-defined generics are implemented, `Option<T>` may be treated as a
+built-in generic enum type. It follows the normal enum construction and match
+rules.
 
 Possible surface syntax:
 
@@ -1044,8 +1048,8 @@ The exact syntax is **TBD**.
 Option values represent either the presence or absence of a value.
 
 ```tsx
-.Some("Ada")
-.None
+const value: Option<string> = .Some("Ada");
+const none: Option<string> = .None;
 ```
 
 Example:
@@ -1117,6 +1121,14 @@ type Result<T, E> = enum {
 ```
 
 Generic syntax is **TBD**, but `Result` is considered a fundamental standard-library type.
+Until user-defined generics are implemented, `Result<T, E>` may be treated as a
+built-in generic enum type. It follows the normal enum construction and match
+rules.
+
+```tsx
+const result: Result<number, NumberError> = .Ok(42);
+const error: Result<number, NumberError> = .Err(NumberError.Invalid);
+```
 
 ---
 
@@ -1176,7 +1188,7 @@ Panic handling and compilation behavior are **TBD**.
 
 # 20. Enums
 
-An enum is a type with a fixed set of variants.
+An enum is a nominal type with a fixed set of variants.
 
 ```tsx
 type Color = enum {
@@ -1186,46 +1198,75 @@ type Color = enum {
 };
 ```
 
-Values are constructed using the enum name:
+Each enum declaration introduces a distinct nominal type. Enum types are not
+structurally compatible with other enum types, even if they have the same
+variant names and payload shapes.
+
+```tsx
+type UserKind = enum {
+	Admin,
+	Member,
+};
+
+type AccountKind = enum {
+	Admin,
+	Member,
+};
+
+const kind: UserKind = UserKind.Admin;
+const other: AccountKind = kind; // Invalid.
+```
+
+Enum variants are scoped to their enum type. A variant name alone is not a
+value.
+
+```tsx
+const red = Color.Red;
+const alsoRed = Red; // Invalid.
+```
+
+`Color.Red` is enum variant syntax. It does not imply that `Color` exists as a
+runtime object or metadata value.
+
+```tsx
+const value = Color; // Invalid.
+const names = Color.names; // Invalid.
+```
+
+Runtime metadata for enum types is not emitted automatically. Enum reflection,
+if provided, must be explicit:
+
+```tsx
+const names = @enumVariantNames(Color);
+```
+
+A fieldless variant is a singleton value of its enum type.
 
 ```tsx
 const red = Color.Red;
 ```
 
-`Color.Red` is currently specified as enum variant construction syntax. The
-preferred direction is that `Color` itself does not automatically become a
-runtime metadata object.
+The runtime representation of enum values is implementation-defined. Programs
+must not depend on the emitted JavaScript representation of enum values.
 
-The current JavaScript compiler implementation emits fieldless enum values as
-unique strings such as `"Color.Red"`. It does not emit a runtime metadata object
-for the enum type.
-
-When the enum type is known and there is no ambiguity, the enum name may be omitted:
+When the enum type is known from context, the enum name may be omitted:
 
 ```tsx
 const blue: Color = .Blue;
 ```
 
----
-
-## 20.1 Enums With Associated Data
-
-Associated-data variants are specified as language direction, but are not yet
-implemented by the current compiler.
-
-Enum variants may carry data:
+The shorthand form `.Variant` may be used only where the expected enum type is
+known from context.
 
 ```tsx
-type Color = enum {
-	Red(number),
-	Green(number),
-	Blue(number),
-};
-
-const red = Color.Red(10);
+const color = .Red; // Invalid: expected enum type is unknown.
 ```
 
-Variants may carry multiple fields:
+---
+
+## 20.1 Associated Data
+
+Enum variants may carry associated data using positional fields.
 
 ```tsx
 type Message = enum {
@@ -1233,9 +1274,61 @@ type Message = enum {
 	Write(string),
 	Quit,
 };
+
+const move = Message.Move(10, 20);
+const write = Message.Write("hello");
+const quit = Message.Quit;
 ```
 
-Named associated fields are **TBD**.
+Associated-data variants are constructed with call syntax. The number and types
+of constructor arguments must match the variant declaration exactly.
+
+```tsx
+Message.Move(10); // Invalid.
+Message.Move("x", "y"); // Invalid.
+```
+
+Shorthand construction is allowed when the expected enum type is known:
+
+```tsx
+const move: Message = .Move(10, 20);
+const quit: Message = .Quit;
+```
+
+Enum variants do not support named associated fields. Use a single object
+payload when named data is desired.
+
+```tsx
+type Message = enum {
+	Move { x: number, y: number }, // Invalid.
+};
+```
+
+```tsx
+type Message = enum {
+	Move({ x: number, y: number }),
+	Write(string),
+	Quit,
+};
+
+const message = Message.Move({ x: 10, y: 20 });
+```
+
+Named constructor syntax is not supported.
+
+```tsx
+const message = Message.Move { x: 10, y: 20 }; // Invalid.
+```
+
+Variants with associated data are not first-class constructor functions in the
+MVP. They may only be used directly in construction syntax.
+
+```tsx
+const move = Message.Move(1, 2); // Valid.
+
+const makeMove = Message.Move; // Invalid in MVP.
+const alsoMove = makeMove(1, 2);
+```
 
 ---
 
@@ -1245,8 +1338,8 @@ Named associated fields are **TBD**.
 
 It is primarily used with enums, `Option`, and `Result`.
 
-The current compiler supports expression-valued match arms over fieldless enum
-variants. Block arms, payload patterns, and guards are not implemented yet.
+The current compiler supports expression-valued match arms over enum variants.
+Block arms and guards are not implemented yet.
 
 ```tsx
 const label = match color {
@@ -1266,13 +1359,73 @@ const label = match color {
 };
 ```
 
-For variants with associated data, the intended future syntax is:
+For variants with associated data, payload patterns list one pattern per
+associated field:
 
 ```tsx
 const text = match message {
 	.Move(x, y) => "Move to ${x}, ${y}",
 	.Write(value) => value,
 	.Quit => "Quit",
+};
+```
+
+Fieldless variants match without parentheses. Payload variants match with
+parentheses, and a payload variant pattern must list exactly one pattern per
+associated field. The wildcard pattern `_` can ignore a whole value or an
+individual payload field.
+
+```tsx
+const label = match message {
+	.Move(_, _) => "move",
+	.Write(_) => "write",
+	.Quit => "quit",
+};
+```
+
+These patterns are invalid:
+
+```tsx
+match message {
+	.Move(x) => "move", // Invalid: Move has two fields.
+	.Write => "write", // Invalid: Write has one field.
+	.Quit() => "quit", // Invalid: Quit has no fields.
+}
+```
+
+When an enum variant uses an object payload, the payload is matched as a single
+field. Destructuring, if added, is separate from enum syntax.
+
+```tsx
+const label = match message {
+	.Move(pos) => "Move to ${pos.x}, ${pos.y}",
+	.Write(value) => value,
+	.Quit => "Quit",
+};
+```
+
+Pattern bindings are scoped to the arm body. They follow the language's normal
+binding and shadowing rules.
+
+```tsx
+const label = match message {
+	.Write(text) => text,
+	.Quit => "",
+	.Move(x, y) => "${x}, ${y}",
+};
+
+text // Invalid.
+```
+
+Because shadowing is disallowed in the MVP, pattern bindings must not shadow
+outer names.
+
+```tsx
+const text = "outer";
+
+const label = match message {
+	.Write(text) => text, // Invalid in MVP: shadows outer binding.
+	_ => "",
 };
 ```
 
@@ -1300,6 +1453,43 @@ The wildcard pattern `_` matches any remaining value:
 
 ```tsx
 _ => "unknown"
+```
+
+Exhaustiveness is checked by variant. For payload variants, matching the
+variant covers all possible payload values unless guards or nested patterns are
+introduced later.
+
+```tsx
+type Message = enum {
+	Move(number, number),
+	Write(string),
+	Quit,
+};
+
+const label = match message {
+	.Move(x, y) => "move",
+	.Write(value) => "write",
+	.Quit => "quit",
+}; // Exhaustive.
+```
+
+Duplicate match patterns are invalid. Match arms that can never be reached are
+invalid.
+
+```tsx
+const label = match color {
+	.Red => "red",
+	.Red => "also red", // Invalid.
+	.Green => "green",
+	.Blue => "blue",
+};
+```
+
+```tsx
+const label = match color {
+	_ => "anything",
+	.Red => "red", // Invalid: unreachable.
+};
 ```
 
 ---
@@ -2047,9 +2237,7 @@ The following topics need further design:
 18. Standard library naming conventions.
 19. Formatter canonical style.
 20. Unicode identifiers and Unicode string escapes.
-21. Runtime enum representation.
-22. Whether enum type names exist in value position.
-23. Object introspection depth and alias preservation.
-24. Structural typing, type identity, and possible future distinct types.
-25. Long-term mutability model.
-26. User-defined directives, macros, and generated code hygiene.
+21. Object introspection depth and alias preservation.
+22. Structural typing for object types and possible future distinct types.
+23. Long-term mutability model.
+24. User-defined directives, macros, and generated code hygiene.

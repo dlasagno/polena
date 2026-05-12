@@ -349,17 +349,70 @@ const label = match blue {
     });
   });
 
-  test("reports unsupported enum and match payload syntax", () => {
-    const enumResult = parse(lex("type Message = enum { Move(number), };").tokens);
-    expect(enumResult.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
-      "Enum variants with associated data are not supported yet.",
+  test("parses enum payload declarations and match payload patterns", () => {
+    const parseResult = parse(
+      lex(`
+type Message = enum { Move(number, number), Write(string), Quit, };
+const value = match message {
+  .Move(x, y) => "move",
+  Message.Write(_) => "write",
+  .Quit => "quit",
+};
+`).tokens,
     );
 
-    const matchResult = parse(
-      lex('const value = match message { .Move(x) => "move", _ => "other", };').tokens,
+    expect(parseResult.diagnostics).toHaveLength(0);
+    expect(parseResult.program.declarations[0]).toMatchObject({
+      kind: "TypeDeclaration",
+      value: {
+        kind: "EnumType",
+        variants: [
+          {
+            kind: "EnumVariantType",
+            name: "Move",
+            payload: [{ name: "number" }, { name: "number" }],
+          },
+          { kind: "EnumVariantType", name: "Write", payload: [{ name: "string" }] },
+          { kind: "EnumVariantType", name: "Quit", payload: [] },
+        ],
+      },
+    });
+    expect(parseResult.program.declarations[1]).toMatchObject({
+      kind: "VariableDeclaration",
+      initializer: {
+        kind: "MatchExpression",
+        arms: [
+          {
+            pattern: {
+              kind: "EnumVariantPattern",
+              variantName: "Move",
+              payload: [
+                { kind: "BindingPattern", name: "x" },
+                { kind: "BindingPattern", name: "y" },
+              ],
+            },
+          },
+          {
+            pattern: {
+              kind: "EnumVariantPattern",
+              enumName: "Message",
+              variantName: "Write",
+              payload: [{ kind: "WildcardPattern" }],
+            },
+          },
+          { pattern: { kind: "EnumVariantPattern", variantName: "Quit" } },
+        ],
+      },
+    });
+  });
+
+  test("rejects named enum payload fields in declarations", () => {
+    const parseResult = parse(
+      lex("type Message = enum { Move { x: number, y: number }, };").tokens,
     );
-    expect(matchResult.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
-      "Match patterns with associated data are not supported yet.",
+
+    expect(parseResult.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Enum variants do not support named associated fields.",
     );
   });
 
@@ -2085,6 +2138,70 @@ const value = label(.Blue);
     expect(executeValue(result.js)).toBe("blue");
   });
 
+  test("supports enum variants with positional payloads", () => {
+    const result = expectCompileOk(`
+type Message = enum {
+  Move(number, number),
+  Write(string),
+  Quit,
+};
+
+const message = Message.Move(10, 20);
+const value = match message {
+  .Move(x, y) => "Move to \${x}, \${y}",
+  .Write(_) => "write",
+  .Quit => "quit",
+};
+`);
+
+    expect(executeValue(result.js)).toBe("Move to 10, 20");
+    expect(result.js).toContain('tag: "Message.Move"');
+    expect(result.js).toContain("values: [10, 20]");
+    expect(result.js).toContain(".tag ??");
+  });
+
+  test("supports contextual shorthand construction and object payloads", () => {
+    const result = expectCompileOk(`
+type Message = enum {
+  Move({ x: number, y: number }),
+  Write(string),
+  Quit,
+};
+
+fn label(message: Message): string {
+  match message {
+    .Move(pos) => "Move to \${pos.x}, \${pos.y}",
+    .Write(value) => value,
+    .Quit => "Quit",
+  }
+}
+
+const direct: Message = .Move({ x: 3, y: 4 });
+const value = label(.Move({ x: 10, y: 20 }));
+`);
+
+    expect(executeValue(result.js)).toBe("Move to 10, 20");
+  });
+
+  test("supports wildcard payload patterns", () => {
+    const result = expectCompileOk(`
+type Message = enum {
+  Move(number, number),
+  Write(string),
+  Quit,
+};
+
+const message = Message.Write("hello");
+const value = match message {
+  .Move(_, _) => "move",
+  .Write(_) => "write",
+  .Quit => "quit",
+};
+`);
+
+    expect(executeValue(result.js)).toBe("write");
+  });
+
   test("rejects duplicate enum variants", () => {
     const result = compile(`
 type Color = enum {
@@ -2129,6 +2246,72 @@ const value = .Red;
     );
   });
 
+  test("rejects invalid enum payload construction", () => {
+    const makeConstructor = compile(`
+type Message = enum {
+  Move(number, number),
+  Quit,
+};
+
+const makeMove = Message.Move;
+`);
+    expect(makeConstructor.ok).toBe(false);
+    expect(makeConstructor.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Enum variant 'Message.Move' requires 2 argument(s).",
+    );
+
+    const wrongArity = compile(`
+type Message = enum {
+  Move(number, number),
+  Quit,
+};
+
+const message = Message.Move(10);
+`);
+    expect(wrongArity.ok).toBe(false);
+    expect(wrongArity.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Expected 2 argument(s), got 1.",
+    );
+
+    const wrongTypes = compile(`
+type Message = enum {
+  Move(number, number),
+  Quit,
+};
+
+const message = Message.Move("x", "y");
+`);
+    expect(wrongTypes.ok).toBe(false);
+    expect(wrongTypes.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Expected 'number', got 'string'.",
+    );
+
+    const fieldlessCall = compile(`
+type Message = enum {
+  Move(number, number),
+  Quit,
+};
+
+const message = Message.Quit();
+`);
+    expect(fieldlessCall.ok).toBe(false);
+    expect(fieldlessCall.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Enum variant 'Message.Quit' has no associated data.",
+    );
+
+    const shorthandWithoutContext = compile(`
+type Message = enum {
+  Move(number, number),
+};
+
+const message = .Move(1, 2);
+`);
+    expect(shorthandWithoutContext.ok).toBe(false);
+    expect(shorthandWithoutContext.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Cannot infer enum type for '.Move'.",
+    );
+  });
+
   test("rejects equality across different enum types", () => {
     const result = compile(`
 type Color = enum {
@@ -2145,6 +2328,22 @@ const value = Color.Red == Status.Red;
     expect(result.ok).toBe(false);
     expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
       "Operator '==' requires compatible operands, got 'Color' and 'Status'.",
+    );
+  });
+
+  test("rejects equality for enums with associated data", () => {
+    const result = compile(`
+type Message = enum {
+  Write(string),
+  Quit,
+};
+
+const value = Message.Quit == Message.Quit;
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Operator '==' cannot compare 'Message' values.",
     );
   });
 
@@ -2182,6 +2381,120 @@ const value = match color {
     expect(result.ok).toBe(false);
     expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
       "Non-exhaustive match; missing '.Blue'.",
+    );
+  });
+
+  test("rejects invalid enum payload match patterns", () => {
+    const wrongArity = compile(`
+type Message = enum {
+  Move(number, number),
+  Write(string),
+  Quit,
+};
+
+const message = Message.Move(1, 2);
+const value = match message {
+  .Move(x) => "move",
+  .Write(_) => "write",
+  .Quit => "quit",
+};
+`);
+    expect(wrongArity.ok).toBe(false);
+    expect(wrongArity.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Expected 2 payload pattern(s), got 1.",
+    );
+
+    const omittedPayload = compile(`
+type Message = enum {
+  Move(number, number),
+  Write(string),
+  Quit,
+};
+
+const message = Message.Write("hello");
+const value = match message {
+  .Move(_, _) => "move",
+  .Write => "write",
+  .Quit => "quit",
+};
+`);
+    expect(omittedPayload.ok).toBe(false);
+    expect(omittedPayload.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Enum variant 'Message.Write' requires 1 payload pattern(s).",
+    );
+
+    const fieldlessPayload = compile(`
+type Message = enum {
+  Move(number, number),
+  Write(string),
+  Quit,
+};
+
+const message = Message.Quit;
+const value = match message {
+  .Move(_, _) => "move",
+  .Write(_) => "write",
+  .Quit() => "quit",
+};
+`);
+    expect(fieldlessPayload.ok).toBe(false);
+    expect(fieldlessPayload.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Enum variant 'Message.Quit' has no associated data.",
+    );
+  });
+
+  test("rejects invalid enum payload pattern bindings", () => {
+    const duplicateBinding = compile(`
+type Message = enum {
+  Move(number, number),
+  Quit,
+};
+
+const message = Message.Move(1, 2);
+const value = match message {
+  .Move(x, x) => "move",
+  .Quit => "quit",
+};
+`);
+    expect(duplicateBinding.ok).toBe(false);
+    expect(duplicateBinding.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Duplicate pattern binding 'x'.",
+    );
+
+    const shadowedBinding = compile(`
+type Message = enum {
+  Write(string),
+  Quit,
+};
+
+const text = "outer";
+const message = Message.Write("inner");
+const value = match message {
+  .Write(text) => text,
+  .Quit => "",
+};
+`);
+    expect(shadowedBinding.ok).toBe(false);
+    expect(shadowedBinding.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Name 'text' shadows an existing name.",
+    );
+
+    const outOfScopeBinding = compile(`
+type Message = enum {
+  Write(string),
+  Quit,
+};
+
+const message = Message.Write("inner");
+const value = match message {
+  .Write(text) => text,
+  .Quit => "",
+};
+const other = text;
+`);
+    expect(outOfScopeBinding.ok).toBe(false);
+    expect(outOfScopeBinding.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Unknown name 'text'.",
     );
   });
 

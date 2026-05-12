@@ -78,6 +78,25 @@ describe("query", () => {
       kind: "MemberName",
     });
   });
+
+  test("finds enum payload types and pattern bindings", () => {
+    const source = `
+type Message = enum { Move(number, number), Quit };
+const message = Message.Move(1, 2);
+const label = match message {
+  .Move(x, y) => x,
+  .Quit => 0,
+};
+`;
+    const program = parseProgram(source);
+
+    expect(findHoverTarget(program, source.indexOf("number"))).toMatchObject({
+      kind: "TypeReference",
+    });
+    expect(findHoverTarget(program, source.indexOf("x,"))).toMatchObject({
+      kind: "PatternBinding",
+    });
+  });
 });
 
 function parseProgram(source: string): Program {

@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import {
   arrayType,
+  enumType,
   formatType,
   functionType,
   inferArithmeticType,
   isAssignableTo,
+  isEqualityComparableType,
   objectType,
   primitiveType,
   sameType,
@@ -65,6 +67,26 @@ describe("semantic types", () => {
 
     expect(isAssignableTo(userWrapper, namedWrapper)).toBe(true);
     expect(isAssignableTo(namedWrapper, userWrapper)).toBe(false);
+  });
+
+  test("treats enum type equality nominally", () => {
+    const left = enumType("UserKind", [{ name: "Admin", payload: [] }]);
+    const sameName = enumType("UserKind", [{ name: "Member", payload: [] }]);
+    const other = enumType("AccountKind", [{ name: "Admin", payload: [] }]);
+
+    expect(sameType(left, sameName)).toBe(true);
+    expect(sameType(left, other)).toBe(false);
+  });
+
+  test("only fieldless enums are equality-comparable", () => {
+    const fieldless = enumType("Color", [{ name: "Red", payload: [] }]);
+    const withPayload = enumType("Message", [
+      { name: "Write", payload: [primitiveType("string")] },
+      { name: "Quit", payload: [] },
+    ]);
+
+    expect(isEqualityComparableType(fieldless)).toBe(true);
+    expect(isEqualityComparableType(withPayload)).toBe(false);
   });
 
   test("formats user-facing type names", () => {

@@ -34,6 +34,7 @@ import { Scope, type SymbolInfo } from "./symbols";
 import type { Span } from "./span";
 import {
   arrayType,
+  enumHasPayload,
   enumType,
   formatType,
   functionType,
@@ -46,6 +47,7 @@ import {
   preferredArithmeticType,
   primitiveType,
   sameType,
+  type EnumVariantType,
   type ObjectTypeField as SemanticObjectTypeField,
   type Type,
   unknownType,
@@ -372,6 +374,7 @@ class Checker {
       seenVariants.add(variant.name);
       variants.push({
         name: variant.name,
+        payload: variant.payload.map((payloadType) => this.typeFromNode(payloadType)),
         nodeId: variant.nodeId,
         nameSpan: variant.nameSpan,
         span: variant.span,
@@ -1053,7 +1056,23 @@ class Checker {
       return unknownType();
     }
 
-    this.expectEnumVariant(expectedType, expression.variantName, expression.variantNameSpan);
+    const variant = this.expectEnumVariant(
+      expectedType,
+      expression.variantName,
+      expression.variantNameSpan,
+    );
+    if (variant !== undefined && variant.payload.length > 0) {
+      this.diagnostics.push(
+        error(
+          `Enum variant '${expectedType.name}.${expression.variantName}' requires ${variant.payload.length} argument(s).`,
+          expression.span,
+          {
+            code: DiagnosticCode.WrongArgumentCount,
+            label: "this variant has associated data and must be constructed with call syntax",
+          },
+        ),
+      );
+    }
     this.resolveShorthandEnumVariant(expression, expectedType.name);
     this.recordEnumVariantReference(expression.nodeId, expectedType, expression.variantName);
     return expectedType;
@@ -1283,10 +1302,14 @@ class Checker {
         rightType.kind !== "unknown" &&
         !isEqualityComparableType(leftType)
       ) {
+        const label =
+          leftType.kind === "enum" && enumHasPayload(leftType)
+            ? "equality for enums with associated data is not supported yet"
+            : "this type does not support equality comparison";
         this.diagnostics.push(
           error(`Operator '${operator}' cannot compare '${formatType(leftType)}' values.`, span, {
             code: DiagnosticCode.IncompatibleOperands,
-            label: "this type does not support equality comparison",
+            label,
           }),
         );
       }
@@ -1586,6 +1609,11 @@ class Checker {
     scope: Scope,
     options: InferOptions,
   ): Type {
+    const enumConstructorType = this.inferEnumConstructorCall(expression, scope, options);
+    if (enumConstructorType !== undefined) {
+      return enumConstructorType;
+    }
+
     const calleeType = this.inferExpression(expression.callee, scope, options);
 
     if (calleeType.kind === "unknown") {
@@ -1647,6 +1675,82 @@ class Checker {
     return calleeType.returnType;
   }
 
+  private inferEnumConstructorCall(
+    expression: Extract<Expression, { kind: "CallExpression" }>,
+    scope: Scope,
+    options: InferOptions,
+  ): Type | undefined {
+    const resolved = this.resolveEnumConstructorCallee(expression.callee, options.expectedType);
+    if (resolved === undefined) {
+      return undefined;
+    }
+
+    const { enumType, variant, variantName, variantNameSpan } = resolved;
+    if (enumType.name === "<unknown>") {
+      for (const arg of expression.args) {
+        this.inferExpression(arg, scope, options);
+      }
+      return unknownType();
+    }
+
+    if (variant.payload.length === 0) {
+      this.diagnostics.push(
+        error(
+          `Enum variant '${enumType.name}.${variantName}' has no associated data.`,
+          expression.span,
+          {
+            code: DiagnosticCode.WrongArgumentCount,
+            label: "this fieldless variant is constructed without parentheses",
+          },
+        ),
+      );
+      for (const arg of expression.args) {
+        this.inferExpression(arg, scope, options);
+      }
+      return enumType;
+    }
+
+    if (expression.args.length !== variant.payload.length) {
+      this.diagnostics.push(
+        error(
+          `Expected ${variant.payload.length} argument(s), got ${expression.args.length}.`,
+          expression.span,
+          {
+            code: DiagnosticCode.WrongArgumentCount,
+            label: "wrong number of arguments for this enum variant",
+          },
+        ),
+      );
+    }
+
+    const count = Math.min(expression.args.length, variant.payload.length);
+    for (let index = 0; index < count; index += 1) {
+      const arg = expression.args[index];
+      const expected = variant.payload[index];
+      if (arg === undefined || expected === undefined) {
+        continue;
+      }
+
+      this.expectType(
+        this.inferExpression(arg, scope, { ...options, expectedType: expected }),
+        expected,
+        arg.span,
+      );
+    }
+
+    for (let index = count; index < expression.args.length; index += 1) {
+      const arg = expression.args[index];
+      if (arg !== undefined) {
+        this.inferExpression(arg, scope, options);
+      }
+    }
+
+    this.recordEnumVariantReference(expression.callee.nodeId, enumType, variantName);
+    this.resolveEnumConstructorCalleeNode(expression.callee, enumType.name);
+    void variantNameSpan;
+    return enumType;
+  }
+
   private inferIndexExpression(
     expression: Extract<Expression, { kind: "IndexExpression" }>,
     scope: Scope,
@@ -1688,8 +1792,22 @@ class Checker {
         expression.target.nodeId,
       );
       if (enumType !== undefined) {
-        if (this.expectEnumVariant(enumType, expression.name, expression.nameSpan)) {
+        const variant = this.expectEnumVariant(enumType, expression.name, expression.nameSpan);
+        if (variant !== undefined) {
           this.recordEnumVariantReference(expression.nodeId, enumType, expression.name);
+          if (variant.payload.length > 0) {
+            this.diagnostics.push(
+              error(
+                `Enum variant '${enumType.name}.${expression.name}' requires ${variant.payload.length} argument(s).`,
+                expression.span,
+                {
+                  code: DiagnosticCode.WrongArgumentCount,
+                  label:
+                    "this variant has associated data and must be constructed with call syntax",
+                },
+              ),
+            );
+          }
         }
         return enumType;
       }
@@ -1761,13 +1879,15 @@ class Checker {
       );
     }
 
-    if (enumScrutinee !== undefined) {
-      this.checkMatchPatterns(expression, enumScrutinee);
-    }
+    const armScopes =
+      enumScrutinee === undefined
+        ? new Map<number, Scope>()
+        : this.checkMatchPatterns(expression, enumScrutinee, scope);
 
     let resultType: Type | undefined;
     for (const arm of expression.arms) {
-      const armType = this.inferExpression(arm.body, scope, {
+      const armScope = armScopes.get(arm.nodeId) ?? scope;
+      const armType = this.inferExpression(arm.body, armScope, {
         ...options,
         expectedType: options.expectedType ?? resultType,
       });
@@ -1786,11 +1906,16 @@ class Checker {
   private checkMatchPatterns(
     expression: MatchExpression,
     scrutineeType: Extract<Type, { kind: "enum" }>,
-  ): void {
+    parentScope: Scope,
+  ): Map<number, Scope> {
+    const armScopes = new Map<number, Scope>();
     const seenVariants = new Set<string>();
     let sawWildcard = false;
 
     for (const arm of expression.arms) {
+      const armScope = new Scope(parentScope);
+      armScopes.set(arm.nodeId, armScope);
+
       if (sawWildcard) {
         this.diagnostics.push(
           error("Unreachable match arm.", arm.pattern.span, {
@@ -1836,13 +1961,22 @@ class Checker {
       }
 
       if (
-        !this.expectEnumVariant(scrutineeType, arm.pattern.variantName, arm.pattern.variantNameSpan)
+        this.expectEnumVariant(
+          scrutineeType,
+          arm.pattern.variantName,
+          arm.pattern.variantNameSpan,
+        ) === undefined
       ) {
+        continue;
+      }
+      const variant = this.findEnumVariant(scrutineeType, arm.pattern.variantName);
+      if (variant === undefined) {
         continue;
       }
 
       this.resolveShorthandMatchPattern(arm.pattern, scrutineeType.name);
       this.recordEnumVariantReference(arm.pattern.nodeId, scrutineeType, arm.pattern.variantName);
+      this.checkEnumPayloadPattern(arm.pattern, variant, scrutineeType, armScope);
 
       if (seenVariants.has(arm.pattern.variantName)) {
         this.diagnostics.push(
@@ -1858,7 +1992,7 @@ class Checker {
     }
 
     if (sawWildcard) {
-      return;
+      return armScopes;
     }
 
     const missingVariants = scrutineeType.variants
@@ -1876,6 +2010,91 @@ class Checker {
           },
         ),
       );
+    }
+
+    return armScopes;
+  }
+
+  private checkEnumPayloadPattern(
+    pattern: Extract<MatchPattern, { readonly kind: "EnumVariantPattern" }>,
+    variant: EnumVariantType,
+    enumType: Extract<Type, { readonly kind: "enum" }>,
+    armScope: Scope,
+  ): void {
+    const payload = pattern.payload;
+
+    if (variant.payload.length === 0) {
+      if (payload !== undefined) {
+        this.diagnostics.push(
+          error(
+            `Enum variant '${enumType.name}.${variant.name}' has no associated data.`,
+            pattern.payloadSpan ?? pattern.span,
+            {
+              code: DiagnosticCode.WrongArgumentCount,
+              label: "fieldless variants match without parentheses",
+            },
+          ),
+        );
+      }
+      return;
+    }
+
+    if (payload === undefined) {
+      this.diagnostics.push(
+        error(
+          `Enum variant '${enumType.name}.${variant.name}' requires ${variant.payload.length} payload pattern(s).`,
+          pattern.span,
+          {
+            code: DiagnosticCode.WrongArgumentCount,
+            label: "payload variants must match with parentheses",
+          },
+        ),
+      );
+      return;
+    }
+
+    if (payload.length !== variant.payload.length) {
+      this.diagnostics.push(
+        error(
+          `Expected ${variant.payload.length} payload pattern(s), got ${payload.length}.`,
+          pattern.payloadSpan ?? pattern.span,
+          {
+            code: DiagnosticCode.WrongArgumentCount,
+            label: "wrong number of payload patterns for this enum variant",
+          },
+        ),
+      );
+    }
+
+    const count = Math.min(payload.length, variant.payload.length);
+    for (let index = 0; index < count; index += 1) {
+      const payloadPattern = payload[index];
+      const payloadType = variant.payload[index];
+      if (
+        payloadPattern === undefined ||
+        payloadType === undefined ||
+        payloadPattern.kind === "WildcardPattern"
+      ) {
+        continue;
+      }
+
+      this.declareName(
+        armScope,
+        {
+          name: payloadPattern.name,
+          type: payloadType,
+          span: payloadPattern.nameSpan,
+          definitionNodeId: payloadPattern.nodeId,
+          fullSpan: payloadPattern.span,
+          assignability: "immutable-binding",
+        },
+        "PatternBinding",
+        {
+          duplicateMessage: `Duplicate pattern binding '${payloadPattern.name}'.`,
+          duplicateLabel: "this pattern binding is already defined in this pattern",
+        },
+      );
+      this.semantics.patternBindingTypes.set(payloadPattern.nodeId, payloadType);
     }
   }
 
@@ -2002,10 +2221,21 @@ class Checker {
       return unknownType();
     }
 
-    if (
-      this.expectEnumVariant(enumType, variantName, variantNameSpan) &&
-      referenceNodeId !== undefined
-    ) {
+    const variant = this.expectEnumVariant(enumType, variantName, variantNameSpan);
+    if (variant !== undefined && variant.payload.length > 0) {
+      this.diagnostics.push(
+        error(
+          `Enum variant '${enumType.name}.${variantName}' requires ${variant.payload.length} argument(s).`,
+          variantNameSpan,
+          {
+            code: DiagnosticCode.WrongArgumentCount,
+            label: "this variant has associated data and must be constructed with call syntax",
+          },
+        ),
+      );
+    }
+
+    if (variant !== undefined && referenceNodeId !== undefined) {
       this.recordEnumVariantReference(referenceNodeId, enumType, variantName);
     }
     return enumType;
@@ -2015,9 +2245,10 @@ class Checker {
     enumType: Extract<Type, { readonly kind: "enum" }>,
     variantName: string,
     variantNameSpan: Span,
-  ): boolean {
-    if (enumType.variants.some((variant) => variant.name === variantName)) {
-      return true;
+  ): EnumVariantType | undefined {
+    const variant = this.findEnumVariant(enumType, variantName);
+    if (variant !== undefined) {
+      return variant;
     }
 
     this.diagnostics.push(
@@ -2026,7 +2257,129 @@ class Checker {
         label: "this variant is not defined for the enum",
       }),
     );
-    return false;
+    return undefined;
+  }
+
+  private findEnumVariant(
+    enumType: Extract<Type, { readonly kind: "enum" }>,
+    variantName: string,
+  ): EnumVariantType | undefined {
+    return enumType.variants.find((variant) => variant.name === variantName);
+  }
+
+  private resolveEnumConstructorCallee(
+    callee: Expression,
+    expectedType: Type | undefined,
+  ):
+    | {
+        readonly enumType: Extract<Type, { readonly kind: "enum" }>;
+        readonly variant: EnumVariantType;
+        readonly variantName: string;
+        readonly variantNameSpan: Span;
+      }
+    | undefined {
+    if (callee.kind === "MemberExpression" && callee.target.kind === "NameExpression") {
+      const enumType = this.resolveEnumTypeByName(
+        callee.target.name,
+        callee.target.span,
+        callee.target.nodeId,
+      );
+      if (enumType === undefined) {
+        return undefined;
+      }
+
+      const variant = this.expectEnumVariant(enumType, callee.name, callee.nameSpan);
+      if (variant === undefined) {
+        return undefined;
+      }
+
+      return { enumType, variant, variantName: callee.name, variantNameSpan: callee.nameSpan };
+    }
+
+    if (callee.kind !== "EnumVariantExpression") {
+      return undefined;
+    }
+
+    if (callee.enumName !== undefined) {
+      const enumType = this.resolveEnumTypeByName(
+        callee.enumName,
+        callee.enumNameSpan ?? callee.span,
+        callee.nodeId,
+      );
+      if (enumType === undefined) {
+        this.diagnostics.push(
+          error(`Unknown enum type '${callee.enumName}'.`, callee.enumNameSpan ?? callee.span, {
+            code: DiagnosticCode.UnknownType,
+            label: "no enum type with this name is in scope",
+          }),
+        );
+        return undefined;
+      }
+
+      const variant = this.expectEnumVariant(enumType, callee.variantName, callee.variantNameSpan);
+      if (variant === undefined) {
+        return undefined;
+      }
+
+      return {
+        enumType,
+        variant,
+        variantName: callee.variantName,
+        variantNameSpan: callee.variantNameSpan,
+      };
+    }
+
+    if (expectedType === undefined || expectedType.kind === "unknown") {
+      this.diagnostics.push(
+        error(`Cannot infer enum type for '.${callee.variantName}'.`, callee.span, {
+          code: DiagnosticCode.CannotInferEnumVariant,
+          label: "this shorthand enum variant needs an expected enum type",
+        }),
+      );
+      return {
+        enumType: enumType("<unknown>", []) as Extract<Type, { readonly kind: "enum" }>,
+        variant: { name: callee.variantName, payload: [] },
+        variantName: callee.variantName,
+        variantNameSpan: callee.variantNameSpan,
+      };
+    }
+
+    if (expectedType.kind !== "enum") {
+      this.diagnostics.push(
+        error(`Expected an enum type for '.${callee.variantName}'.`, callee.span, {
+          code: DiagnosticCode.TypeMismatch,
+          label: `expected enum type, got '${formatType(expectedType)}'`,
+        }),
+      );
+      return {
+        enumType: enumType("<unknown>", []) as Extract<Type, { readonly kind: "enum" }>,
+        variant: { name: callee.variantName, payload: [] },
+        variantName: callee.variantName,
+        variantNameSpan: callee.variantNameSpan,
+      };
+    }
+
+    const variant = this.expectEnumVariant(
+      expectedType,
+      callee.variantName,
+      callee.variantNameSpan,
+    );
+    if (variant === undefined) {
+      return undefined;
+    }
+
+    return {
+      enumType: expectedType,
+      variant,
+      variantName: callee.variantName,
+      variantNameSpan: callee.variantNameSpan,
+    };
+  }
+
+  private resolveEnumConstructorCalleeNode(callee: Expression, enumName: string): void {
+    if (callee.kind === "EnumVariantExpression" && callee.enumName === undefined) {
+      this.resolveShorthandEnumVariant(callee, enumName);
+    }
   }
 
   private resolveShorthandEnumVariant(expression: EnumVariantExpression, enumName: string): void {

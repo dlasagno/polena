@@ -23,6 +23,7 @@ export type ObjectTypeField = {
 
 export type EnumVariantType = {
   readonly name: string;
+  readonly payload: readonly Type[];
   readonly nodeId?: NodeId;
   readonly nameSpan?: Span;
   readonly span?: Span;
@@ -123,7 +124,14 @@ export function isNumericPrimitiveName(name: PrimitiveType): name is "number" | 
 }
 
 export function isEqualityComparableType(type: Type): boolean {
-  return (type.kind === "primitive" && type.name !== "void") || type.kind === "enum";
+  return (
+    (type.kind === "primitive" && type.name !== "void") ||
+    (type.kind === "enum" && !enumHasPayload(type))
+  );
+}
+
+export function enumHasPayload(enumType: Extract<Type, { readonly kind: "enum" }>): boolean {
+  return enumType.variants.some((variant) => variant.payload.length > 0);
 }
 
 export function isOrderingComparableType(type: Type): boolean {

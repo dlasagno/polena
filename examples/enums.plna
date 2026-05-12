@@ -1,4 +1,12 @@
+// Fieldless enums are nominal types with scoped variants.
+
 type Color = enum {
+  Red,
+  Green,
+  Blue,
+};
+
+type Status = enum {
   Red,
   Green,
   Blue,
@@ -8,14 +16,103 @@ const red = Color.Red;
 const green = Color.Green;
 const blue = Color.Blue;
 
+println("fieldless values");
 println("${red}");
 println("${green}");
 println("${blue}");
 
 const color: Color = .Red;
-const value = match color {
+const isRed = color == Color.Red;
+const isBlue = color == Color.Blue;
+
+println("fieldless equality");
+println("is red: ${isRed}");
+println("is blue: ${isBlue}");
+
+const colorName = match color {
   .Red => "red",
-  .Green => "green",
+  Color.Green => "green",
   .Blue => "blue",
 };
-println("${value}");
+
+println("matched color: ${colorName}");
+
+fn paint(value: Color): string {
+  match value {
+    .Red => "paint red",
+    .Green => "paint green",
+    .Blue => "paint blue",
+  }
+}
+
+println(paint(.Green));
+
+// Invalid enum behavior, shown here as comments so this example still compiles:
+// const badScope = Red;
+// const badNominal: Status = color;
+// const badTypeValue = Color;
+// const badProperty = Color.names;
+
+// Associated data uses positional fields.
+
+type Message = enum {
+  Move(number, number),
+  MoveNamed({ x: number, y: number }),
+  Write(string),
+  Quit,
+};
+
+const move = Message.Move(10, 20);
+const write: Message = .Write("hello");
+const quit: Message = .Quit;
+const moveNamed = Message.MoveNamed({ x: 3, y: 4 });
+
+fn describe(message: Message): string {
+  match message {
+    .Move(x, y) => "Move to ${x}, ${y}",
+    .MoveNamed(pos) => "Move to ${pos.x}, ${pos.y}",
+    .Write(text) => "Write ${text}",
+    .Quit => "Quit",
+  }
+}
+
+println("payload values");
+println(describe(move));
+println(describe(write));
+println(describe(quit));
+println(describe(moveNamed));
+println(describe(.Move(30, 40)));
+
+const category = match write {
+  .Move(_, _) => "movement",
+  .MoveNamed(_) => "movement",
+  .Write(_) => "text",
+  .Quit => "done",
+};
+
+println("category: ${category}");
+
+const fallback = match moveNamed {
+  .Quit => "done",
+  _ => "not done",
+};
+
+println("wildcard: ${fallback}");
+
+// Invalid associated-data behavior:
+// type BadMessage = enum {
+//   Move { x: number, y: number },
+// };
+// const badNamedConstructor = Message.Move { x: 1, y: 2 };
+// const badConstructorValue = Message.Move;
+// const badArity = Message.Move(1);
+// const badTypes = Message.Move("x", "y");
+// const badShorthand = .Move(1, 2);
+// const badFieldlessCall = Message.Quit();
+// const badPayloadEquality = Message.Quit == Message.Quit;
+// const badPayloadPattern = match move {
+//   .Move(x) => "move",
+//   .MoveNamed(_) => "named",
+//   .Write(_) => "write",
+//   .Quit => "quit",
+// };

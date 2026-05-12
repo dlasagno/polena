@@ -32,7 +32,7 @@ class JavaScriptEmitter {
   private usesIndexHelper = false;
   private usesIndexSetHelper = false;
   private usesIndexUpdateHelper = false;
-  private readonly enumTypes = new Map<string, Set<string>>();
+  private readonly enumTypes = new Map<string, Map<string, { readonly payloadArity: number }>>();
 
   public emitProgram(program: Program): string {
     const lines: string[] = [];
@@ -41,7 +41,12 @@ class JavaScriptEmitter {
       if (declaration.kind === "TypeDeclaration" && declaration.value.kind === "EnumType") {
         this.enumTypes.set(
           declaration.name,
-          new Set(declaration.value.variants.map((variant) => variant.name)),
+          new Map(
+            declaration.value.variants.map((variant) => [
+              variant.name,
+              { payloadArity: variant.payload.length },
+            ]),
+          ),
         );
       }
     }
@@ -326,6 +331,12 @@ class JavaScriptEmitter {
       case "MatchExpression":
         return this.emitMatchExpression(expression, indent, loopContext);
       case "CallExpression":
+        {
+          const enumConstructor = this.emitEnumConstructorCall(expression, indent, loopContext);
+          if (enumConstructor !== undefined) {
+            return enumConstructor;
+          }
+        }
         return `${this.emitCallCallee(expression.callee, indent, loopContext)}(${expression.args
           .map((arg) => this.emitExpression(arg, indent, loopContext))
           .join(", ")})`;
@@ -339,7 +350,7 @@ class JavaScriptEmitter {
       case "MemberExpression":
         if (
           expression.target.kind === "NameExpression" &&
-          this.enumTypes.get(expression.target.name)?.has(expression.name) === true
+          this.enumTypes.get(expression.target.name)?.get(expression.name)?.payloadArity === 0
         ) {
           return JSON.stringify(`${expression.target.name}.${expression.name}`);
         }
@@ -357,6 +368,56 @@ class JavaScriptEmitter {
     }
 
     return this.emitExpression(callee, indent, loopContext);
+  }
+
+  private emitEnumConstructorCall(
+    expression: Extract<Expression, { readonly kind: "CallExpression" }>,
+    indent: string,
+    loopContext?: LoopEmitContext,
+  ): string | undefined {
+    const resolved = this.resolveEnumConstructor(expression.callee);
+    if (resolved === undefined || resolved.payloadArity === 0) {
+      return undefined;
+    }
+
+    return `({ tag: ${JSON.stringify(`${resolved.enumName}.${resolved.variantName}`)}, values: [${expression.args
+      .map((arg) => this.emitExpression(arg, indent, loopContext))
+      .join(", ")}] })`;
+  }
+
+  private resolveEnumConstructor(
+    callee: Expression,
+  ):
+    | { readonly enumName: string; readonly variantName: string; readonly payloadArity: number }
+    | undefined {
+    if (callee.kind === "MemberExpression" && callee.target.kind === "NameExpression") {
+      const variant = this.enumTypes.get(callee.target.name)?.get(callee.name);
+      if (variant === undefined) {
+        return undefined;
+      }
+
+      return {
+        enumName: callee.target.name,
+        variantName: callee.name,
+        payloadArity: variant.payloadArity,
+      };
+    }
+
+    if (callee.kind === "EnumVariantExpression") {
+      const enumName = callee.enumName ?? callee.resolvedEnumName;
+      if (enumName === undefined) {
+        return undefined;
+      }
+
+      const variant = this.enumTypes.get(enumName)?.get(callee.variantName);
+      if (variant === undefined) {
+        return undefined;
+      }
+
+      return { enumName, variantName: callee.variantName, payloadArity: variant.payloadArity };
+    }
+
+    return undefined;
   }
 
   private emitIfStatement(
@@ -492,6 +553,16 @@ class JavaScriptEmitter {
     indent: string,
     loopContext?: LoopEmitContext,
   ): string {
+    const scrutineeVar = this.nextTemp("matchValue");
+    const usesPayloadTags = expression.arms.some(
+      (arm) =>
+        arm.pattern.kind === "EnumVariantPattern" && this.matchPatternPayloadArity(arm.pattern) > 0,
+    );
+
+    if (usesPayloadTags) {
+      return this.emitPayloadMatchExpression(expression, indent, loopContext, scrutineeVar);
+    }
+
     const lines = [
       "(() => {",
       `${indent}  switch (${this.emitExpression(expression.scrutinee, `${indent}  `, loopContext)}) {`,
@@ -511,6 +582,64 @@ class JavaScriptEmitter {
 
     lines.push(`${indent}  }`, `${indent}})()`);
     return lines.join("\n");
+  }
+
+  private emitPayloadMatchExpression(
+    expression: MatchExpression,
+    indent: string,
+    loopContext: LoopEmitContext | undefined,
+    scrutineeVar: string,
+  ): string {
+    const lines = [
+      "(() => {",
+      `${indent}  const ${scrutineeVar} = ${this.emitExpression(expression.scrutinee, `${indent}  `, loopContext)};`,
+      `${indent}  switch (${scrutineeVar}.tag ?? ${scrutineeVar}) {`,
+    ];
+
+    for (const arm of expression.arms) {
+      if (arm.pattern.kind === "WildcardPattern") {
+        lines.push(`${indent}    default:`);
+      } else {
+        lines.push(`${indent}    case ${this.emitMatchPatternValue(arm.pattern)}:`);
+        lines.push(
+          ...this.emitPayloadPatternBindings(arm.pattern, scrutineeVar, `${indent}      `),
+        );
+      }
+
+      lines.push(
+        `${indent}      return ${this.emitExpression(arm.body, `${indent}      `, loopContext)};`,
+      );
+    }
+
+    lines.push(`${indent}  }`, `${indent}})()`);
+    return lines.join("\n");
+  }
+
+  private emitPayloadPatternBindings(
+    pattern: Extract<MatchPattern, { readonly kind: "EnumVariantPattern" }>,
+    scrutineeVar: string,
+    indent: string,
+  ): string[] {
+    return (pattern.payload ?? []).flatMap((payloadPattern, index) => {
+      if (payloadPattern.kind === "WildcardPattern") {
+        return [];
+      }
+
+      return [
+        `${indent}const ${emitIdentifier(payloadPattern.name)} = ${scrutineeVar}.values[${index}];`,
+      ];
+    });
+  }
+
+  private matchPatternPayloadArity(
+    pattern: Extract<MatchPattern, { readonly kind: "EnumVariantPattern" }>,
+  ): number {
+    const enumName = pattern.enumName ?? pattern.resolvedEnumName;
+    if (enumName === undefined) {
+      return 0;
+    }
+
+    return this.enumTypes.get(enumName)?.get(pattern.variantName)?.payloadArity ?? 0;
   }
 
   private emitMatchPatternValue(

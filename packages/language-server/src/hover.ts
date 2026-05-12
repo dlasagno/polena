@@ -25,6 +25,9 @@ type EnumVariantTypeNode = Extract<TypeNode, { readonly kind: "EnumType" }>["var
 type ObjectLiteralField = Extract<Expression, { readonly kind: "ObjectLiteral" }>["fields"][number];
 type MatchArm = Extract<Expression, { readonly kind: "MatchExpression" }>["arms"][number];
 type MatchPattern = MatchArm["pattern"];
+type EnumPayloadPattern = NonNullable<
+  Extract<MatchPattern, { readonly kind: "EnumVariantPattern" }>["payload"]
+>[number];
 
 export function getHover(
   document: TextDocument,
@@ -63,6 +66,7 @@ function renderHover(analysis: AnalyzeResult, target: HoverTarget): string | und
       );
     case "Declaration":
     case "Parameter":
+    case "PatternBinding":
     case "FieldDefinition":
     case "EnumVariantDefinition":
       return renderNodeHover(analysis, target.nodeId);
@@ -133,6 +137,12 @@ function renderNodeHover(analysis: AnalyzeResult, nodeId: NodeId): string | unde
       return `type ${node.name} = ${formatTypeNode(node.value)}`;
     case "Parameter":
       return `${node.name}: ${formatTypeNode(node.type)}`;
+    case "BindingPattern": {
+      const type = analysis.semantics.patternBindingTypes.get(node.nodeId);
+      return type === undefined || type.kind === "unknown"
+        ? node.name
+        : `${node.name}: ${formatType(type)}`;
+    }
     case "ObjectTypeField":
     case "ObjectLiteralField":
       return renderFieldHover(analysis, node);
@@ -195,7 +205,7 @@ function renderEnumVariantHover(
   const typeDeclaration = findEnumTypeDeclaration(program, variant.nodeId);
   return typeDeclaration === undefined
     ? variant.name
-    : `${typeDeclaration.name}.${variant.name}: ${typeDeclaration.name}`;
+    : `${typeDeclaration.name}.${formatEnumVariantTypeNode(variant)}: ${typeDeclaration.name}`;
 }
 
 function formatTypeNode(typeNode: TypeNode): string {
@@ -211,10 +221,18 @@ function formatTypeNode(typeNode: TypeNode): string {
         .map((field) => `${field.name}: ${formatTypeNode(field.type)}`)
         .join(", ")} }`;
     case "EnumType":
-      return `enum { ${typeNode.variants.map((variant) => variant.name).join(", ")} }`;
+      return `enum { ${typeNode.variants.map(formatEnumVariantTypeNode).join(", ")} }`;
     case "UnknownType":
       return "unknown";
   }
+}
+
+function formatEnumVariantTypeNode(variant: EnumVariantTypeNode): string {
+  if (variant.payload.length === 0) {
+    return variant.name;
+  }
+
+  return `${variant.name}(${variant.payload.map(formatTypeNode).join(", ")})`;
 }
 
 type AstNode =
@@ -228,6 +246,7 @@ type AstNode =
   | ObjectTypeField
   | ObjectLiteralField
   | EnumVariantTypeNode
+  | EnumPayloadPattern
   | MatchArm
   | MatchPattern;
 
@@ -362,7 +381,15 @@ function findAstNodeInTypeNode(typeNode: TypeNode, nodeId: NodeId): AstNode | un
       }
       return undefined;
     case "EnumType":
-      return typeNode.variants.find((variant) => variant.nodeId === nodeId);
+      return findFirst(typeNode.variants, (variant) => {
+        if (variant.nodeId === nodeId) {
+          return variant;
+        }
+
+        return findFirst(variant.payload, (payloadType) =>
+          findAstNodeInTypeNode(payloadType, nodeId),
+        );
+      });
     case "PrimitiveType":
     case "NamedType":
     case "UnknownType":
@@ -433,7 +460,10 @@ function findAstNodeInExpression(expression: Expression, nodeId: NodeId): AstNod
           if (arm.pattern.nodeId === nodeId) {
             return arm.pattern;
           }
-          return findAstNodeInExpression(arm.body, nodeId);
+          return (
+            findAstNodeInMatchPattern(arm.pattern, nodeId) ??
+            findAstNodeInExpression(arm.body, nodeId)
+          );
         })
       );
     case "CallExpression":
@@ -455,6 +485,16 @@ function findAstNodeInExpression(expression: Expression, nodeId: NodeId): AstNod
     case "EnumVariantExpression":
       return undefined;
   }
+}
+
+function findAstNodeInMatchPattern(pattern: MatchPattern, nodeId: NodeId): AstNode | undefined {
+  if (pattern.kind !== "EnumVariantPattern") {
+    return undefined;
+  }
+
+  return findFirst(pattern.payload ?? [], (payloadPattern) =>
+    payloadPattern.nodeId === nodeId ? payloadPattern : undefined,
+  );
 }
 
 function findEnumTypeDeclaration(

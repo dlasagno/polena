@@ -56,6 +56,7 @@ export type EnumVariantTypeNode = {
   readonly nodeId: NodeId;
   readonly name: string;
   readonly nameSpan: Span;
+  readonly payload: readonly TypeNode[];
   readonly span: Span;
 };
 
@@ -334,7 +335,23 @@ export type MatchPattern =
       readonly enumNameSpan?: Span;
       readonly variantName: string;
       readonly variantNameSpan: Span;
+      readonly payload?: readonly EnumPayloadPattern[];
+      readonly payloadSpan?: Span;
       readonly resolvedEnumName?: string;
+      readonly span: Span;
+    }
+  | {
+      readonly kind: "WildcardPattern";
+      readonly nodeId: NodeId;
+      readonly span: Span;
+    };
+
+export type EnumPayloadPattern =
+  | {
+      readonly kind: "BindingPattern";
+      readonly nodeId: NodeId;
+      readonly name: string;
+      readonly nameSpan: Span;
       readonly span: Span;
     }
   | {

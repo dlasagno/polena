@@ -7,6 +7,7 @@ export type DefinitionKind =
   | "Function"
   | "Prelude"
   | "TypeAlias"
+  | "PatternBinding"
   | "EnumVariant"
   | "Field";
 
@@ -62,6 +63,7 @@ export type ReferenceTarget =
 
 export type Semantics = {
   readonly expressionTypes: Map<NodeId, Type>;
+  readonly patternBindingTypes: Map<NodeId, Type>;
   readonly references: Map<NodeId, ReferenceTarget>;
   readonly definitions: Definition[];
 };
@@ -69,6 +71,7 @@ export type Semantics = {
 export function emptySemantics(): Semantics {
   return {
     expressionTypes: new Map(),
+    patternBindingTypes: new Map(),
     references: new Map(),
     definitions: [],
   };

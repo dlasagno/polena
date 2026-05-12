@@ -9,6 +9,7 @@ import type {
   FunctionDeclaration,
   IfExpression,
   LoopContinuation,
+  EnumPayloadPattern,
   MatchArm,
   MatchExpression,
   MatchPattern,
@@ -32,7 +33,7 @@ import type {
 import { error, type Diagnostic } from "./diagnostic";
 import { DiagnosticCode } from "./diagnostic-codes";
 import { lex } from "./lexer";
-import { makeLocation, mergeSpans, spanFrom } from "./span";
+import { makeLocation, mergeSpans, spanFrom, type Span } from "./span";
 import type { Token, TokenKind } from "./token";
 
 export type ParseResult = {
@@ -485,20 +486,42 @@ class Parser {
 
         const name = this.expect("Identifier", "Expected enum variant name.");
         let span = name.span;
+        const payload: TypeNode[] = [];
         if (this.match("LeftParen")) {
-          const leftParen = this.previous();
-          this.diagnostics.push(
-            error("Enum variants with associated data are not supported yet.", leftParen.span, {
-              code: DiagnosticCode.UnsupportedEnumPayload,
-              label: "payload syntax is not implemented for enum variants",
-            }),
-          );
-          this.recoverToRightParen();
+          if (!this.check("RightParen")) {
+            do {
+              if (this.check("RightParen")) {
+                break;
+              }
+
+              payload.push(this.parseType());
+            } while (this.match("Comma"));
+          }
           const rightParen = this.expectClosingDelimiter(
             "RightParen",
             "Expected ')' after enum variant payload.",
           );
           span = mergeSpans(name.span, rightParen.span);
+        } else if (this.match("LeftBrace")) {
+          const leftBrace = this.previous();
+          this.diagnostics.push(
+            error("Enum variants do not support named associated fields.", leftBrace.span, {
+              code: DiagnosticCode.UnsupportedEnumPayload,
+              label: "named associated fields are not supported for enum variants",
+              notes: [
+                {
+                  kind: "help",
+                  message: "use a single object payload such as 'Move({ x: number, y: number })'",
+                },
+              ],
+            }),
+          );
+          this.recoverToClosingBrace();
+          const rightBrace = this.expectClosingDelimiter(
+            "RightBrace",
+            "Expected '}' after enum variant fields.",
+          );
+          span = mergeSpans(name.span, rightBrace.span);
         }
 
         variants.push(
@@ -506,6 +529,7 @@ class Parser {
             kind: "EnumVariantType" as const,
             name: name.text,
             nameSpan: name.span,
+            payload,
             span,
           }),
         );
@@ -806,12 +830,6 @@ class Parser {
     }
   }
 
-  private recoverToRightParen(): void {
-    while (!this.check("RightParen") && !this.check("Eof")) {
-      this.advance();
-    }
-  }
-
   private parseIfExpression(): IfExpression {
     const ifToken = this.expect("If", "Expected 'if'.");
     const condition = this.parseCondition("if");
@@ -908,13 +926,14 @@ class Parser {
     if (this.match("Dot")) {
       const dot = this.previous();
       const variant = this.expect("Identifier", "Expected enum variant name after '.'.");
+      const payload = this.parseEnumPayloadPattern();
       const pattern: MatchPattern = this.node({
         kind: "EnumVariantPattern",
         variantName: variant.text,
         variantNameSpan: variant.span,
-        span: mergeSpans(dot.span, variant.span),
+        ...(payload === undefined ? {} : { payload: payload.patterns, payloadSpan: payload.span }),
+        span: mergeSpans(dot.span, payload?.span ?? variant.span),
       });
-      this.rejectMatchPatternPayload();
       return pattern;
     }
 
@@ -922,15 +941,18 @@ class Parser {
       const enumName = this.previous();
       if (this.match("Dot")) {
         const variant = this.expect("Identifier", "Expected enum variant name after '.'.");
+        const payload = this.parseEnumPayloadPattern();
         const pattern: MatchPattern = this.node({
           kind: "EnumVariantPattern",
           enumName: enumName.text,
           enumNameSpan: enumName.span,
           variantName: variant.text,
           variantNameSpan: variant.span,
-          span: mergeSpans(enumName.span, variant.span),
+          ...(payload === undefined
+            ? {}
+            : { payload: payload.patterns, payloadSpan: payload.span }),
+          span: mergeSpans(enumName.span, payload?.span ?? variant.span),
         });
-        this.rejectMatchPatternPayload();
         return pattern;
       }
     }
@@ -948,20 +970,43 @@ class Parser {
     return this.node({ kind: "WildcardPattern", span: token.span });
   }
 
-  private rejectMatchPatternPayload(): void {
+  private parseEnumPayloadPattern():
+    | { readonly patterns: readonly EnumPayloadPattern[]; readonly span: Span }
+    | undefined {
     if (!this.match("LeftParen")) {
-      return;
+      return undefined;
     }
 
     const leftParen = this.previous();
-    this.diagnostics.push(
-      error("Match patterns with associated data are not supported yet.", leftParen.span, {
-        code: DiagnosticCode.UnsupportedMatchPayload,
-        label: "payload pattern syntax is not implemented",
-      }),
+    const patterns: EnumPayloadPattern[] = [];
+
+    if (!this.check("RightParen")) {
+      do {
+        if (this.check("RightParen")) {
+          break;
+        }
+
+        const token = this.expect("Identifier", "Expected payload pattern.");
+        if (token.text === "_") {
+          patterns.push(this.node({ kind: "WildcardPattern" as const, span: token.span }));
+        } else {
+          patterns.push(
+            this.node({
+              kind: "BindingPattern" as const,
+              name: token.text,
+              nameSpan: token.span,
+              span: token.span,
+            }),
+          );
+        }
+      } while (this.match("Comma"));
+    }
+
+    const rightParen = this.expectClosingDelimiter(
+      "RightParen",
+      "Expected ')' after match pattern payload.",
     );
-    this.recoverToRightParen();
-    this.expectClosingDelimiter("RightParen", "Expected ')' after match pattern payload.");
+    return { patterns, span: mergeSpans(leftParen.span, rightParen.span) };
   }
 
   private parseLoopContinuation(): LoopContinuation {

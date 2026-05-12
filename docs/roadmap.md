@@ -139,16 +139,7 @@ Goal: add algebraic data modeling and exhaustive control flow.
 
 Candidate work:
 
-- Tokenize and parse enum type declarations.
-- Represent enum types and variants in the checker.
-- Emit JavaScript for fieldless enums first.
-- Add associated-data variants after representation and pattern semantics are
-  specified.
-- Implement `match` expressions.
-- Require exhaustive matching over enums.
-- Add diagnostics for missing variants, unreachable duplicate arms, malformed
-  patterns, and incompatible arm result types.
-- Decide and document enum equality rules.
+- Add match guards if they become part of the initial `match` feature.
 
 CLI:
 
@@ -157,8 +148,6 @@ CLI:
 
 Language server:
 
-- Surface exhaustive-match diagnostics in editors with the same spans as the
-  compiler.
 - Add document symbols for enum declarations if declaration data is stable
   enough.
 
@@ -169,15 +158,14 @@ VS Code extension:
 
 Design questions to settle first:
 
-- Runtime representation of fieldless enums.
-- Runtime representation of variants with associated data.
-- Pattern syntax for enum payloads.
 - Whether guards are part of the initial `match` feature.
 
 Exit criteria:
 
-- Fieldless enums and exhaustive `match` work end-to-end.
-- The checker can produce focused missing-case diagnostics.
+- Fieldless enums, associated-data enums, and exhaustive `match` work
+  end-to-end.
+- The checker can produce focused missing-case and malformed-pattern
+  diagnostics.
 - The generated JavaScript remains readable and stable.
 
 ---
