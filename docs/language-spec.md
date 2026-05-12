@@ -736,7 +736,7 @@ This operation does not return `undefined`.
 
 Array indexing never produces an untyped missing value.
 
-Array elements may be assigned by index when the array value is mutable:
+Array elements may be assigned by index:
 
 ```tsx
 values[0] = "Ada";
@@ -745,6 +745,10 @@ values[0] = "Ada";
 Index assignment checks index validity at runtime under the same rules as index
 access. Invalid indexes panic. The assigned value must be compatible with the
 array element type.
+
+In the MVP, array values are mutable sequence values. `const` and `let` control
+whether a binding can be reassigned; they do not freeze or deeply mutate the
+array value itself.
 
 ---
 
@@ -856,21 +860,16 @@ Objects cannot be used as hash maps. Use a `Map` type for dynamic key/value stor
 
 Dynamic property access is **TBD**.
 
-For now, object and array mutability follows JavaScript-like behavior:
+## 17.1 Mutability
+
+In the MVP, object and array values use JavaScript-like runtime mutability.
+`const` and `let` control binding mutability, not deep value mutability:
 
 - `const` prevents rebinding,
 - `let` allows rebinding,
-- object and array values may still be mutable unless otherwise restricted.
-
-Example direction:
-
-```tsx
-const user = {
-	name: "Ada",
-};
-
-user.name = "Grace"; // Likely allowed for now.
-```
+- object fields may be assigned when the field is known and the value type is
+  compatible,
+- array elements may be assigned when the index and element value are valid.
 
 `const` does not freeze the object or array value.
 
@@ -880,17 +879,53 @@ const user = {
 };
 
 user = { name: "Grace" }; // Invalid: rebinding a const binding.
-user.name = "Grace";     // Valid for now: mutating the object value.
+user.name = "Grace";     // Valid: mutating the object value.
+```
+
+`let` permits rebinding the variable. It does not make nested values more or
+less mutable than they otherwise are.
+
+```tsx
+let user = {
+	name: "Ada",
+};
+
+user = { name: "Grace" }; // Valid: rebinding a let binding.
+user.name = "Lovelace";   // Valid: mutating the object value.
 ```
 
 Property assignment requires the property to be known on the object's static type
 and the assigned value to be compatible with the property type.
 
-The long-term mutability model is **TBD**.
+```tsx
+type User = {
+	name: string,
+};
+
+const user: User = {
+	name: "Ada",
+};
+
+user.name = "Grace"; // Valid.
+user.email = "a@example.com"; // Invalid: User has no field email.
+user.name = 42; // Invalid: name has type string.
+```
+
+Mutation through function parameters is allowed in the MVP because object and
+array values are reference-like values at runtime.
+
+```tsx
+fn rename(user: User): void {
+	user.name = "Grace";
+}
+```
+
+Readonly fields, immutable collection types, ownership, borrowing, and deeper
+immutability controls are deferred.
 
 ---
 
-## 17.1 Object Types
+## 17.2 Object Types
 
 Object types are written with property names and types:
 
@@ -914,7 +949,7 @@ const user: User = {
 
 ---
 
-## 17.2 Structural Typing
+## 17.3 Structural Typing
 
 Object types are structural.
 
@@ -950,7 +985,7 @@ requires the same exact object shape.
 
 ---
 
-## 17.3 Property Access Safety
+## 17.4 Property Access Safety
 
 Accessing a property that is not known to exist on a type is invalid.
 
