@@ -1497,16 +1497,84 @@ type User = {
     );
   });
 
-  test("rejects structural object assignment before structural assignability is implemented", () => {
+  test("supports structural object assignment from non-literal values", () => {
+    const result = expectCompileOk(`
+type Named = {
+  name: string,
+};
+
+const user = {
+  id: "ada",
+  name: "Ada",
+};
+
+const named: Named = user;
+const value = named.name;
+`);
+
+    expect(executeValue(result.js)).toBe("Ada");
+  });
+
+  test("supports structural object arguments", () => {
+    const result = expectCompileOk(`
+type Named = {
+  name: string,
+};
+
+fn greet(value: Named): string {
+  "Hello \${value.name}"
+}
+
+const user = {
+  id: "ada",
+  name: "Ada",
+};
+
+const value = greet(user);
+`);
+
+    expect(executeValue(result.js)).toBe("Hello Ada");
+  });
+
+  test("supports nested structural object assignment", () => {
+    const result = expectCompileOk(`
+type NamedBox = {
+  value: {
+    name: string,
+  },
+};
+
+const userBox = {
+  value: {
+    id: "ada",
+    name: "Ada",
+  },
+};
+
+const namedBox: NamedBox = userBox;
+const value = namedBox.value.name;
+`);
+
+    expect(executeValue(result.js)).toBe("Ada");
+  });
+
+  test("rejects structural object assignment with missing fields", () => {
     const result = compile(`
-const a = { a: 1, b: 2 };
-type X = { a: number };
-const b: X = a;
+type User = {
+  id: string,
+  name: string,
+};
+
+const named = {
+  name: "Ada",
+};
+
+const user: User = named;
 `);
 
     expect(result.ok).toBe(false);
     expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
-      "Expected '{ a: number }', got '{ a: number, b: number }'.",
+      "Expected '{ id: string, name: string }', got '{ name: string }'.",
     );
   });
 

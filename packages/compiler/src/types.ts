@@ -64,7 +64,15 @@ export function sameType(left: Type, right: Type): boolean {
 }
 
 export function isAssignableTo(source: Type, target: Type): boolean {
-  return source.kind === "unknown" || target.kind === "unknown" || sameType(source, target);
+  if (source.kind === "unknown" || target.kind === "unknown" || sameType(source, target)) {
+    return true;
+  }
+
+  if (source.kind === "object" && target.kind === "object") {
+    return hasAssignableObjectFields(source.fields, target.fields);
+  }
+
+  return false;
 }
 
 export function formatType(type: Type): string {
@@ -133,6 +141,20 @@ function sameObjectFields(
   for (const leftField of left) {
     const rightField = right.find((field) => field.name === leftField.name);
     if (rightField === undefined || !sameType(leftField.type, rightField.type)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function hasAssignableObjectFields(
+  source: readonly ObjectTypeField[],
+  target: readonly ObjectTypeField[],
+): boolean {
+  for (const targetField of target) {
+    const sourceField = source.find((field) => field.name === targetField.name);
+    if (sourceField === undefined || !isAssignableTo(sourceField.type, targetField.type)) {
       return false;
     }
   }

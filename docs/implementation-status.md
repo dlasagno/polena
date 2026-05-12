@@ -124,9 +124,9 @@ Status values:
 
 | Feature | Status | Notes |
 |---|---|---|
-| Object literals | Partially implemented | Parsed, checked, and emitted. Contextual object literals require exact fields. |
+| Object literals | Implemented | Parsed, checked, and emitted. Fresh contextual object literals intentionally reject missing and excess fields. |
 | Object type declarations | Partially implemented | Supported through `type Name = { ... };`. |
-| Structural object typing | Not implemented | The language specifies structural typing, but the MVP currently requires exact object assignability. |
+| Structural object typing | Implemented | Non-literal object values may be assigned to narrower object types when required fields are present and compatible. |
 | Object property access | Implemented | Known fields can be read from object values; unknown fields are rejected. |
 | Object field assignment | Implemented | Field must be known on the object's static type and value type must be compatible. |
 | Object introspection directives | Not implemented | Depends on directives and object types. |

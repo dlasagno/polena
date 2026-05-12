@@ -50,7 +50,21 @@ describe("semantic types", () => {
 
     expect(sameType(left, sameFieldsDifferentOrder)).toBe(true);
     expect(sameType(left, wider)).toBe(false);
-    expect(isAssignableTo(wider, left)).toBe(false);
+    expect(isAssignableTo(wider, left)).toBe(true);
+    expect(isAssignableTo(left, wider)).toBe(false);
+  });
+
+  test("treats nested object assignability structurally", () => {
+    const named = objectType([{ name: "name", type: primitiveType("string") }]);
+    const user = objectType([
+      { name: "id", type: primitiveType("string") },
+      { name: "name", type: primitiveType("string") },
+    ]);
+    const namedWrapper = objectType([{ name: "value", type: named }]);
+    const userWrapper = objectType([{ name: "value", type: user }]);
+
+    expect(isAssignableTo(userWrapper, namedWrapper)).toBe(true);
+    expect(isAssignableTo(namedWrapper, userWrapper)).toBe(false);
   });
 
   test("formats user-facing type names", () => {

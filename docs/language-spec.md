@@ -974,14 +974,19 @@ greet(user);
 
 Extra fields are allowed when assigning to a narrower structural type.
 
-Fresh object literals assigned directly to an annotated object type may be
-checked more strictly than non-literal values. The exact excess-property rules
-are **TBD**.
+Fresh object literals assigned directly to an annotated object type are checked
+exactly. Missing fields and excess fields are rejected.
+
+```tsx
+const named: Named = {
+	id: "1", // Invalid: fresh object literal has excess field id.
+	name: "Ada",
+};
+```
 
 The current compiler MVP parses and checks object type declarations, object
-literals, known-field property access, and known-field property assignment, but
-general structural assignability is not implemented yet. For now, assigning one
-object-typed value to another requires the same exact object shape.
+literals, structural object assignability, known-field property access, and
+known-field property assignment.
 
 ---
 

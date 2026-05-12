@@ -27,12 +27,12 @@ programs end-to-end. It supports:
 - Array type syntax such as `[]number` and named aliases for array types
 - Array literals, typed empty arrays, `.length`, checked indexing, and checked
   index assignment
-- Object type aliases, exact object literals, property access, and field
-  assignment
+- Object type aliases, exact object literal checking, structural object
+  assignment, property access, and field assignment
 
-It intentionally does not yet support structural object assignability, object
-field readonly controls, enums, match expressions, modules/imports, or the full
-type system from the language draft.
+It intentionally does not yet support object field readonly controls, enums,
+match expressions, modules/imports, or the full type system from the language
+draft.
 
 Example:
 
