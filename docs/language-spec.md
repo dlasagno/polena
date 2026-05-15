@@ -47,11 +47,36 @@ Line endings may be LF or CRLF, but line comments end at LF.
 
 # 3. Comments
 
-The language supports only line comments.
+The language supports only line comments. Block comments are not part of the
+language.
 
 ```tsx
-// This is a line comment, it starts with "//" and ends at the next LF
+// This is a line comment. It starts with "//" and ends at the next LF.
 ```
+
+Two doc-comment forms are recognized:
+
+- `///` introduces an **item doc comment**, attached to the declaration that
+  immediately follows it. Multiple consecutive `///` lines form a single
+  doc-comment block.
+- `//!` introduces a **module doc comment**, attached to the enclosing module.
+  Module doc comments must appear at the top of a file, before any
+  declaration.
+
+```tsx
+//! This module implements basic parser helpers.
+
+/// Parses a single line, returning the trimmed contents.
+///
+/// Returns `.None` for an empty line.
+export fn parseLine(input: string): Option<string> {
+	// ...
+}
+```
+
+Doc-comment content is treated as Markdown by external documentation
+tooling. The compiler does not validate or render doc-comment content; it
+only attaches the text to the corresponding declaration or module.
 
 ---
 
@@ -1164,17 +1189,38 @@ The exact typing and error-conversion rules are **TBD**.
 
 ## 19.3 Panic
 
-A panic represents a programmer error or violated invariant.
+A panic represents a programmer error or violated invariant. Panics are not
+intended for ordinary recoverable errors — those are modeled with `Result`
+(section 19).
 
-Examples of operations that may panic:
+Operations that panic include:
 
-- checked array indexing out of bounds,
+- checked array indexing out of bounds (section 16.2),
 - explicit failed assertions,
-- unreachable code paths.
+- unreachable code paths (for example, exhaustiveness violations the checker
+  could not prove at compile time and that occur at runtime through external
+  data).
 
-Panics are not intended for ordinary recoverable errors.
+A panic produces an instance of the runtime class `PolenaPanic` and
+terminates the current execution path. The instance carries:
 
-Panic handling and compilation behavior are **TBD**.
+- a human-readable message describing the panic,
+- a kind tag identifying the panic category,
+- the source span of the panicking operation when available.
+
+For the JavaScript target, `PolenaPanic` is a subclass of the JavaScript
+`Error` class. It is thrown by the runtime at the panic site. Polena has no
+`try`/`catch` syntax that can intercept a `PolenaPanic`; the only way to
+observe one from within Polena is by crossing the JavaScript interop
+boundary (section 29), at which point JavaScript code is free to catch the
+underlying `Error` like any other.
+
+A program that panics is considered to have failed. The exit behavior of a
+panicked program depends on the runtime environment and is not part of the
+language proper.
+
+Custom user-thrown panics, panic-from-`main` return-type conventions, and
+the relationship between panics and async unwinding are **TBD**.
 
 ---
 
@@ -1240,6 +1286,12 @@ const red = Color.Red;
 
 The runtime representation of enum values is implementation-defined. Programs
 must not depend on the emitted JavaScript representation of enum values.
+
+For the current JavaScript target, enum values are emitted as tagged plain
+objects of the form `{ tag: "VariantName" }` for fieldless variants and
+`{ tag: "VariantName", payload: [...] }` for variants with associated data.
+This is an informative description and may change without notice; programs
+that introspect this shape are non-conforming.
 
 When the enum type is known from context, the enum name may be omitted:
 
@@ -2068,18 +2120,62 @@ even when their type arguments are the same.
 
 ## 25.5 Generic Functions
 
-Generic functions are **TBD**. The intended direction is:
+A function may declare type parameters in angle brackets immediately after
+its name:
 
 ```tsx
 fn first<T>(items: []T): Option<T> {
-	items.get(0)
+	// ...
+}
+
+fn pair<A, B>(a: A, b: B): Pair<A, B> {
+	{ first: a, second: b }
 }
 ```
 
-Until generic functions are part of the language, generic behavior that
-depends on a function signature must come from compiler-provided builtins.
-For example, `.get` on arrays is intended to return an `Option<element-type>`
-as a compiler-known operation, not as a user-defined generic function.
+Type parameters are nominal names. Their scope is the function's signature
+and body. They may be used anywhere a type is expected, including parameter
+types, the return type, and inside local declarations.
+
+The uniqueness and shadowing rules from the start of section 25 apply:
+parameter names must be distinct within a single function, and they shadow
+same-named outer types within the function.
+
+A generic function is called like any other function. Type arguments may be
+supplied explicitly:
+
+```tsx
+const opt = first<number>(myArray);
+```
+
+When type arguments are omitted, the compiler infers them by unifying the
+argument expressions' types against the parameter types declared in the
+signature:
+
+```tsx
+const items: []string = ["a", "b"];
+const opt = first(items); // Inferred: T = string.
+```
+
+If a type parameter cannot be uniquely determined from the call arguments,
+an explicit type-argument list is required:
+
+```tsx
+fn make<T>(): Option<T> { .None }
+
+const opt = make();                  // Invalid: cannot infer T.
+const opt = make<number>();          // Valid.
+const opt: Option<number> = make();  // Valid: inferred from context.
+```
+
+The number of explicit type arguments must match the number of declared type
+parameters. Mismatches are invalid.
+
+Type parameters are erased at compile time. The JavaScript emit for a
+generic function is a single non-generic JavaScript function; calls to it
+carry no type-argument information at runtime.
+
+Constraints on type parameters remain **TBD** (section 25.6).
 
 ---
 
@@ -2409,15 +2505,36 @@ at every `import` statement that participates in the cycle.
 
 ## 30.5 Standard Library Imports
 
-The `@std` prefix is reserved for the standard library:
+The `@std` prefix is reserved for the standard library.
+
+Standard library modules are organized by runtime applicability:
+
+- `@std/<module>` — modules that work in every supported runtime
+  (for example `@std/option`, `@std/result`, `@std/list`, `@std/string`).
+- `@std/node/<module>` — modules that only work on the Node.js runtime
+  (for example `@std/node/fs`).
+- `@std/browser/<module>` — modules that only work in a browser runtime
+  (for example `@std/browser/dom`).
 
 ```tsx
 import @std/io;
+import @std/node/fs;
+import @std/browser/dom;
 ```
 
-The contents and organization of the standard library are **TBD**. Until the
-standard library exists, the prelude (see `docs/prelude.md`) provides a small
-set of names implicitly, without an import declaration.
+A package's compilation target (a `polena.toml` field — see section 30.6
+and the open question in section 38) declares which runtime namespaces it
+may import from. Importing a runtime-specific module that is incompatible
+with the package's compilation target is an error at the import site.
+
+The transitive propagation rule — that a library importing a
+runtime-specific module is itself constrained to that runtime and must
+declare so — is **TBD**.
+
+The full contents of the standard library are **TBD** and intentionally
+small for the prototype. Until specific stdlib modules ship, the prelude
+(see `docs/prelude.md`) provides a small set of names implicitly, without an
+import declaration.
 
 ---
 
@@ -2747,7 +2864,7 @@ fn parsePort(input: string): Result<number, NumberError> {
 The following topics need further design:
 
 1. Optional field shorthand syntax and the defaulting operator.
-2. Generic functions and generic type parameter constraints.
+2. Generic type parameter constraints.
 3. Function type syntax.
 4. Trait syntax and semantics.
 5. Anonymous function ergonomics.
@@ -2766,7 +2883,8 @@ The following topics need further design:
 13. `.d.ts` conversion strategy.
 14. Async model.
 15. Compile-time evaluation and compiler directive phase model.
-16. Panic behavior.
+16. Custom user-thrown panic syntax, panic-from-`main` return-type
+    conventions, and the interaction between panics and async unwinding.
 17. Unsafe operations.
 18. Standard library naming conventions.
 19. Formatter canonical style.
