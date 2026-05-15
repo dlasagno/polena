@@ -206,7 +206,8 @@ VS Code extension:
 
 Design questions to settle first:
 
-- Generic type syntax and restrictions.
+- Generic function syntax and type parameter constraints (basic generic type
+  declarations are specified in section 25 of the language spec).
 - Whether `Option` and `Result` need special checker support.
 - Exact `try` operator syntax and permitted contexts.
 - Boundary behavior for JavaScript exceptions.

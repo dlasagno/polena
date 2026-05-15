@@ -1,0 +1,27 @@
+type ZodType = enum {
+    String,
+    Array([]ZodType),
+};
+
+fn zString(): ZodType {
+    .String
+}
+
+fn zArray(items: ZodType): ZodType {
+    .Array([items])
+}
+
+const userSchema = zArray(zString());
+
+type User = @typeOf({
+    const schema = userSchema;
+    match schema {
+        .String => "",
+        .Array(items) => [
+            match items.get(0) {
+                .String => "",
+                _ => "",
+            }
+        ],
+    }
+})

@@ -1018,7 +1018,7 @@ The language does not expose JavaScript `null` or `undefined` as ordinary values
 
 Missing or optional values are represented explicitly using `Option<T>`.
 
-Conceptually:
+`Option` is a generic enum type, following section 25:
 
 ```tsx
 type Option<T> = enum {
@@ -1027,19 +1027,12 @@ type Option<T> = enum {
 };
 ```
 
-Generic syntax is still **TBD**, but `Option` is considered a fundamental standard-library type.
-Until user-defined generics are implemented, `Option<T>` may be treated as a
-built-in generic enum type. It follows the normal enum construction and match
-rules.
+It is considered a fundamental standard-library type. Until generic type
+declarations are implemented, `Option<T>` may be treated as a built-in
+generic enum type. It follows the normal enum construction and match rules.
 
-Possible surface syntax:
-
-```tsx
-Option<string>
-string?
-```
-
-The exact syntax is **TBD**.
+A shorthand surface syntax for optional types — `string?` for `Option<string>`
+— is **TBD**. See section 18.2.
 
 ---
 
@@ -1111,7 +1104,7 @@ The language does not use exceptions for ordinary recoverable errors.
 
 Recoverable errors are represented explicitly using `Result<T, E>`.
 
-Conceptually:
+`Result` is a generic enum type, following section 25:
 
 ```tsx
 type Result<T, E> = enum {
@@ -1120,10 +1113,9 @@ type Result<T, E> = enum {
 };
 ```
 
-Generic syntax is **TBD**, but `Result` is considered a fundamental standard-library type.
-Until user-defined generics are implemented, `Result<T, E>` may be treated as a
-built-in generic enum type. It follows the normal enum construction and match
-rules.
+It is considered a fundamental standard-library type. Until generic type
+declarations are implemented, `Result<T, E>` may be treated as a built-in
+generic enum type. It follows the normal enum construction and match rules.
 
 ```tsx
 const result: Result<number, NumberError> = .Ok(42);
@@ -1866,6 +1858,8 @@ Type aliases are transparent unless otherwise specified.
 
 Nominal type aliases/newtypes are **TBD**.
 
+Type declarations may also introduce generic type parameters. See section 25.
+
 The current compiler MVP supports transparent aliases to existing types:
 
 ```tsx
@@ -1873,26 +1867,208 @@ type Score = number;
 type Scores = []Score;
 ```
 
-Object and enum type declaration bodies are part of the language direction but
-are not implemented in the MVP.
+Object type bodies, enum type bodies, and generic type parameters are part of
+the language direction but are not implemented in the MVP.
 
 ---
 
 # 25. Generics
 
-Generics are not required for the earliest prototype but are expected to be part of the language.
+Polena supports a basic form of generics: **generic type declarations**.
 
-They are necessary for user-defined reusable types such as:
+A generic type declaration introduces one or more type parameters in angle
+brackets after the type name:
 
 ```tsx
-Option<T>
-Result<T, E>
-[]T
+type Pagination<T> = {
+	data: []T,
+	page: number,
+};
+
+type Pair<A, B> = {
+	first: A,
+	second: B,
+};
+
+type Option<T> = enum {
+	Some(T),
+	None,
+};
+
+type Result<T, E> = enum {
+	Ok(T),
+	Err(E),
+};
 ```
 
-The intended direction is simple, predictable generics rather than TypeScript-style advanced type-level programming.
+Type parameters are nominal names. Their scope is the body of the declaration
+that introduces them. They may be used anywhere a type is expected inside the
+body, including object field types, enum variant payloads, array element
+types, and as type arguments to other generic types.
 
-Possible syntax:
+```tsx
+type Tree<T> = enum {
+	Leaf(T),
+	Node([]Tree<T>),
+};
+```
+
+Type parameters do not introduce value-level bindings. A bare type parameter
+name is not a value.
+
+Type parameter names must be unique within a single declaration:
+
+```tsx
+type Bad<T, T> = ...; // Invalid: duplicate type parameter T.
+```
+
+A type parameter shadows a same-named outer type within the body of the
+declaration.
+
+The intended direction is simple, predictable generics rather than
+TypeScript-style advanced type-level programming. Higher-kinded types,
+variance annotations, conditional types, mapped types, and arbitrary
+type-level computation are non-goals.
+
+---
+
+## 25.1 Instantiation
+
+A generic type is used by supplying type arguments in angle brackets:
+
+```tsx
+type UserPage = Pagination<User>;
+
+const page: Pagination<User> = {
+	data: [],
+	page: 1,
+};
+
+const opt: Option<string> = .Some("Ada");
+const result: Result<number, ParseError> = .Ok(42);
+```
+
+The number of type arguments must match the number of declared type
+parameters exactly.
+
+```tsx
+const page: Pagination = ...; // Invalid: missing type argument.
+const page: Pagination<User, number> = ...; // Invalid: too many type arguments.
+```
+
+A bare reference to a generic type name in a type position, without
+arguments, is invalid.
+
+Type arguments may themselves be any valid type, including other
+instantiations of generic types.
+
+```tsx
+const nested: Option<Option<number>> = .Some(.Some(1));
+const pages: []Pagination<User> = [];
+```
+
+Applying type arguments to a non-generic type is invalid:
+
+```tsx
+type Score = number;
+const s: Score<string> = ...; // Invalid: Score has no type parameters.
+```
+
+---
+
+## 25.2 Generic Enums
+
+When a generic type declaration has an enum body, its variants are
+instantiated along with the type. A variant's payload types are obtained by
+substituting the declaration's type arguments for its type parameters.
+
+```tsx
+type Option<T> = enum {
+	Some(T),
+	None,
+};
+
+const one: Option<number> = Option.Some(1);
+const name: Option<string> = .Some("Ada");
+const empty: Option<number> = .None;
+```
+
+Enum variant construction follows the rules in section 20.1. The compiler
+substitutes type arguments when checking payload types against variant
+declarations.
+
+For shorthand construction `.Variant(payload)`, the expected enum type
+determines the type arguments. For qualified construction
+`EnumName.Variant(payload)` without an expected type from context, the
+compiler infers the type arguments from the payload values.
+
+```tsx
+const one = Option.Some(1);     // Inferred Option<number>.
+const name = Option.Some("Ada"); // Inferred Option<string>.
+```
+
+When the type arguments cannot be uniquely determined from context or
+payload values, an explicit annotation is required.
+
+```tsx
+const empty = Option.None; // Invalid: cannot determine type argument T.
+const empty: Option<number> = .None; // Valid.
+```
+
+Explicit type-argument syntax at construction sites, such as
+`Option<number>.Some(1)`, is **TBD**.
+
+---
+
+## 25.3 Generic Match Patterns
+
+When matching against a value of an instantiated generic enum type, payload
+patterns bind values whose types are the substituted variant payload types.
+
+```tsx
+const opt: Option<number> = .Some(1);
+
+const label = match opt {
+	.Some(value) => "got ${value}", // value: number
+	.None => "nothing",
+};
+```
+
+Exhaustiveness and arity rules from section 21 apply unchanged. Type
+substitution is performed before patterns are checked against variant
+payloads.
+
+---
+
+## 25.4 Type Identity
+
+Two instantiations of the same generic type are identical when their type
+arguments are identical.
+
+```tsx
+type Pair<A, B> = { first: A, second: B };
+
+const p1: Pair<string, number> = { first: "a", second: 1 };
+const p2: Pair<string, number> = p1; // Valid: same instantiation.
+const p3: Pair<number, string> = p1; // Invalid: different instantiation.
+```
+
+Type aliases remain transparent (section 24). A type alias whose right-hand
+side mentions type parameters is itself a generic type declaration.
+
+```tsx
+type StringPair<V> = Pair<string, V>;
+```
+
+Generic enum instantiations follow the nominal typing rule from section 20.
+Two distinct generic enum declarations produce incompatible instantiations
+even when their type arguments are the same.
+
+---
+
+## 25.5 Generic Functions
+
+Generic functions are **TBD**. The intended direction is:
 
 ```tsx
 fn first<T>(items: []T): Option<T> {
@@ -1900,7 +2076,19 @@ fn first<T>(items: []T): Option<T> {
 }
 ```
 
-Advanced features such as conditional types, mapped types, and arbitrary type-level computation are non-goals.
+Until generic functions are part of the language, generic behavior that
+depends on a function signature must come from compiler-provided builtins.
+For example, `.get` on arrays is intended to return an `Option<element-type>`
+as a compiler-known operation, not as a user-defined generic function.
+
+---
+
+## 25.6 Constraints
+
+Type parameter constraints are **TBD**. Constraints are expected to be
+designed together with traits (section 26): the only meaningful constraints
+in a language without traits are structural, and structural constraints
+would need to be reconciled with whatever trait mechanism is added later.
 
 ---
 
@@ -2217,8 +2405,8 @@ fn parsePort(input: string): Result<number, NumberError> {
 
 The following topics need further design:
 
-1. Exact syntax for `Option<T>` and optional fields.
-2. Exact syntax and semantics for generics.
+1. Optional field shorthand syntax and the defaulting operator.
+2. Generic functions and generic type parameter constraints.
 3. Function type syntax.
 4. Trait syntax and semantics.
 5. Anonymous function ergonomics.
