@@ -168,6 +168,7 @@ class Parser {
   private parseFunctionDeclaration(): FunctionDeclaration {
     const fnToken = this.expect("Fn", "Expected 'fn'.");
     const name = this.expect("Identifier", "Expected function name.");
+    const typeParameters = this.parseTypeParameters();
     this.expect("LeftParen", "Expected '(' after function name.");
 
     const params: Parameter[] = [];
@@ -186,6 +187,7 @@ class Parser {
       kind: "FunctionDeclaration",
       name: name.text,
       nameSpan: name.span,
+      typeParameters,
       params,
       returnType,
       body,

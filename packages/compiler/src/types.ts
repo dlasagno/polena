@@ -14,6 +14,7 @@ export type Type =
   | { readonly kind: "typeParameter"; readonly name: string }
   | {
       readonly kind: "function";
+      readonly typeParameters: readonly string[];
       readonly params: readonly Type[];
       readonly returnType: Type;
     }
@@ -63,8 +64,12 @@ export function typeParameterType(name: string): Type {
   return { kind: "typeParameter", name };
 }
 
-export function functionType(params: readonly Type[], returnType: Type): Type {
-  return { kind: "function", params, returnType };
+export function functionType(
+  params: readonly Type[],
+  returnType: Type,
+  typeParameters: readonly string[] = [],
+): Type {
+  return { kind: "function", typeParameters, params, returnType };
 }
 
 export function unknownType(): Type {
@@ -98,6 +103,8 @@ export function sameType(left: Type, right: Type): boolean {
     case "function":
       return (
         right.kind === "function" &&
+        left.typeParameters.length === right.typeParameters.length &&
+        left.typeParameters.every((param, index) => param === right.typeParameters[index]) &&
         left.params.length === right.params.length &&
         left.params.every((param, index) => {
           const rightParam = right.params[index];

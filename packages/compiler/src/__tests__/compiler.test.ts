@@ -339,6 +339,19 @@ describe("parser", () => {
     });
   });
 
+  test("parses generic function declarations", () => {
+    const parseResult = parse(lex("fn identity<T>(value: T): T { value }").tokens);
+
+    expect(parseResult.diagnostics).toHaveLength(0);
+    expect(parseResult.program.declarations[0]).toMatchObject({
+      kind: "FunctionDeclaration",
+      name: "identity",
+      typeParameters: [{ kind: "TypeParameter", name: "T" }],
+      params: [{ name: "value", type: { kind: "NamedType", name: "T" } }],
+      returnType: { kind: "NamedType", name: "T" },
+    });
+  });
+
   test("parses fieldless enum declarations", () => {
     const lexResult = lex("type Color = enum { Red, Green, Blue, };");
     const parseResult = parse(lexResult.tokens);
@@ -2232,6 +2245,63 @@ const value = match nested {
     expect(executeValue(result.js)).toBe(1);
   });
 
+  test("supports generic functions over arrays, objects, and enums", () => {
+    const result = expectCompileOk(`
+type Box<T> = { value: T };
+type Option<T> = enum {
+  Some(T),
+  None,
+};
+
+fn identity<T>(value: T): T {
+  value
+}
+
+fn first<T>(items: []T): Option<T> {
+  if items.length == 0 {
+    .None
+  } else {
+    .Some(items[0])
+  }
+}
+
+fn unbox<T>(box: Box<T>): T {
+  box.value
+}
+
+const numberValue = identity(41) + 1;
+const stringValue = identity("ok");
+const boxed = unbox({ value: stringValue });
+const firstValue = match first([numberValue]) {
+  .Some(value) => value,
+  .None => 0,
+};
+const value = if boxed == "ok" { firstValue } else { 0 };
+`);
+
+    expect(executeValue(result.js)).toBe(42);
+    expect(result.js).toContain("function identity(value)");
+    expect(result.js).toContain("function first(items)");
+  });
+
+  test("infers generic function return type from context", () => {
+    const result = expectCompileOk(`
+type Option<T> = enum {
+  Some(T),
+  None,
+};
+
+fn none<T>(): Option<T> {
+  .None
+}
+
+const value: Option<number> = none();
+`);
+
+    expect(result.js).toContain("function none()");
+    expect(result.js).toContain('"Option.None"');
+  });
+
   test("rejects invalid generic type argument usage", () => {
     const missing = compile(`
 type Box<T> = { value: T };
@@ -2249,6 +2319,43 @@ const score: Score<string> = 1;
     expect(extra.ok).toBe(false);
     expect(extra.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
       "Type 'Score' does not take type arguments.",
+    );
+  });
+
+  test("rejects invalid generic function usage", () => {
+    const duplicate = compile("fn bad<T, T>(value: T): T { value }");
+    expect(duplicate.ok).toBe(false);
+    expect(duplicate.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Duplicate type parameter 'T'.",
+    );
+
+    const cannotInfer = compile(`
+type Option<T> = enum {
+  Some(T),
+  None,
+};
+
+fn make<T>(): Option<T> {
+  .None
+}
+
+const value = make();
+`);
+    expect(cannotInfer.ok).toBe(false);
+    expect(cannotInfer.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Cannot infer type argument(s) 'T' for 'make'.",
+    );
+
+    const mismatch = compile(`
+fn choose<T>(left: T, right: T): T {
+  left
+}
+
+const value = choose(1, "two");
+`);
+    expect(mismatch.ok).toBe(false);
+    expect(mismatch.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Expected 'number', got 'string'.",
     );
   });
 

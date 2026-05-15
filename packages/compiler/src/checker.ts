@@ -18,6 +18,7 @@ import type {
   Statement,
   TypeDeclaration,
   TypeNode,
+  TypeParameter,
   VariableDeclaration,
   WhileExpression,
 } from "./ast";
@@ -246,19 +247,7 @@ class Checker {
       return;
     }
 
-    const seenParameters = new Set<string>();
-    for (const param of declaration.typeParameters) {
-      if (seenParameters.has(param.name)) {
-        this.diagnostics.push(
-          error(`Duplicate type parameter '${param.name}'.`, param.nameSpan, {
-            code: DiagnosticCode.DuplicateName,
-            label: "this type parameter is already defined",
-          }),
-        );
-        continue;
-      }
-      seenParameters.add(param.name);
-    }
+    this.checkDuplicateTypeParameters(declaration.typeParameters);
 
     this.typeSymbols.set(declaration.name, {
       name: declaration.name,
@@ -275,6 +264,30 @@ class Checker {
       declaration.nameSpan,
       declaration.span,
     );
+  }
+
+  private checkDuplicateTypeParameters(typeParameters: readonly TypeParameter[]): void {
+    const seenParameters = new Set<string>();
+    for (const param of typeParameters) {
+      if (seenParameters.has(param.name)) {
+        this.diagnostics.push(
+          error(`Duplicate type parameter '${param.name}'.`, param.nameSpan, {
+            code: DiagnosticCode.DuplicateName,
+            label: "this type parameter is already defined",
+          }),
+        );
+        continue;
+      }
+      seenParameters.add(param.name);
+    }
+  }
+
+  private typeEnvironmentFromParameters(parameters: readonly string[]): TypeEnvironment {
+    const environment = new Map<string, Type>();
+    for (const parameter of parameters) {
+      environment.set(parameter, typeParameterType(parameter));
+    }
+    return environment;
   }
 
   private resolveTypeDeclaration(declaration: TypeDeclaration): Type {
@@ -521,9 +534,14 @@ class Checker {
   }
 
   private declareFunction(scope: Scope, declaration: FunctionDeclaration): void {
+    this.checkDuplicateTypeParameters(declaration.typeParameters);
+    const environment = this.typeEnvironmentFromParameters(
+      declaration.typeParameters.map((param) => param.name),
+    );
     const type = functionType(
-      declaration.params.map((param) => this.typeFromNode(param.type)),
-      this.typeFromNode(declaration.returnType),
+      declaration.params.map((param) => this.typeFromNode(param.type, undefined, environment)),
+      this.typeFromNode(declaration.returnType, undefined, environment),
+      declaration.typeParameters.map((param) => param.name),
     );
 
     this.declareName(
@@ -546,10 +564,13 @@ class Checker {
 
   private checkFunction(declaration: FunctionDeclaration, parentScope: Scope): void {
     const scope = new Scope(parentScope);
-    const returnType = this.typeFromNode(declaration.returnType);
+    const environment = this.typeEnvironmentFromParameters(
+      declaration.typeParameters.map((param) => param.name),
+    );
+    const returnType = this.typeFromNode(declaration.returnType, undefined, environment);
 
     for (const param of declaration.params) {
-      this.declareParameter(scope, param);
+      this.declareParameter(scope, param, environment);
     }
 
     if (declaration.body.isMissing === true) {
@@ -645,12 +666,12 @@ class Checker {
     }
   }
 
-  private declareParameter(scope: Scope, param: Parameter): void {
+  private declareParameter(scope: Scope, param: Parameter, environment: TypeEnvironment): void {
     this.declareName(
       scope,
       {
         name: param.name,
-        type: this.typeFromNode(param.type),
+        type: this.typeFromNode(param.type, undefined, environment),
         span: param.nameSpan,
         definitionNodeId: param.nodeId,
         fullSpan: param.span,
@@ -1762,6 +1783,10 @@ class Checker {
       return unknownType();
     }
 
+    if (calleeType.typeParameters.length > 0) {
+      return this.inferGenericFunctionCall(expression, scope, options, calleeType);
+    }
+
     if (expression.args.length !== calleeType.params.length) {
       this.diagnostics.push(
         error(
@@ -1802,6 +1827,78 @@ class Checker {
     }
 
     return calleeType.returnType;
+  }
+
+  private inferGenericFunctionCall(
+    expression: Extract<Expression, { kind: "CallExpression" }>,
+    scope: Scope,
+    options: InferOptions,
+    calleeType: Extract<Type, { readonly kind: "function" }>,
+  ): Type {
+    if (expression.args.length !== calleeType.params.length) {
+      this.diagnostics.push(
+        error(
+          `Expected ${calleeType.params.length} argument(s), got ${expression.args.length}.`,
+          expression.span,
+          {
+            code: DiagnosticCode.WrongArgumentCount,
+            label: "wrong number of arguments in this call",
+          },
+        ),
+      );
+    }
+
+    const inferred = new Map<string, Type>();
+    if (options.expectedType !== undefined) {
+      this.inferTypeArgumentsFromType(calleeType.returnType, options.expectedType, inferred);
+    }
+
+    const count = Math.min(expression.args.length, calleeType.params.length);
+    const actualTypes: Type[] = [];
+    for (let index = 0; index < count; index += 1) {
+      const arg = expression.args[index];
+      const param = calleeType.params[index];
+
+      if (arg === undefined || param === undefined) {
+        continue;
+      }
+
+      const actualType = this.inferExpression(arg, scope, {
+        ...options,
+        expectedType: shouldUseGenericParameterContext(param) ? param : undefined,
+      });
+      actualTypes.push(actualType);
+      this.inferTypeArgumentsFromType(param, actualType, inferred);
+    }
+
+    for (let index = count; index < expression.args.length; index += 1) {
+      const arg = expression.args[index];
+      if (arg !== undefined) {
+        this.inferExpression(arg, scope, options);
+      }
+    }
+
+    const substitution = this.functionTypeArgumentSubstitution(
+      calleeType.typeParameters,
+      inferred,
+      expression.callee,
+    );
+    if (substitution === undefined) {
+      return unknownType();
+    }
+
+    for (let index = 0; index < actualTypes.length; index += 1) {
+      const actualType = actualTypes[index];
+      const param = calleeType.params[index];
+      const arg = expression.args[index];
+      if (actualType === undefined || param === undefined || arg === undefined) {
+        continue;
+      }
+
+      this.expectType(actualType, substituteType(param, substitution), arg.span);
+    }
+
+    return substituteType(calleeType.returnType, substitution);
   }
 
   private inferEnumConstructorCall(
@@ -2552,7 +2649,8 @@ class Checker {
     if (
       expectedType?.kind === "enum" &&
       expectedType.name === typeName &&
-      expectedType.typeArguments.length === symbol.typeParameters.length
+      expectedType.typeArguments.length === symbol.typeParameters.length &&
+      !typeContainsTypeParameter(expectedType)
     ) {
       return expectedType.typeArguments;
     }
@@ -2597,6 +2695,47 @@ class Checker {
     }
 
     return typeArguments;
+  }
+
+  private functionTypeArgumentSubstitution(
+    typeParameters: readonly string[],
+    inferred: ReadonlyMap<string, Type>,
+    callee: Expression,
+  ): ReadonlyMap<string, Type> | undefined {
+    const substitution = new Map<string, Type>();
+    const missing: string[] = [];
+
+    for (const parameter of typeParameters) {
+      const typeArgument = inferred.get(parameter);
+      if (
+        typeArgument === undefined ||
+        typeArgument.kind === "unknown" ||
+        typeContainsTypeParameter(typeArgument)
+      ) {
+        missing.push(parameter);
+        continue;
+      }
+
+      substitution.set(parameter, typeArgument);
+    }
+
+    if (missing.length > 0) {
+      const name =
+        callee.kind === "NameExpression" ? `'${callee.name}'` : "this generic function call";
+      this.diagnostics.push(
+        error(
+          `Cannot infer type argument(s) ${missing.map((param) => `'${param}'`).join(", ")} for ${name}.`,
+          callee.span,
+          {
+            code: DiagnosticCode.TypeMismatch,
+            label: "add enough typed arguments or contextual type information",
+          },
+        ),
+      );
+      return undefined;
+    }
+
+    return substitution;
   }
 
   private inferTypeArgumentsFromType(
@@ -2957,6 +3096,67 @@ function objectAssignabilityMismatch(
   }
 
   return undefined;
+}
+
+function shouldUseGenericParameterContext(type: Type): boolean {
+  return type.kind === "enum" && typeContainsTypeParameter(type);
+}
+
+function typeContainsTypeParameter(type: Type): boolean {
+  switch (type.kind) {
+    case "typeParameter":
+      return true;
+    case "array":
+      return typeContainsTypeParameter(type.element);
+    case "object":
+      return type.fields.some((field) => typeContainsTypeParameter(field.type));
+    case "enum":
+      return (
+        type.typeArguments.some(typeContainsTypeParameter) ||
+        type.variants.some((variant) => variant.payload.some(typeContainsTypeParameter))
+      );
+    case "function":
+      return (
+        type.params.some(typeContainsTypeParameter) || typeContainsTypeParameter(type.returnType)
+      );
+    case "primitive":
+    case "unknown":
+      return false;
+  }
+}
+
+function substituteType(type: Type, substitution: ReadonlyMap<string, Type>): Type {
+  switch (type.kind) {
+    case "typeParameter":
+      return substitution.get(type.name) ?? type;
+    case "array":
+      return arrayType(substituteType(type.element, substitution));
+    case "object":
+      return objectType(
+        type.fields.map((field) => ({
+          ...field,
+          type: substituteType(field.type, substitution),
+        })),
+      );
+    case "enum":
+      return genericEnumType(
+        type.name,
+        type.typeArguments.map((arg) => substituteType(arg, substitution)),
+        type.variants.map((variant) => ({
+          ...variant,
+          payload: variant.payload.map((payload) => substituteType(payload, substitution)),
+        })),
+      );
+    case "function":
+      return functionType(
+        type.params.map((param) => substituteType(param, substitution)),
+        substituteType(type.returnType, substitution),
+        type.typeParameters,
+      );
+    case "primitive":
+    case "unknown":
+      return type;
+  }
 }
 
 function isArithmeticOperator(operator: BinaryOperator): boolean {

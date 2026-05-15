@@ -99,6 +99,7 @@ Status values:
 | Explicit `return expr;` | Implemented | Checked against return type. |
 | Anonymous functions | Not implemented | Spec includes likely syntax, but MVP does not parse it. |
 | Function type syntax | Not implemented | Function types exist internally but cannot be written in source. |
+| Generic functions | Partially implemented | Declarations such as `fn id<T>(value: T): T` are supported with inferred type arguments at calls; explicit call type arguments are not implemented. |
 | Return type inference | Not implemented | Function return types are required. |
 
 ---
@@ -142,7 +143,7 @@ Status values:
 | `type Name = ...;` declarations | Partially implemented | Supports aliases to primitive, array, object, enum, named alias, and generic instantiation types. |
 | Type aliases | Implemented | Transparent aliases; recursive aliases are rejected. |
 | Separate type/value namespaces | Implemented | Type aliases and value bindings may use the same name. |
-| Generics | Partially implemented | Generic type declarations and instantiations are supported, including substitution in object fields, enum payloads, and aliases over generic instantiations. Generic functions and constraints are not implemented. |
+| Generics | Partially implemented | Generic type declarations and instantiations are supported, including substitution in object fields, enum payloads, aliases over generic instantiations, and inferred generic function calls. Explicit function call type arguments and constraints are not implemented. |
 | `unknown` source type | Not implemented | Internal unknown type exists for error recovery only. |
 
 ---

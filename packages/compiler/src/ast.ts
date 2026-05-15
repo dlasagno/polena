@@ -100,6 +100,7 @@ export type FunctionDeclaration = {
   readonly nodeId: NodeId;
   readonly name: string;
   readonly nameSpan: Span;
+  readonly typeParameters: readonly TypeParameter[];
   readonly params: readonly Parameter[];
   readonly returnType: TypeNode;
   readonly body: Block;

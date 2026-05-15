@@ -15,6 +15,7 @@ programs end-to-end. It supports:
 - Optional variable type annotations
 - Transparent type aliases with `type Name = ExistingType;`
 - Function declarations with typed parameters and explicit return types
+- Generic function declarations with inferred type arguments
 - Final-expression function returns and explicit `return expr;`
 - `void` function returns
 - Function calls
@@ -30,12 +31,12 @@ programs end-to-end. It supports:
   index assignment
 - Object type aliases, exact object literal checking, structural object
   assignment, property access, and field assignment
-- Fieldless enum declarations, enum values, enum equality, and exhaustive
-  `match` expressions with wildcard arms
+- Fieldless and associated-data enum declarations, enum values, enum equality
+  for fieldless enums, and exhaustive `match` expressions with wildcard arms
 
-It intentionally does not yet support object field readonly controls, enum
-variants with associated data, modules/imports, or the full type system from the
-language draft.
+It intentionally does not yet support object field readonly controls,
+modules/imports, explicit generic function call type arguments, or the full type
+system from the language draft.
 
 Example:
 
