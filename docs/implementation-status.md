@@ -114,7 +114,7 @@ Status values:
 | Untyped empty arrays rejected | Implemented | Diagnostic asks for a type annotation. |
 | `.length` | Implemented | Type is currently `number`. |
 | Checked indexing | Implemented | Emits a runtime helper that rejects negative, fractional, `NaN`, and out-of-bounds indexes. |
-| Safe `.get(index)` access | Not implemented | Spec describes it, but there is no standard library array method yet. |
+| Safe `.get(index)` access | Implemented | Returns `Option<T>` for arrays and emits a helper that returns `.None` for invalid or out-of-bounds indexes. |
 | Unsafe array access | Not implemented | Still TBD in the spec. |
 | Dedicated `Index` type | Not implemented | Still TBD in the spec. |
 | Array element assignment | Implemented | Assignment and compound assignment use checked runtime index rules. |
@@ -157,8 +157,8 @@ Status values:
 | Enum equality | Implemented | `==` and `!=` are valid for fieldless enum values of the same enum type. Equality for enums with associated data is not implemented. |
 | Match expressions | Partially implemented | Supports expression arms over enum values with `.Variant`, `Enum.Variant`, payload patterns, and `_` patterns. Guards are not implemented. |
 | Exhaustiveness checking | Implemented | Enum matches must cover every variant unless a wildcard arm is present. Duplicate and unreachable arms are rejected. |
-| `Option<T>` | Partially implemented | Can be defined as a user generic enum and used with normal generic enum construction and matching. There is no built-in standard library definition yet. |
-| `Result<T, E>` | Partially implemented | Can be defined as a user generic enum and used with normal generic enum construction and matching. There is no built-in standard library definition yet. |
+| `Option<T>` | Implemented | Provided by the compiler prelude as a generic enum with `.Some(T)` and `.None`. |
+| `Result<T, E>` | Implemented | Provided by the compiler prelude as a generic enum with `.Ok(T)` and `.Err(E)`. |
 | `try` operator | Not implemented | Depends on `Result`. |
 | Panic model | Partially implemented | Checked indexing throws a JavaScript `RangeError`; the general panic model is TBD. |
 

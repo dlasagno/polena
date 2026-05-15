@@ -2225,11 +2225,6 @@ const value = pair.second;
 
   test("supports generic enum construction and payload matching", () => {
     const result = expectCompileOk(`
-type Option<T> = enum {
-  Some(T),
-  None,
-};
-
 const one = Option.Some(1);
 const empty: Option<number> = .None;
 const nested: Option<Option<number>> = .Some(one);
@@ -2245,13 +2240,73 @@ const value = match nested {
     expect(executeValue(result.js)).toBe(1);
   });
 
+  test("supports prelude Option and Result types", () => {
+    const result = expectCompileOk(`
+type ParseError = enum {
+  Empty,
+  Invalid,
+};
+
+const present = Option.Some(42);
+const missing: Option<number> = .None;
+const parsed: Result<number, ParseError> = .Ok(10);
+const failed: Result<number, ParseError> = .Err(ParseError.Empty);
+
+const optionValue = match present {
+  .Some(value) => value,
+  .None => 0,
+};
+const resultValue = match parsed {
+  .Ok(value) => value,
+  .Err(_) => 0,
+};
+const value = optionValue + resultValue;
+`);
+
+    expect(executeValue(result.js)).toBe(52);
+    expect(result.js).toContain('"Option.Some"');
+    expect(result.js).toContain('"Result.Ok"');
+    expect(result.js).toContain('"Result.Err"');
+    expect(result.js).toContain('"Option.None"');
+    expect(result.js).toContain("const missing =");
+    expect(result.js).toContain("const failed =");
+  });
+
+  test("supports safe array get through prelude Option", () => {
+    const result = expectCompileOk(`
+const values = [10, 20];
+const first = match values.get(0) {
+  .Some(value) => value,
+  .None => 0,
+};
+const missing = match values.get(4) {
+  .Some(value) => value,
+  .None => 5,
+};
+const value = first + missing;
+`);
+
+    expect(executeValue(result.js)).toBe(15);
+    expect(result.js).toContain("function __polenaArrayGet");
+  });
+
+  test("rejects invalid safe array get calls", () => {
+    const wrongIndex = compile('const value = [1].get("0");');
+    expect(wrongIndex.ok).toBe(false);
+    expect(wrongIndex.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Expected 'number', got 'string'.",
+    );
+
+    const nonArray = compile("const value = 1.get(0);");
+    expect(nonArray.ok).toBe(false);
+    expect(nonArray.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Unknown property 'get' on type 'number'.",
+    );
+  });
+
   test("supports generic functions over arrays, objects, and enums", () => {
     const result = expectCompileOk(`
 type Box<T> = { value: T };
-type Option<T> = enum {
-  Some(T),
-  None,
-};
 
 fn identity<T>(value: T): T {
   value
@@ -2286,11 +2341,6 @@ const value = if boxed == "ok" { firstValue } else { 0 };
 
   test("infers generic function return type from context", () => {
     const result = expectCompileOk(`
-type Option<T> = enum {
-  Some(T),
-  None,
-};
-
 fn none<T>(): Option<T> {
   .None
 }
@@ -2320,6 +2370,12 @@ const score: Score<string> = 1;
     expect(extra.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
       "Type 'Score' does not take type arguments.",
     );
+
+    const preludeConflict = compile("type Option<T> = enum { Some(T), None };");
+    expect(preludeConflict.ok).toBe(false);
+    expect(preludeConflict.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Duplicate type name 'Option'.",
+    );
   });
 
   test("rejects invalid generic function usage", () => {
@@ -2330,11 +2386,6 @@ const score: Score<string> = 1;
     );
 
     const cannotInfer = compile(`
-type Option<T> = enum {
-  Some(T),
-  None,
-};
-
 fn make<T>(): Option<T> {
   .None
 }
@@ -2361,11 +2412,6 @@ const value = choose(1, "two");
 
   test("rejects generic enum construction when type arguments cannot be inferred", () => {
     const result = compile(`
-type Option<T> = enum {
-  Some(T),
-  None,
-};
-
 const empty = Option.None;
 `);
 

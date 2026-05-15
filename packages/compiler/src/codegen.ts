@@ -14,7 +14,7 @@ import type {
   VariableDeclaration,
   WhileExpression,
 } from "./ast";
-import { getPreludeFunction } from "./prelude";
+import { getPreludeFunction, preludeEnumTypes } from "./prelude";
 
 export function generateJavaScript(program: Program): string {
   return new JavaScriptEmitter().emitProgram(program);
@@ -32,10 +32,23 @@ class JavaScriptEmitter {
   private usesIndexHelper = false;
   private usesIndexSetHelper = false;
   private usesIndexUpdateHelper = false;
+  private usesArrayGetHelper = false;
   private readonly enumTypes = new Map<string, Map<string, { readonly payloadArity: number }>>();
 
   public emitProgram(program: Program): string {
     const lines: string[] = [];
+
+    for (const enumType of preludeEnumTypes) {
+      this.enumTypes.set(
+        enumType.name,
+        new Map(
+          enumType.variants.map((variant) => [
+            variant.name,
+            { payloadArity: variant.payload.length },
+          ]),
+        ),
+      );
+    }
 
     for (const declaration of program.declarations) {
       if (declaration.kind === "TypeDeclaration" && declaration.value.kind === "EnumType") {
@@ -57,6 +70,10 @@ class JavaScriptEmitter {
 
     if (this.usesIndexHelper) {
       lines.unshift(...emitIndexHelper(), "");
+    }
+
+    if (this.usesArrayGetHelper) {
+      lines.unshift(...emitArrayGetHelper(), "");
     }
 
     if (this.usesIndexSetHelper) {
@@ -337,6 +354,12 @@ class JavaScriptEmitter {
             return enumConstructor;
           }
         }
+        {
+          const arrayGet = this.emitArrayGetCall(expression, indent, loopContext);
+          if (arrayGet !== undefined) {
+            return arrayGet;
+          }
+        }
         return `${this.emitCallCallee(expression.callee, indent, loopContext)}(${expression.args
           .map((arg) => this.emitExpression(arg, indent, loopContext))
           .join(", ")})`;
@@ -383,6 +406,32 @@ class JavaScriptEmitter {
     return `({ tag: ${JSON.stringify(`${resolved.enumName}.${resolved.variantName}`)}, values: [${expression.args
       .map((arg) => this.emitExpression(arg, indent, loopContext))
       .join(", ")}] })`;
+  }
+
+  private emitArrayGetCall(
+    expression: Extract<Expression, { readonly kind: "CallExpression" }>,
+    indent: string,
+    loopContext?: LoopEmitContext,
+  ): string | undefined {
+    if (
+      expression.callee.kind !== "MemberExpression" ||
+      expression.callee.name !== "get" ||
+      expression.args.length !== 1
+    ) {
+      return undefined;
+    }
+
+    const index = expression.args[0];
+    if (index === undefined) {
+      return undefined;
+    }
+
+    this.usesArrayGetHelper = true;
+    return `__polenaArrayGet(${this.emitExpression(
+      expression.callee.target,
+      indent,
+      loopContext,
+    )}, ${this.emitExpression(index, indent, loopContext)})`;
   }
 
   private resolveEnumConstructor(
@@ -738,6 +787,17 @@ function emitIndexUpdateHelper(): string[] {
     "      array[index] %= value;",
     "      return;",
     "  }",
+    "}",
+  ];
+}
+
+function emitArrayGetHelper(): string[] {
+  return [
+    "function __polenaArrayGet(array, index) {",
+    "  if (!Number.isInteger(index) || index < 0 || index >= array.length) {",
+    '    return "Option.None";',
+    "  }",
+    '  return { tag: "Option.Some", values: [array[index]] };',
     "}",
   ];
 }

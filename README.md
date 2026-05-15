@@ -19,7 +19,8 @@ programs end-to-end. It supports:
 - Final-expression function returns and explicit `return expr;`
 - `void` function returns
 - Function calls
-- A provisional prelude with `println(message: string): void`
+- A provisional prelude with `println(message: string): void`, `Option<T>`, and
+  `Result<T, E>`
 - Unary `!` and `-`
 - Binary arithmetic, comparison, `and`, and `or` expressions
 - String and array concatenation with `++`
@@ -29,6 +30,7 @@ programs end-to-end. It supports:
 - Array type syntax such as `[]number` and named aliases for array types
 - Array literals, typed empty arrays, `.length`, checked indexing, and checked
   index assignment
+- Safe array access with `.get(index): Option<T>`
 - Object type aliases, exact object literal checking, structural object
   assignment, property access, and field assignment
 - Fieldless and associated-data enum declarations, enum values, enum equality

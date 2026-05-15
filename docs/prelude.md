@@ -41,6 +41,67 @@ println("count = ${count}");
 
 ---
 
+## `Option<T>`
+
+```tsx
+type Option<T> = enum {
+	Some(T),
+	None,
+}
+```
+
+Represents either a present value or no value.
+
+Example:
+
+```tsx
+const values = [10, 20];
+
+const label = match values.get(0) {
+	.Some(value) => "value ${value}",
+	.None => "missing",
+};
+```
+
+---
+
+## `Result<T, E>`
+
+```tsx
+type Result<T, E> = enum {
+	Ok(T),
+	Err(E),
+}
+```
+
+Represents either a successful value or a recoverable error value.
+
+Example:
+
+```tsx
+type ParseError = enum {
+	Empty,
+	Invalid,
+};
+
+const parsed: Result<number, ParseError> = .Ok(42);
+```
+
+---
+
+## Array `.get(index)`
+
+```tsx
+items.get(index): Option<T>
+```
+
+Returns `.Some(value)` when `index` is an integer within bounds, otherwise
+returns `.None`.
+
+Checked indexing with `items[index]` still panics on invalid indexes.
+
+---
+
 ## Deferred Items
 
 The prelude does not yet include input, sleeping, parsing helpers, filesystem
@@ -51,8 +112,7 @@ design:
 
 - Input depends on whether the program runs in a CLI, browser, or another
   JavaScript host.
-- Numeric parsing should return an explicit `Result` or `Option`, which is not
-  implemented yet.
+- Numeric parsing should return an explicit `Result` or `Option`.
 - Sleeping is naturally asynchronous in JavaScript, and async functions are not
   part of the current compiler MVP.
 - A real core or standard library depends on the module and import system, which

@@ -24,7 +24,7 @@ import type {
 } from "./ast";
 import { error, type Diagnostic } from "./diagnostic";
 import { DiagnosticCode } from "./diagnostic-codes";
-import { preludeFunctions } from "./prelude";
+import { preludeEnumTypes, preludeFunctions, type PreludeEnumType } from "./prelude";
 import {
   emptySemantics,
   type DefinitionKind,
@@ -116,6 +116,41 @@ function returnOutcome(): ControlFlowOutcome {
   };
 }
 
+function preludeEnumTypeSymbol(
+  enumType: PreludeEnumType,
+  span: Span,
+  typeIndex: number,
+): TypeSymbol {
+  const nodeBase = -1_000 - typeIndex * 1_000;
+  return {
+    name: enumType.name,
+    typeParameters: enumType.typeParameters,
+    value: {
+      kind: "EnumType",
+      nodeId: nodeBase,
+      variants: enumType.variants.map((variant, variantIndex) => ({
+        kind: "EnumVariantType" as const,
+        nodeId: nodeBase - 10 - variantIndex,
+        name: variant.name,
+        nameSpan: span,
+        payload: variant.payload.map((name, payloadIndex) => ({
+          kind: "NamedType" as const,
+          nodeId: nodeBase - 100 - variantIndex * 10 - payloadIndex,
+          name,
+          nameSpan: span,
+          typeArguments: [],
+          span,
+        })),
+        span,
+      })),
+      span,
+    },
+    span,
+    definitionNodeId: nodeBase,
+    fullSpan: span,
+  };
+}
+
 function breakOutcome(): ControlFlowOutcome {
   return {
     canFallThrough: false,
@@ -165,6 +200,7 @@ class Checker {
 
   public check(program: Program): CheckResult {
     const scope = new Scope();
+    this.declarePreludeTypes(program.span);
     this.declarePrelude(scope, program.span);
 
     for (const declaration of program.declarations) {
@@ -233,6 +269,15 @@ class Checker {
         span,
         assignability: "immutable-binding",
       });
+    }
+  }
+
+  private declarePreludeTypes(span: Span): void {
+    for (let index = 0; index < preludeEnumTypes.length; index += 1) {
+      const enumType = preludeEnumTypes[index];
+      if (enumType !== undefined) {
+        this.typeSymbols.set(enumType.name, preludeEnumTypeSymbol(enumType, span, index));
+      }
     }
   }
 
@@ -2160,6 +2205,13 @@ class Checker {
 
     if (expression.name === "length" && targetType.kind === "array") {
       return primitiveType("number");
+    }
+
+    if (expression.name === "get" && targetType.kind === "array") {
+      return functionType(
+        [primitiveType("number")],
+        this.resolveNamedType("Option", expression.nameSpan, [targetType.element]),
+      );
     }
 
     if (targetType.kind === "object") {

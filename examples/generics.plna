@@ -10,16 +10,6 @@ type Page<T> = {
   page: number,
 };
 
-type Option<T> = enum {
-  Some(T),
-  None,
-};
-
-type Result<T, E> = enum {
-  Ok(T),
-  Err(E),
-};
-
 type StringPair<V> = Pair<string, V>;
 
 const scorePair: StringPair<number> = {
