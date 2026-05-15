@@ -37,7 +37,7 @@ describe("LSP hover", () => {
     const document = TextDocument.create("file:///example.plna", "polena", 1, source);
     const analysis = analyze(source);
 
-    expect(hoverText(document, analysis, source.indexOf("greet"))).toBe(
+    expect(hoverText(document, analysis, source.indexOf("greet("))).toBe(
       "```polena\nfn greet(user: User): string\n```",
     );
     expect(hoverText(document, analysis, source.indexOf("user:"))).toBe(
@@ -81,6 +81,25 @@ describe("LSP hover", () => {
     expect(hoverText(document, analysis, source.indexOf("x,"))).toBe("```polena\nx: number\n```");
     expect(hoverText(document, analysis, source.lastIndexOf("x"))).toBe(
       "```polena\nx: number\n```",
+    );
+  });
+
+  test("includes declaration doc comments in hovers", () => {
+    const source = [
+      "/// A user-facing greeting.",
+      "///",
+      "/// Supports Markdown **emphasis**.",
+      'fn greet(name: string): string { "Hello, $' + '{name}" }',
+      'const message = greet("Ada");',
+    ].join("\n");
+    const document = TextDocument.create("file:///example.plna", "polena", 1, source);
+    const analysis = analyze(source);
+
+    expect(hoverText(document, analysis, source.indexOf("greet("))).toBe(
+      "```polena\nfn greet(name: string): string\n```\n\nA user-facing greeting.\n\nSupports Markdown **emphasis**.",
+    );
+    expect(hoverText(document, analysis, source.lastIndexOf("greet"))).toBe(
+      "```polena\nfn greet(name: string): string\n```\n\nA user-facing greeting.\n\nSupports Markdown **emphasis**.",
     );
   });
 });

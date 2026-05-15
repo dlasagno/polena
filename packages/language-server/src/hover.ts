@@ -48,7 +48,7 @@ export function getHover(
     range: spanToRange(target.span),
     contents: {
       kind: "markdown",
-      value: `\`\`\`polena\n${value}\n\`\`\``,
+      value,
     },
   };
 }
@@ -85,7 +85,7 @@ function renderExpressionHover(analysis: AnalyzeResult, nodeId: NodeId): string 
     return undefined;
   }
 
-  return formatType(type);
+  return renderCodeHover(formatType(type), undefined);
 }
 
 function renderReferenceHover(analysis: AnalyzeResult, nodeId: NodeId): string | undefined {
@@ -108,16 +108,19 @@ function renderReference(reference: ReferenceTarget, analysis: AnalyzeResult): s
     case "Function":
       return renderNodeHover(analysis, reference.definitionNodeId);
     case "Prelude":
-      return reference.name;
+      return renderCodeHover(reference.name, undefined);
     case "TypeAlias":
       return renderNodeHover(analysis, reference.definitionNodeId);
     case "EnumVariant":
-      return `${reference.enumName}.${reference.variantName}: ${reference.enumName}`;
+      return renderCodeHover(
+        `${reference.enumName}.${reference.variantName}: ${reference.enumName}`,
+        undefined,
+      );
     case "Field": {
       const node = findAstNode(analysis.program, reference.definitionNodeId);
       return node?.kind === "ObjectTypeField" || node?.kind === "ObjectLiteralField"
         ? renderFieldHover(analysis, node)
-        : reference.name;
+        : renderCodeHover(reference.name, undefined);
     }
   }
 }
@@ -134,14 +137,16 @@ function renderNodeHover(analysis: AnalyzeResult, nodeId: NodeId): string | unde
     case "FunctionDeclaration":
       return renderFunctionHover(node);
     case "TypeDeclaration":
-      return `type ${node.name} = ${formatTypeNode(node.value)}`;
+      return renderCodeHover(`type ${node.name} = ${formatTypeNode(node.value)}`, node.doc);
     case "Parameter":
-      return `${node.name}: ${formatTypeNode(node.type)}`;
+      return renderCodeHover(`${node.name}: ${formatTypeNode(node.type)}`, undefined);
     case "BindingPattern": {
       const type = analysis.semantics.patternBindingTypes.get(node.nodeId);
-      return type === undefined || type.kind === "unknown"
-        ? node.name
-        : `${node.name}: ${formatType(type)}`;
+      const code =
+        type === undefined || type.kind === "unknown"
+          ? node.name
+          : `${node.name}: ${formatType(type)}`;
+      return renderCodeHover(code, undefined);
     }
     case "ObjectTypeField":
     case "ObjectLiteralField":
@@ -154,10 +159,15 @@ function renderNodeHover(analysis: AnalyzeResult, nodeId: NodeId): string | unde
     case "ObjectType":
     case "EnumType":
     case "UnknownType":
-      return formatTypeNode(node);
+      return renderCodeHover(formatTypeNode(node), undefined);
     default:
       return undefined;
   }
+}
+
+function renderCodeHover(code: string, doc: string | undefined): string {
+  const renderedCode = `\`\`\`polena\n${code}\n\`\`\``;
+  return doc === undefined || doc.length === 0 ? renderedCode : `${renderedCode}\n\n${doc}`;
 }
 
 function renderVariableHover(analysis: AnalyzeResult, declaration: VariableDeclaration): string {
@@ -172,14 +182,20 @@ function renderVariableHover(analysis: AnalyzeResult, declaration: VariableDecla
         : formatType(type)
       : formatTypeNode(declaration.typeAnnotation);
 
-  return `${declaration.mutability} ${declaration.name}: ${renderedType}`;
+  return renderCodeHover(
+    `${declaration.mutability} ${declaration.name}: ${renderedType}`,
+    declaration.doc,
+  );
 }
 
 function renderFunctionHover(declaration: FunctionDeclaration): string {
   const params = declaration.params
     .map((param) => `${param.name}: ${formatTypeNode(param.type)}`)
     .join(", ");
-  return `fn ${declaration.name}(${params}): ${formatTypeNode(declaration.returnType)}`;
+  return renderCodeHover(
+    `fn ${declaration.name}(${params}): ${formatTypeNode(declaration.returnType)}`,
+    declaration.doc,
+  );
 }
 
 function renderFieldHover(
@@ -187,15 +203,15 @@ function renderFieldHover(
   field: ObjectTypeField | ObjectLiteralField,
 ): string | undefined {
   if (field.kind === "ObjectTypeField") {
-    return `${field.name}: ${formatTypeNode(field.type)}`;
+    return renderCodeHover(`${field.name}: ${formatTypeNode(field.type)}`, undefined);
   }
 
   const type = analysis.semantics.expressionTypes.get(field.value.nodeId);
   if (type === undefined || type.kind === "unknown") {
-    return field.name;
+    return renderCodeHover(field.name, undefined);
   }
 
-  return `${field.name}: ${formatType(type)}`;
+  return renderCodeHover(`${field.name}: ${formatType(type)}`, undefined);
 }
 
 function renderEnumVariantHover(
@@ -203,9 +219,11 @@ function renderEnumVariantHover(
   variant: EnumVariantTypeNode,
 ): string | undefined {
   const typeDeclaration = findEnumTypeDeclaration(program, variant.nodeId);
-  return typeDeclaration === undefined
-    ? variant.name
-    : `${typeDeclaration.name}.${formatEnumVariantTypeNode(variant)}: ${typeDeclaration.name}`;
+  const code =
+    typeDeclaration === undefined
+      ? variant.name
+      : `${typeDeclaration.name}.${formatEnumVariantTypeNode(variant)}: ${typeDeclaration.name}`;
+  return renderCodeHover(code, undefined);
 }
 
 function formatTypeNode(typeNode: TypeNode): string {

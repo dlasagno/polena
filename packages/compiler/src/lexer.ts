@@ -127,6 +127,16 @@ class Lexer {
         return;
       case "/":
         if (this.match("/")) {
+          if (this.match("/")) {
+            this.scanDocComment("DocComment", start);
+            return;
+          }
+
+          if (this.match("!")) {
+            this.scanDocComment("ModuleDocComment", start);
+            return;
+          }
+
           this.skipLineComment();
           return;
         }
@@ -388,6 +398,19 @@ class Lexer {
     }
   }
 
+  private scanDocComment(kind: "DocComment" | "ModuleDocComment", start: SourceLocation): void {
+    const contentStart = this.offset;
+    while (!this.isAtEnd() && this.peek() !== "\n") {
+      this.advance();
+    }
+
+    this.tokens.push({
+      kind,
+      text: normalizeDocCommentText(this.source.slice(contentStart, this.offset)),
+      span: spanFrom(start, this.location()),
+    });
+  }
+
   private addToken(kind: TokenKind, start: SourceLocation): void {
     this.tokens.push({
       kind,
@@ -449,6 +472,10 @@ class Lexer {
   private location(): SourceLocation {
     return makeLocation(this.offset, this.line, this.column);
   }
+}
+
+function normalizeDocCommentText(text: string): string {
+  return text.startsWith(" ") ? text.slice(1) : text;
 }
 
 function isDigit(char: string): boolean {

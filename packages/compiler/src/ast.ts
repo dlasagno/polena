@@ -85,6 +85,7 @@ export type TypeDeclaration = {
   readonly typeParameters: readonly TypeParameter[];
   readonly value: TypeNode;
   readonly span: Span;
+  readonly doc?: string;
 };
 
 export type TypeParameter = {
@@ -105,6 +106,7 @@ export type FunctionDeclaration = {
   readonly returnType: TypeNode;
   readonly body: Block;
   readonly span: Span;
+  readonly doc?: string;
 };
 
 export type Parameter = {
@@ -142,6 +144,7 @@ export type VariableDeclaration = {
   readonly typeAnnotation?: TypeNode;
   readonly initializer: Expression;
   readonly span: Span;
+  readonly doc?: string;
 };
 
 export type ReturnStatement = {

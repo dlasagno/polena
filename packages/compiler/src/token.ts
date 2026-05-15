@@ -6,6 +6,8 @@ export type TokenKind =
   | "BigInt"
   | "String"
   | "MultilineString"
+  | "DocComment"
+  | "ModuleDocComment"
   | "Const"
   | "Let"
   | "Type"

@@ -20,6 +20,24 @@ describe("lexer", () => {
     ]);
   });
 
+  test("tokenizes doc comments", () => {
+    const result = lex("//! Module docs\n/// Adds one.\nconst answer: number = 42;");
+
+    expect(result.diagnostics).toHaveLength(0);
+    expect(result.tokens.map((token) => `${token.kind}:${token.text}`)).toEqual([
+      "ModuleDocComment:Module docs",
+      "DocComment:Adds one.",
+      "Const:const",
+      "Identifier:answer",
+      "Colon::",
+      "NumberType:number",
+      "Equal:=",
+      "Number:42",
+      "Semicolon:;",
+      "Eof:",
+    ]);
+  });
+
   test("tokenizes bigint literals and bigint types", () => {
     const result = lex("const answer: bigint = 42n;");
 
@@ -216,6 +234,19 @@ describe("lexer", () => {
 });
 
 describe("parser", () => {
+  test("attaches doc comments to declarations", () => {
+    const source =
+      "/// Adds one.\n///\n/// Returns the next value.\nfn next(value: number): number { value + 1 }";
+    const result = parse(lex(source).tokens);
+    const declaration = result.program.declarations[0];
+
+    expect(result.diagnostics).toHaveLength(0);
+    expect(declaration).toMatchObject({
+      kind: "FunctionDeclaration",
+      doc: "Adds one.\n\nReturns the next value.",
+    });
+  });
+
   test("parses function declarations and operator precedence", () => {
     const lexResult = lex('fn value(): string { "a" ++ "b" + "c" }');
     const parseResult = parse(lexResult.tokens);

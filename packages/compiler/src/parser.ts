@@ -60,6 +60,10 @@ class Parser {
 
     while (!this.check("Eof")) {
       const startIndex = this.index;
+      this.skipModuleDocComments();
+      if (this.check("Eof")) {
+        break;
+      }
       declarations.push(this.parseTopLevelDeclaration());
       this.ensureProgress(startIndex);
     }
@@ -78,16 +82,18 @@ class Parser {
   }
 
   private parseTopLevelDeclaration(): TopLevelDeclaration {
+    const doc = this.parseDocCommentBlock();
+
     if (this.check("Type")) {
-      return this.parseTypeDeclaration();
+      return this.parseTypeDeclaration(doc);
     }
 
     if (this.check("Fn")) {
-      return this.parseFunctionDeclaration();
+      return this.parseFunctionDeclaration(doc);
     }
 
     if (this.check("Const") || this.check("Let")) {
-      return this.parseVariableDeclaration(true);
+      return this.parseVariableDeclaration(true, doc);
     }
 
     if (this.isAssignmentStatementStart()) {
@@ -119,7 +125,7 @@ class Parser {
     });
   }
 
-  private parseTypeDeclaration(): TypeDeclaration {
+  private parseTypeDeclaration(doc: string | undefined): TypeDeclaration {
     const typeToken = this.expect("Type", "Expected 'type'.");
     const name = this.expect("Identifier", "Expected type name.");
     const typeParameters = this.parseTypeParameters();
@@ -134,6 +140,7 @@ class Parser {
       typeParameters,
       value,
       span: mergeSpans(typeToken.span, semicolon.span),
+      ...(doc === undefined ? {} : { doc }),
     });
   }
 
@@ -165,7 +172,7 @@ class Parser {
     return params;
   }
 
-  private parseFunctionDeclaration(): FunctionDeclaration {
+  private parseFunctionDeclaration(doc: string | undefined): FunctionDeclaration {
     const fnToken = this.expect("Fn", "Expected 'fn'.");
     const name = this.expect("Identifier", "Expected function name.");
     const typeParameters = this.parseTypeParameters();
@@ -192,6 +199,7 @@ class Parser {
       returnType,
       body,
       span: mergeSpans(fnToken.span, body.span),
+      ...(doc === undefined ? {} : { doc }),
     });
   }
 
@@ -228,9 +236,10 @@ class Parser {
 
     while (!this.check("RightBrace") && !this.check("Eof")) {
       const startIndex = this.index;
+      const doc = this.parseDocCommentBlock();
 
       if (this.check("Const") || this.check("Let")) {
-        statements.push(this.parseVariableDeclaration(true));
+        statements.push(this.parseVariableDeclaration(true, doc));
         this.ensureProgress(startIndex);
         continue;
       }
@@ -299,7 +308,10 @@ class Parser {
     return this.node({ kind: "Block", statements, finalExpression, span });
   }
 
-  private parseVariableDeclaration(requireSemicolon: boolean): VariableDeclaration {
+  private parseVariableDeclaration(
+    requireSemicolon: boolean,
+    doc: string | undefined = undefined,
+  ): VariableDeclaration {
     const keyword = this.match("Const")
       ? this.previous()
       : this.expect("Let", "Expected 'const' or 'let'.");
@@ -327,6 +339,7 @@ class Parser {
       ...(typeAnnotation === undefined ? {} : { typeAnnotation }),
       initializer,
       span: mergeSpans(keyword.span, endSpan),
+      ...(doc === undefined ? {} : { doc }),
     });
   }
 
@@ -1120,6 +1133,24 @@ class Parser {
       }),
     );
     return token;
+  }
+
+  private parseDocCommentBlock(): string | undefined {
+    if (!this.check("DocComment")) {
+      return undefined;
+    }
+
+    const lines: string[] = [];
+    while (this.check("DocComment")) {
+      lines.push(this.advance().text);
+    }
+    return lines.join("\n");
+  }
+
+  private skipModuleDocComments(): void {
+    while (this.check("ModuleDocComment")) {
+      this.advance();
+    }
   }
 
   private expectClosingDelimiter(
