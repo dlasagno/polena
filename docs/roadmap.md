@@ -257,11 +257,15 @@ VS Code extension:
 
 Design questions to settle first:
 
-- Module path syntax and extension behavior.
-- Whether import resolution follows npm, relative paths, or a Polena-specific
-  model.
-- How packages are represented.
 - How much JavaScript interop is allowed before the type system is mature.
+- Re-exports and opaque-type syntax.
+- Dependency declaration format in `polena.toml`, both for external
+  dependencies and for workspace-internal references.
+- Compilation-target field in `polena.toml` (browser, Node, and similar).
+
+The module path syntax, import grammar, package layout, workspace layout,
+and the declarations-only/`main` rules are specified in section 30 of the
+language spec.
 
 Exit criteria:
 

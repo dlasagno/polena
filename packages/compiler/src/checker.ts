@@ -38,6 +38,7 @@ import {
   enumType,
   formatType,
   functionType,
+  genericEnumType,
   inferArithmeticType,
   isAssignableTo,
   isEqualityComparableType,
@@ -47,6 +48,7 @@ import {
   preferredArithmeticType,
   primitiveType,
   sameType,
+  typeParameterType,
   type EnumVariantType,
   type ObjectTypeField as SemanticObjectTypeField,
   type Type,
@@ -81,11 +83,14 @@ type InferOptions = {
 
 type TypeSymbol = {
   readonly name: string;
+  readonly typeParameters: readonly string[];
   readonly value: TypeNode;
   readonly span: Span;
   readonly definitionNodeId: number;
   readonly fullSpan: Span;
 };
+
+type TypeEnvironment = ReadonlyMap<string, Type>;
 
 export function check(program: Program): CheckResult {
   const checker = new Checker();
@@ -155,6 +160,7 @@ class Checker {
   private readonly typeSymbols = new Map<string, TypeSymbol>();
   private readonly resolvedTypeSymbols = new Map<string, Type>();
   private readonly resolvingTypeSymbols = new Set<string>();
+  private readonly resolvingGenericTypeSymbols = new Set<string>();
 
   public check(program: Program): CheckResult {
     const scope = new Scope();
@@ -240,8 +246,23 @@ class Checker {
       return;
     }
 
+    const seenParameters = new Set<string>();
+    for (const param of declaration.typeParameters) {
+      if (seenParameters.has(param.name)) {
+        this.diagnostics.push(
+          error(`Duplicate type parameter '${param.name}'.`, param.nameSpan, {
+            code: DiagnosticCode.DuplicateName,
+            label: "this type parameter is already defined",
+          }),
+        );
+        continue;
+      }
+      seenParameters.add(param.name);
+    }
+
     this.typeSymbols.set(declaration.name, {
       name: declaration.name,
+      typeParameters: declaration.typeParameters.map((param) => param.name),
       value: declaration.value,
       span: declaration.nameSpan,
       definitionNodeId: declaration.nodeId,
@@ -257,10 +278,24 @@ class Checker {
   }
 
   private resolveTypeDeclaration(declaration: TypeDeclaration): Type {
-    return this.resolveNamedType(declaration.name, declaration.nameSpan);
+    if (declaration.typeParameters.length === 0) {
+      return this.resolveNamedType(declaration.name, declaration.nameSpan, [], declaration.nodeId);
+    }
+
+    const environment = new Map<string, Type>();
+    for (const param of declaration.typeParameters) {
+      environment.set(param.name, typeParameterType(param.name));
+    }
+
+    return this.typeFromNode(declaration.value, declaration.name, environment);
   }
 
-  private resolveNamedType(name: string, span: Span, referenceNodeId?: number): Type {
+  private resolveNamedType(
+    name: string,
+    span: Span,
+    typeArguments: readonly Type[] = [],
+    referenceNodeId?: number,
+  ): Type {
     const symbol = this.typeSymbols.get(name);
     if (symbol === undefined) {
       this.diagnostics.push(
@@ -281,6 +316,64 @@ class Checker {
         nameSpan: symbol.span,
         fullSpan: symbol.fullSpan,
       });
+    }
+
+    if (symbol.typeParameters.length === 0 && typeArguments.length > 0) {
+      this.diagnostics.push(
+        error(`Type '${name}' does not take type arguments.`, span, {
+          code: DiagnosticCode.TypeMismatch,
+          label: "remove the type arguments",
+        }),
+      );
+      return unknownType();
+    }
+
+    if (symbol.typeParameters.length > 0 && typeArguments.length === 0) {
+      this.diagnostics.push(
+        error(
+          `Generic type '${name}' requires ${symbol.typeParameters.length} type argument(s).`,
+          span,
+          {
+            code: DiagnosticCode.TypeMismatch,
+            label: "supply type arguments for this generic type",
+          },
+        ),
+      );
+      return unknownType();
+    }
+
+    if (symbol.typeParameters.length > 0 && typeArguments.length !== symbol.typeParameters.length) {
+      this.diagnostics.push(
+        error(
+          `Generic type '${name}' requires ${symbol.typeParameters.length} type argument(s), got ${typeArguments.length}.`,
+          span,
+          {
+            code: DiagnosticCode.TypeMismatch,
+            label: "wrong number of type arguments",
+          },
+        ),
+      );
+      return unknownType();
+    }
+
+    if (symbol.typeParameters.length > 0) {
+      const key = `${name}<${typeArguments.map(formatType).join(",")}>`;
+      if (this.resolvingGenericTypeSymbols.has(key)) {
+        return genericEnumType(name, typeArguments, []);
+      }
+
+      const environment = new Map<string, Type>();
+      for (let index = 0; index < symbol.typeParameters.length; index += 1) {
+        const parameter = symbol.typeParameters[index];
+        const argument = typeArguments[index];
+        if (parameter !== undefined && argument !== undefined) {
+          environment.set(parameter, argument);
+        }
+      }
+      this.resolvingGenericTypeSymbols.add(key);
+      const type = this.typeFromNode(symbol.value, name, environment, typeArguments);
+      this.resolvingGenericTypeSymbols.delete(key);
+      return type;
     }
 
     const resolved = this.resolvedTypeSymbols.get(name);
@@ -305,18 +398,49 @@ class Checker {
     return type;
   }
 
-  private typeFromNode(typeNode: TypeNode, declaredName?: string): Type {
+  private typeFromNode(
+    typeNode: TypeNode,
+    declaredName?: string,
+    environment: TypeEnvironment = new Map(),
+    declaredTypeArguments: readonly Type[] = [],
+  ): Type {
     switch (typeNode.kind) {
       case "PrimitiveType":
         return primitiveType(typeNode.name);
       case "ArrayType":
-        return arrayType(this.typeFromNode(typeNode.element));
+        return arrayType(this.typeFromNode(typeNode.element, undefined, environment));
       case "ObjectType":
-        return this.typeFromObjectTypeNode(typeNode);
+        return this.typeFromObjectTypeNode(typeNode, environment);
       case "EnumType":
-        return this.typeFromEnumTypeNode(typeNode, declaredName ?? "<anonymous enum>");
+        return this.typeFromEnumTypeNode(
+          typeNode,
+          declaredName ?? "<anonymous enum>",
+          environment,
+          declaredTypeArguments,
+        );
       case "NamedType":
-        return this.resolveNamedType(typeNode.name, typeNode.nameSpan, typeNode.nodeId);
+        if (environment.has(typeNode.name)) {
+          if (typeNode.typeArguments.length > 0) {
+            this.diagnostics.push(
+              error(
+                `Type parameter '${typeNode.name}' does not take type arguments.`,
+                typeNode.nameSpan,
+                {
+                  code: DiagnosticCode.TypeMismatch,
+                  label: "remove the type arguments",
+                },
+              ),
+            );
+            return unknownType();
+          }
+          return environment.get(typeNode.name) ?? unknownType();
+        }
+        return this.resolveNamedType(
+          typeNode.name,
+          typeNode.nameSpan,
+          typeNode.typeArguments.map((arg) => this.typeFromNode(arg, undefined, environment)),
+          typeNode.nodeId,
+        );
       case "UnknownType":
         return unknownType();
     }
@@ -324,6 +448,7 @@ class Checker {
 
   private typeFromObjectTypeNode(
     typeNode: Extract<TypeNode, { readonly kind: "ObjectType" }>,
+    environment: TypeEnvironment,
   ): Type {
     const fields: SemanticObjectTypeField[] = [];
     const seenFields = new Set<string>();
@@ -344,7 +469,7 @@ class Checker {
         name: field.name,
         nodeId: field.nodeId,
         nameSpan: field.nameSpan,
-        type: this.typeFromNode(field.type),
+        type: this.typeFromNode(field.type, undefined, environment),
         span: field.span,
       });
       this.recordDefinition("Field", field.nodeId, field.name, field.nameSpan, field.span);
@@ -356,6 +481,8 @@ class Checker {
   private typeFromEnumTypeNode(
     typeNode: Extract<TypeNode, { readonly kind: "EnumType" }>,
     name: string,
+    environment: TypeEnvironment,
+    typeArguments: readonly Type[],
   ): Type {
     const variants = [];
     const seenVariants = new Set<string>();
@@ -374,7 +501,9 @@ class Checker {
       seenVariants.add(variant.name);
       variants.push({
         name: variant.name,
-        payload: variant.payload.map((payloadType) => this.typeFromNode(payloadType)),
+        payload: variant.payload.map((payloadType) =>
+          this.typeFromNode(payloadType, undefined, environment),
+        ),
         nodeId: variant.nodeId,
         nameSpan: variant.nameSpan,
         span: variant.span,
@@ -388,7 +517,7 @@ class Checker {
       );
     }
 
-    return enumType(name, variants);
+    return genericEnumType(name, typeArguments, variants);
   }
 
   private declareFunction(scope: Scope, declaration: FunctionDeclaration): void {
@@ -1680,6 +1809,11 @@ class Checker {
     scope: Scope,
     options: InferOptions,
   ): Type | undefined {
+    const genericConstructorType = this.inferGenericEnumConstructorCall(expression, scope, options);
+    if (genericConstructorType !== undefined) {
+      return genericConstructorType;
+    }
+
     const resolved = this.resolveEnumConstructorCallee(expression.callee, options.expectedType);
     if (resolved === undefined) {
       return undefined;
@@ -1751,6 +1885,110 @@ class Checker {
     return enumType;
   }
 
+  private inferGenericEnumConstructorCall(
+    expression: Extract<Expression, { kind: "CallExpression" }>,
+    scope: Scope,
+    options: InferOptions,
+  ): Type | undefined {
+    if (
+      expression.callee.kind !== "MemberExpression" ||
+      expression.callee.target.kind !== "NameExpression"
+    ) {
+      return undefined;
+    }
+
+    const typeName = expression.callee.target.name;
+    const symbol = this.typeSymbols.get(typeName);
+    if (symbol === undefined || symbol.typeParameters.length === 0) {
+      return undefined;
+    }
+
+    const template = this.genericTemplateEnumType(symbol, expression.callee.target.span);
+    if (template === undefined) {
+      return unknownType();
+    }
+
+    const templateVariant = this.expectEnumVariant(
+      template,
+      expression.callee.name,
+      expression.callee.nameSpan,
+    );
+    if (templateVariant === undefined) {
+      return unknownType();
+    }
+
+    if (templateVariant.payload.length === 0) {
+      this.diagnostics.push(
+        error(
+          `Enum variant '${typeName}.${expression.callee.name}' has no associated data.`,
+          expression.span,
+          {
+            code: DiagnosticCode.WrongArgumentCount,
+            label: "this fieldless variant is constructed without parentheses",
+          },
+        ),
+      );
+      for (const arg of expression.args) {
+        this.inferExpression(arg, scope, options);
+      }
+      return this.genericEnumTypeFromExpectedOrUnknown(typeName, symbol, options.expectedType);
+    }
+
+    const actualTypes = expression.args.map((arg) => this.inferExpression(arg, scope, options));
+    const typeArguments = this.inferGenericEnumTypeArguments(
+      typeName,
+      symbol,
+      templateVariant,
+      actualTypes,
+      options.expectedType,
+      expression.callee.target.span,
+    );
+    if (typeArguments === undefined) {
+      return unknownType();
+    }
+
+    const enumType = this.resolveNamedType(
+      typeName,
+      expression.callee.target.span,
+      typeArguments,
+      expression.callee.target.nodeId,
+    );
+    if (enumType.kind !== "enum") {
+      return unknownType();
+    }
+
+    const variant = this.findEnumVariant(enumType, expression.callee.name);
+    if (variant === undefined) {
+      return unknownType();
+    }
+
+    if (expression.args.length !== variant.payload.length) {
+      this.diagnostics.push(
+        error(
+          `Expected ${variant.payload.length} argument(s), got ${expression.args.length}.`,
+          expression.span,
+          {
+            code: DiagnosticCode.WrongArgumentCount,
+            label: "wrong number of arguments for this enum variant",
+          },
+        ),
+      );
+    }
+
+    const count = Math.min(expression.args.length, variant.payload.length);
+    for (let index = 0; index < count; index += 1) {
+      const arg = expression.args[index];
+      const actual = actualTypes[index];
+      const expected = variant.payload[index];
+      if (arg !== undefined && actual !== undefined && expected !== undefined) {
+        this.expectType(actual, expected, arg.span);
+      }
+    }
+
+    this.recordEnumVariantReference(expression.callee.nodeId, enumType, expression.callee.name);
+    return enumType;
+  }
+
   private inferIndexExpression(
     expression: Extract<Expression, { kind: "IndexExpression" }>,
     scope: Scope,
@@ -1786,6 +2024,11 @@ class Checker {
     options: InferOptions,
   ): Type {
     if (expression.target.kind === "NameExpression") {
+      const genericEnumType = this.resolveGenericEnumMemberExpression(expression, options);
+      if (genericEnumType !== undefined) {
+        return genericEnumType;
+      }
+
       const enumType = this.resolveEnumTypeByName(
         expression.target.name,
         expression.target.span,
@@ -1841,6 +2084,59 @@ class Checker {
       ),
     );
     return unknownType();
+  }
+
+  private resolveGenericEnumMemberExpression(
+    expression: Extract<Expression, { kind: "MemberExpression" }>,
+    options: InferOptions,
+  ): Type | undefined {
+    if (expression.target.kind !== "NameExpression") {
+      return undefined;
+    }
+
+    const typeName = expression.target.name;
+    const symbol = this.typeSymbols.get(typeName);
+    if (symbol === undefined || symbol.typeParameters.length === 0) {
+      return undefined;
+    }
+
+    const expectedType = options.expectedType;
+    if (
+      expectedType?.kind !== "enum" ||
+      expectedType.name !== typeName ||
+      expectedType.typeArguments.length !== symbol.typeParameters.length
+    ) {
+      this.diagnostics.push(
+        error(
+          `Cannot infer type arguments for '${typeName}.${expression.name}'.`,
+          expression.target.span,
+          {
+            code: DiagnosticCode.CannotInferEnumVariant,
+            label: "add a type annotation to provide the generic enum type",
+          },
+        ),
+      );
+      return unknownType();
+    }
+
+    const variant = this.expectEnumVariant(expectedType, expression.name, expression.nameSpan);
+    if (variant !== undefined) {
+      this.recordEnumVariantReference(expression.nodeId, expectedType, expression.name);
+      if (variant.payload.length > 0) {
+        this.diagnostics.push(
+          error(
+            `Enum variant '${expectedType.name}.${expression.name}' requires ${variant.payload.length} argument(s).`,
+            expression.span,
+            {
+              code: DiagnosticCode.WrongArgumentCount,
+              label: "this variant has associated data and must be constructed with call syntax",
+            },
+          ),
+        );
+      }
+    }
+
+    return expectedType;
   }
 
   private inferMatchExpression(
@@ -2195,12 +2491,152 @@ class Checker {
       return undefined;
     }
 
-    const type = this.resolveNamedType(name, span, referenceNodeId);
+    const type = this.resolveNamedType(name, span, [], referenceNodeId);
     if (type.kind !== "enum") {
       return undefined;
     }
 
     return type;
+  }
+
+  private genericTemplateEnumType(
+    symbol: TypeSymbol,
+    span: Span,
+  ): Extract<Type, { readonly kind: "enum" }> | undefined {
+    const environment = new Map<string, Type>();
+    const typeArguments: Type[] = [];
+    for (const parameter of symbol.typeParameters) {
+      const parameterType = typeParameterType(parameter);
+      environment.set(parameter, parameterType);
+      typeArguments.push(parameterType);
+    }
+
+    const type = this.typeFromNode(symbol.value, symbol.name, environment, typeArguments);
+    if (type.kind === "enum") {
+      return type;
+    }
+
+    this.diagnostics.push(
+      error(`Type '${symbol.name}' is not an enum type.`, span, {
+        code: DiagnosticCode.TypeMismatch,
+        label: "enum construction requires an enum type",
+      }),
+    );
+    return undefined;
+  }
+
+  private genericEnumTypeFromExpectedOrUnknown(
+    name: string,
+    symbol: TypeSymbol,
+    expectedType: Type | undefined,
+  ): Type {
+    if (
+      expectedType?.kind === "enum" &&
+      expectedType.name === name &&
+      expectedType.typeArguments.length === symbol.typeParameters.length
+    ) {
+      return expectedType;
+    }
+
+    return unknownType();
+  }
+
+  private inferGenericEnumTypeArguments(
+    typeName: string,
+    symbol: TypeSymbol,
+    templateVariant: EnumVariantType,
+    actualTypes: readonly Type[],
+    expectedType: Type | undefined,
+    span: Span,
+  ): readonly Type[] | undefined {
+    if (
+      expectedType?.kind === "enum" &&
+      expectedType.name === typeName &&
+      expectedType.typeArguments.length === symbol.typeParameters.length
+    ) {
+      return expectedType.typeArguments;
+    }
+
+    if (actualTypes.length !== templateVariant.payload.length) {
+      return symbol.typeParameters.map(() => unknownType());
+    }
+
+    const inferred = new Map<string, Type>();
+    for (let index = 0; index < templateVariant.payload.length; index += 1) {
+      const pattern = templateVariant.payload[index];
+      const actual = actualTypes[index];
+      if (pattern !== undefined && actual !== undefined) {
+        this.inferTypeArgumentsFromType(pattern, actual, inferred);
+      }
+    }
+
+    const typeArguments: Type[] = [];
+    const missing: string[] = [];
+    for (const parameter of symbol.typeParameters) {
+      const typeArgument = inferred.get(parameter);
+      if (typeArgument === undefined) {
+        missing.push(parameter);
+        typeArguments.push(unknownType());
+      } else {
+        typeArguments.push(typeArgument);
+      }
+    }
+
+    if (missing.length > 0) {
+      this.diagnostics.push(
+        error(
+          `Cannot infer type argument(s) ${missing.map((name) => `'${name}'`).join(", ")} for '${typeName}'.`,
+          span,
+          {
+            code: DiagnosticCode.CannotInferEnumVariant,
+            label: "add a type annotation to provide the generic enum type",
+          },
+        ),
+      );
+      return undefined;
+    }
+
+    return typeArguments;
+  }
+
+  private inferTypeArgumentsFromType(
+    pattern: Type,
+    actual: Type,
+    inferred: Map<string, Type>,
+  ): void {
+    if (pattern.kind === "typeParameter") {
+      const existing = inferred.get(pattern.name);
+      if (existing === undefined || existing.kind === "unknown") {
+        inferred.set(pattern.name, actual);
+      }
+      return;
+    }
+
+    if (pattern.kind === "array" && actual.kind === "array") {
+      this.inferTypeArgumentsFromType(pattern.element, actual.element, inferred);
+      return;
+    }
+
+    if (pattern.kind === "object" && actual.kind === "object") {
+      for (const patternField of pattern.fields) {
+        const actualField = actual.fields.find((field) => field.name === patternField.name);
+        if (actualField !== undefined) {
+          this.inferTypeArgumentsFromType(patternField.type, actualField.type, inferred);
+        }
+      }
+      return;
+    }
+
+    if (pattern.kind === "enum" && actual.kind === "enum" && pattern.name === actual.name) {
+      const count = Math.min(pattern.typeArguments.length, actual.typeArguments.length);
+      for (let index = 0; index < count; index += 1) {
+        const patternArg = pattern.typeArguments[index];
+        const actualArg = actual.typeArguments[index];
+        if (patternArg !== undefined && actualArg !== undefined) {
+          this.inferTypeArgumentsFromType(patternArg, actualArg, inferred);
+        }
+      }
+    }
   }
 
   private resolveQualifiedEnumVariant(

@@ -301,6 +301,44 @@ describe("parser", () => {
     });
   });
 
+  test("parses generic type declarations and instantiations", () => {
+    const parseResult = parse(lex("type Pair<A, B> = { first: A, second: B };").tokens);
+
+    expect(parseResult.diagnostics).toHaveLength(0);
+    expect(parseResult.program.declarations[0]).toMatchObject({
+      kind: "TypeDeclaration",
+      name: "Pair",
+      typeParameters: [
+        { kind: "TypeParameter", name: "A" },
+        { kind: "TypeParameter", name: "B" },
+      ],
+      value: {
+        kind: "ObjectType",
+        fields: [
+          { name: "first", type: { kind: "NamedType", name: "A", typeArguments: [] } },
+          { name: "second", type: { kind: "NamedType", name: "B", typeArguments: [] } },
+        ],
+      },
+    });
+
+    const nested = parse(lex("const value: Option<Option<number>> = .None;").tokens);
+    expect(nested.diagnostics).toHaveLength(0);
+    expect(nested.program.declarations[0]).toMatchObject({
+      kind: "VariableDeclaration",
+      typeAnnotation: {
+        kind: "NamedType",
+        name: "Option",
+        typeArguments: [
+          {
+            kind: "NamedType",
+            name: "Option",
+            typeArguments: [{ kind: "PrimitiveType", name: "number" }],
+          },
+        ],
+      },
+    });
+  });
+
   test("parses fieldless enum declarations", () => {
     const lexResult = lex("type Color = enum { Red, Green, Blue, };");
     const parseResult = parse(lexResult.tokens);
@@ -2158,6 +2196,76 @@ const value = match message {
     expect(result.js).toContain('tag: "Message.Move"');
     expect(result.js).toContain("values: [10, 20]");
     expect(result.js).toContain(".tag ??");
+  });
+
+  test("supports generic object aliases and aliases over generic instantiations", () => {
+    const result = expectCompileOk(`
+type Pair<A, B> = { first: A, second: B };
+type StringPair<V> = Pair<string, V>;
+
+const pair: StringPair<number> = { first: "x", second: 1 };
+const value = pair.second;
+`);
+
+    expect(executeValue(result.js)).toBe(1);
+  });
+
+  test("supports generic enum construction and payload matching", () => {
+    const result = expectCompileOk(`
+type Option<T> = enum {
+  Some(T),
+  None,
+};
+
+const one = Option.Some(1);
+const empty: Option<number> = .None;
+const nested: Option<Option<number>> = .Some(one);
+const value = match nested {
+  .Some(inner) => match inner {
+    .Some(value) => value,
+    .None => 0,
+  },
+  .None => 0,
+};
+`);
+
+    expect(executeValue(result.js)).toBe(1);
+  });
+
+  test("rejects invalid generic type argument usage", () => {
+    const missing = compile(`
+type Box<T> = { value: T };
+const box: Box = { value: 1 };
+`);
+    expect(missing.ok).toBe(false);
+    expect(missing.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Generic type 'Box' requires 1 type argument(s).",
+    );
+
+    const extra = compile(`
+type Score = number;
+const score: Score<string> = 1;
+`);
+    expect(extra.ok).toBe(false);
+    expect(extra.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Type 'Score' does not take type arguments.",
+    );
+  });
+
+  test("rejects generic enum construction when type arguments cannot be inferred", () => {
+    const result = compile(`
+type Option<T> = enum {
+  Some(T),
+  None,
+};
+
+const empty = Option.None;
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Cannot infer type arguments for 'Option.None'.",
+    );
   });
 
   test("supports contextual shorthand construction and object payloads", () => {

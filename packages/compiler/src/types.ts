@@ -5,7 +5,13 @@ export type Type =
   | { readonly kind: "primitive"; readonly name: PrimitiveType }
   | { readonly kind: "array"; readonly element: Type }
   | { readonly kind: "object"; readonly fields: readonly ObjectTypeField[] }
-  | { readonly kind: "enum"; readonly name: string; readonly variants: readonly EnumVariantType[] }
+  | {
+      readonly kind: "enum";
+      readonly name: string;
+      readonly typeArguments: readonly Type[];
+      readonly variants: readonly EnumVariantType[];
+    }
+  | { readonly kind: "typeParameter"; readonly name: string }
   | {
       readonly kind: "function";
       readonly params: readonly Type[];
@@ -42,7 +48,19 @@ export function objectType(fields: readonly ObjectTypeField[]): Type {
 }
 
 export function enumType(name: string, variants: readonly EnumVariantType[]): Type {
-  return { kind: "enum", name, variants };
+  return genericEnumType(name, [], variants);
+}
+
+export function genericEnumType(
+  name: string,
+  typeArguments: readonly Type[],
+  variants: readonly EnumVariantType[],
+): Type {
+  return { kind: "enum", name, typeArguments, variants };
+}
+
+export function typeParameterType(name: string): Type {
+  return { kind: "typeParameter", name };
 }
 
 export function functionType(params: readonly Type[], returnType: Type): Type {
@@ -66,7 +84,17 @@ export function sameType(left: Type, right: Type): boolean {
     case "object":
       return right.kind === "object" && sameObjectFields(left.fields, right.fields);
     case "enum":
-      return right.kind === "enum" && left.name === right.name;
+      return (
+        right.kind === "enum" &&
+        left.name === right.name &&
+        left.typeArguments.length === right.typeArguments.length &&
+        left.typeArguments.every((arg, index) => {
+          const rightArg = right.typeArguments[index];
+          return rightArg !== undefined && sameType(arg, rightArg);
+        })
+      );
+    case "typeParameter":
+      return right.kind === "typeParameter" && left.name === right.name;
     case "function":
       return (
         right.kind === "function" &&
@@ -105,6 +133,11 @@ export function formatType(type: Type): string {
         .map((field) => `${field.name}: ${formatType(field.type)}`)
         .join(", ")} }`;
     case "enum":
+      if (type.typeArguments.length === 0) {
+        return type.name;
+      }
+      return `${type.name}<${type.typeArguments.map(formatType).join(", ")}>`;
+    case "typeParameter":
       return type.name;
     case "function":
       return "function";

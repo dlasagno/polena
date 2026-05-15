@@ -4,6 +4,7 @@ import {
   enumType,
   formatType,
   functionType,
+  genericEnumType,
   inferArithmeticType,
   isAssignableTo,
   isEqualityComparableType,
@@ -78,6 +79,29 @@ describe("semantic types", () => {
     expect(sameType(left, other)).toBe(false);
   });
 
+  test("treats generic enum instantiations as distinct by type arguments", () => {
+    const numberOption = genericEnumType(
+      "Option",
+      [primitiveType("number")],
+      [
+        { name: "Some", payload: [primitiveType("number")] },
+        { name: "None", payload: [] },
+      ],
+    );
+    const sameNumberOption = genericEnumType("Option", [primitiveType("number")], []);
+    const stringOption = genericEnumType(
+      "Option",
+      [primitiveType("string")],
+      [
+        { name: "Some", payload: [primitiveType("string")] },
+        { name: "None", payload: [] },
+      ],
+    );
+
+    expect(sameType(numberOption, sameNumberOption)).toBe(true);
+    expect(sameType(numberOption, stringOption)).toBe(false);
+  });
+
   test("only fieldless enums are equality-comparable", () => {
     const fieldless = enumType("Color", [{ name: "Red", payload: [] }]);
     const withPayload = enumType("Message", [
@@ -101,6 +125,9 @@ describe("semantic types", () => {
       "{ id: string }",
     );
     expect(formatType(functionType([], primitiveType("void")))).toBe("function");
+    expect(formatType(genericEnumType("Option", [primitiveType("number")], []))).toBe(
+      "Option<number>",
+    );
     expect(formatType(unknownType())).toBe("unknown");
   });
 

@@ -22,6 +22,7 @@ export type TypeNode =
       readonly nodeId: NodeId;
       readonly name: string;
       readonly nameSpan: Span;
+      readonly typeArguments: readonly TypeNode[];
       readonly span: Span;
     }
   | {
@@ -81,7 +82,16 @@ export type TypeDeclaration = {
   readonly nodeId: NodeId;
   readonly name: string;
   readonly nameSpan: Span;
+  readonly typeParameters: readonly TypeParameter[];
   readonly value: TypeNode;
+  readonly span: Span;
+};
+
+export type TypeParameter = {
+  readonly kind: "TypeParameter";
+  readonly nodeId: NodeId;
+  readonly name: string;
+  readonly nameSpan: Span;
   readonly span: Span;
 };
 

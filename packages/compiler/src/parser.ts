@@ -26,6 +26,7 @@ import type {
   TopLevelDeclaration,
   TypeDeclaration,
   TypeNode,
+  TypeParameter,
   UnaryOperator,
   VariableDeclaration,
   WhileExpression,
@@ -121,6 +122,7 @@ class Parser {
   private parseTypeDeclaration(): TypeDeclaration {
     const typeToken = this.expect("Type", "Expected 'type'.");
     const name = this.expect("Identifier", "Expected type name.");
+    const typeParameters = this.parseTypeParameters();
     this.expect("Equal", "Expected '=' in type declaration.");
     const value = this.parseType();
     const semicolon = this.expect("Semicolon", "Expected ';' after type declaration.");
@@ -129,9 +131,38 @@ class Parser {
       kind: "TypeDeclaration",
       name: name.text,
       nameSpan: name.span,
+      typeParameters,
       value,
       span: mergeSpans(typeToken.span, semicolon.span),
     });
+  }
+
+  private parseTypeParameters(): readonly TypeParameter[] {
+    if (!this.match("Less")) {
+      return [];
+    }
+
+    const params: TypeParameter[] = [];
+    if (!this.check("Greater")) {
+      do {
+        if (this.check("Greater")) {
+          break;
+        }
+
+        const name = this.expect("Identifier", "Expected type parameter name.");
+        params.push(
+          this.node({
+            kind: "TypeParameter" as const,
+            name: name.text,
+            nameSpan: name.span,
+            span: name.span,
+          }),
+        );
+      } while (this.match("Comma"));
+    }
+
+    this.expect("Greater", "Expected '>' after type parameters.");
+    return params;
   }
 
   private parseFunctionDeclaration(): FunctionDeclaration {
@@ -445,11 +476,16 @@ class Parser {
     if (type === undefined) {
       if (token.kind === "Identifier") {
         this.advance();
+        const typeArguments = this.parseTypeArguments();
         return this.node({
           kind: "NamedType",
           name: token.text,
           nameSpan: token.span,
-          span: token.span,
+          typeArguments,
+          span:
+            typeArguments.length === 0
+              ? token.span
+              : mergeSpans(token.span, last(typeArguments).span),
         });
       }
 
@@ -467,6 +503,26 @@ class Parser {
 
     this.advance();
     return this.node({ kind: "PrimitiveType", name: type, span: token.span });
+  }
+
+  private parseTypeArguments(): readonly TypeNode[] {
+    if (!this.match("Less")) {
+      return [];
+    }
+
+    const args: TypeNode[] = [];
+    if (!this.check("Greater")) {
+      do {
+        if (this.check("Greater")) {
+          break;
+        }
+
+        args.push(this.parseType());
+      } while (this.match("Comma"));
+    }
+
+    this.expect("Greater", "Expected '>' after type arguments.");
+    return args;
   }
 
   private parseExpression(): Expression {
@@ -1290,6 +1346,10 @@ function primitiveTypeFromToken(kind: TokenKind): PrimitiveType | undefined {
     default:
       return undefined;
   }
+}
+
+function last<T>(items: readonly T[]): T {
+  return items[items.length - 1] as T;
 }
 
 function unaryOperatorFromToken(kind: TokenKind): UnaryOperator | undefined {

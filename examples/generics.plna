@@ -1,0 +1,83 @@
+// Generic type declarations can parameterize object aliases and enums.
+
+type Pair<A, B> = {
+  first: A,
+  second: B,
+};
+
+type Page<T> = {
+  items: []T,
+  page: number,
+};
+
+type Option<T> = enum {
+  Some(T),
+  None,
+};
+
+type Result<T, E> = enum {
+  Ok(T),
+  Err(E),
+};
+
+type StringPair<V> = Pair<string, V>;
+
+const scorePair: StringPair<number> = {
+  first: "Ada",
+  second: 98,
+};
+
+const names: Page<string> = {
+  items: ["Ada", "Grace"],
+  page: 1,
+};
+
+const present = Option.Some(scorePair.second);
+const missing: Option<number> = .None;
+const nested: Option<Option<number>> = .Some(present);
+
+fn describeScore(score: Option<number>): string {
+  match score {
+    .Some(value) => "score ${value}",
+    .None => "no score",
+  }
+}
+
+fn describeNested(score: Option<Option<number>>): string {
+  match score {
+    .Some(inner) => describeScore(inner),
+    .None => "outer missing",
+  }
+}
+
+type ParseError = enum {
+  Empty,
+  Invalid,
+};
+
+const parsed: Result<number, ParseError> = .Ok(42);
+const failed: Result<number, ParseError> = .Err(ParseError.Empty);
+
+fn describeResult(result: Result<number, ParseError>): string {
+  match result {
+    .Ok(value) => "parsed ${value}",
+    .Err(error) => match error {
+      .Empty => "empty input",
+      .Invalid => "invalid input",
+    },
+  }
+}
+
+println("pair ${scorePair.first}: ${scorePair.second}");
+println("page ${names.page}: ${names.items[0]}, ${names.items[1]}");
+println(describeScore(present));
+println(describeScore(missing));
+println(describeNested(nested));
+println(describeResult(parsed));
+println(describeResult(failed));
+
+// Invalid generic behavior, shown here as comments so this example still compiles:
+// const missingTypeArgument: Option = .None;
+// const tooManyTypeArguments: Option<number, string> = .None;
+// const nonGenericTypeArgument: ParseError<number> = .Empty;
+// const cannotInferFieldless = Option.None;

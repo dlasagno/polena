@@ -139,10 +139,10 @@ Status values:
 |---|---|---|
 | Primitive type annotations | Implemented | `number`, `bigint`, `boolean`, `string`, `void`. |
 | Array type annotations | Implemented | `[]T`. |
-| `type Name = ...;` declarations | Partially implemented | Supports aliases to primitive, array, object, enum, and named alias types. |
+| `type Name = ...;` declarations | Partially implemented | Supports aliases to primitive, array, object, enum, named alias, and generic instantiation types. |
 | Type aliases | Implemented | Transparent aliases; recursive aliases are rejected. |
 | Separate type/value namespaces | Implemented | Type aliases and value bindings may use the same name. |
-| Generics | Not implemented | Still TBD in the spec. |
+| Generics | Partially implemented | Generic type declarations and instantiations are supported, including substitution in object fields, enum payloads, and aliases over generic instantiations. Generic functions and constraints are not implemented. |
 | `unknown` source type | Not implemented | Internal unknown type exists for error recovery only. |
 
 ---
@@ -156,8 +156,8 @@ Status values:
 | Enum equality | Implemented | `==` and `!=` are valid for fieldless enum values of the same enum type. Equality for enums with associated data is not implemented. |
 | Match expressions | Partially implemented | Supports expression arms over enum values with `.Variant`, `Enum.Variant`, payload patterns, and `_` patterns. Guards are not implemented. |
 | Exhaustiveness checking | Implemented | Enum matches must cover every variant unless a wildcard arm is present. Duplicate and unreachable arms are rejected. |
-| `Option<T>` | Not implemented | Referenced by the spec, but no generic/std library implementation exists. |
-| `Result<T, E>` | Not implemented | Referenced by the spec, but no generic/std library implementation exists. |
+| `Option<T>` | Partially implemented | Can be defined as a user generic enum and used with normal generic enum construction and matching. There is no built-in standard library definition yet. |
+| `Result<T, E>` | Partially implemented | Can be defined as a user generic enum and used with normal generic enum construction and matching. There is no built-in standard library definition yet. |
 | `try` operator | Not implemented | Depends on `Result`. |
 | Panic model | Partially implemented | Checked indexing throws a JavaScript `RangeError`; the general panic model is TBD. |
 
