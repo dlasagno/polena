@@ -76,7 +76,7 @@ Polena is organized as a small Bun workspace:
 
 ## Documentation
 
-- [docs/language-spec.md](docs/language-spec.md) is the source of truth for the
+- [docs/language-spec.md](docs/language-spec.md) is the entry point for the
   intended language design.
 - [docs/implementation-status.md](docs/implementation-status.md) tracks what the
   current TypeScript compiler actually implements.

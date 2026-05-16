@@ -130,12 +130,13 @@ there is a clear I/O boundary.
 
 ## Language Specification
 
-The language specification in `docs/language-spec.md` is the source of truth for
-syntax and semantics.
+The language specification starts at `docs/language-spec.md`. The topic files
+under `docs/language/` collectively define syntax and semantics.
 
 When implementing language behavior:
 
-- Check the relevant section of `docs/language-spec.md` first.
+- Check `docs/language-spec.md` and the relevant `docs/language/` topic file
+  first.
 - Do not infer semantics from TypeScript, JavaScript, Rust, Zig, or other
   languages when the spec says otherwise.
 - Treat `TBD` sections as unresolved design questions. Ask the user before
