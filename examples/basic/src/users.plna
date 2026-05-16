@@ -2,6 +2,7 @@ export type User = {
   name: string,
 };
 
+/// Returns a greeting for the given user.
 export fn greeting(user: User): string {
   "Hello ${user.name}"
 }
