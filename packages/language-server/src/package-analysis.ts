@@ -38,7 +38,9 @@ export async function analyzePackageForDocument(input: {
 
   const manifestPath = join(packageRoot, "polena.toml");
   const sourceDir = join(packageRoot, "src");
-  const manifestSource = await input.io.readTextFile(manifestPath);
+  const manifestSource =
+    input.openDocuments.find((document) => normalize(document.path) === normalize(manifestPath))
+      ?.text ?? (await input.io.readTextFile(manifestPath));
   const manifestResult = parsePackageManifest(manifestSource);
   if (!manifestResult.ok) {
     return {

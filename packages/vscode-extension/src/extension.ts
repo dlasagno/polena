@@ -18,10 +18,16 @@ export function activate(context: vscode.ExtensionContext): void {
     debug: { module: serverModule, transport: TransportKind.ipc },
   };
   const clientOptions: LanguageClientOptions = {
-    documentSelector: [{ scheme: "file", language: "polena" }],
+    documentSelector: [
+      { scheme: "file", language: "polena" },
+      { scheme: "file", pattern: "**/polena.toml" },
+    ],
     outputChannel,
     synchronize: {
-      fileEvents: vscode.workspace.createFileSystemWatcher("**/*.{plna,polena}"),
+      fileEvents: [
+        vscode.workspace.createFileSystemWatcher("**/*.{plna,polena}"),
+        vscode.workspace.createFileSystemWatcher("**/polena.toml"),
+      ],
     },
   };
 

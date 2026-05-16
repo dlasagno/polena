@@ -54,6 +54,32 @@ describe("LSP package analysis", () => {
     expect(result?.diagnosticsByUri.get(pathToFileURL("/app/src/index.plna").href)).toEqual([]);
     expect(result?.diagnosticsByUri.get(pathToFileURL("/app/src/users.plna").href)).toEqual([]);
   });
+
+  test("overlays open package manifests before analyzing diagnostics", async () => {
+    const io = createIo(
+      new Map([
+        ["/app/polena.toml", 'name = "app"\nversion = "0.1.0"\ntarget = "executable"\n'],
+        ["/app/src/index.plna", "export fn main(): void {}"],
+      ]),
+    );
+
+    const result = await analyzePackageForDocument({
+      documentPath: "/app/polena.toml",
+      openDocuments: [
+        {
+          uri: pathToFileURL("/app/polena.toml").href,
+          path: "/app/polena.toml",
+          text: 'name = "app"\nversion = "0.1.0"\ntarget = "invalid"\n',
+        },
+      ],
+      io,
+    });
+
+    const diagnostics = result?.diagnosticsByUri.get(pathToFileURL("/app/polena.toml").href);
+    expect(diagnostics?.map((diagnostic) => diagnostic.message)).toContain(
+      "Invalid package target 'invalid'.",
+    );
+  });
 });
 
 function createIo(files: ReadonlyMap<string, string>): LanguageServerIo {

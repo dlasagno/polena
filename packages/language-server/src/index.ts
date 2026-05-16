@@ -14,6 +14,8 @@ import { TextDocument } from "vscode-languageserver-textdocument";
 import { toLspDiagnostics } from "./diagnostics";
 import { getDocumentSymbols } from "./document-symbols";
 import { getHover } from "./hover";
+import { getManifestCompletions } from "./manifest-completion";
+import { isManifestUri } from "./manifest";
 import {
   analyzePackageForDocument,
   type LanguageServerIo,
@@ -35,6 +37,9 @@ connection.onInitialize(
       textDocumentSync: TextDocumentSyncKind.Incremental,
       hoverProvider: true,
       documentSymbolProvider: true,
+      completionProvider: {
+        triggerCharacters: ['"', "="],
+      },
     },
   }),
 );
@@ -60,6 +65,10 @@ documents.onDidClose((event) => {
 });
 
 connection.onHover((params) => {
+  if (isManifestUri(params.textDocument.uri)) {
+    return null;
+  }
+
   const document = documents.get(params.textDocument.uri);
   if (document === undefined) {
     return null;
@@ -69,12 +78,29 @@ connection.onHover((params) => {
 });
 
 connection.onDocumentSymbol((params) => {
+  if (isManifestUri(params.textDocument.uri)) {
+    return [];
+  }
+
   const document = documents.get(params.textDocument.uri);
   if (document === undefined) {
     return [];
   }
 
   return getDocumentSymbols(document, getAnalysis(document));
+});
+
+connection.onCompletion((params) => {
+  if (!isManifestUri(params.textDocument.uri)) {
+    return [];
+  }
+
+  const document = documents.get(params.textDocument.uri);
+  if (document === undefined) {
+    return [];
+  }
+
+  return getManifestCompletions(document, params.position);
 });
 
 async function publishDiagnostics(
@@ -112,6 +138,11 @@ async function publishDiagnostics(
   }
 
   clearPreviousPackageDiagnostics(document.uri);
+  if (isManifestUri(document.uri)) {
+    connection.sendDiagnostics({ uri: document.uri, diagnostics: [] });
+    return;
+  }
+
   const analysis = getAnalysis(document);
   connection.sendDiagnostics({
     uri: document.uri,

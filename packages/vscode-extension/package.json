@@ -9,6 +9,10 @@
   "engines": {
     "vscode": "^1.85.0"
   },
+  "activationEvents": [
+    "onLanguage:polena",
+    "workspaceContains:**/polena.toml"
+  ],
   "main": "./dist/extension.js",
   "scripts": {
     "build": "bun build ../language-server/src/index.ts --outfile ./dist/server.js --target node && bun build ./src/extension.ts --outfile ./dist/extension.js --target node --external vscode",
