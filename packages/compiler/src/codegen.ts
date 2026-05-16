@@ -83,7 +83,7 @@ class JavaScriptEmitter {
       if (lines.length > 0) {
         lines.push("");
       }
-      lines.push("main();");
+      lines.push(this.emitMainCall(input.module, input.packageProgram));
     }
 
     this.prependHelpers(lines);
@@ -133,6 +133,32 @@ class JavaScriptEmitter {
 
     if (this.usesIndexUpdateHelper) {
       lines.unshift(...emitIndexUpdateHelper(), "");
+    }
+  }
+
+  private emitMainCall(module: ModuleFile, packageProgram: PackageProgram): string {
+    const main = module.program.declarations.find(
+      (
+        declaration,
+      ): declaration is Extract<
+        Program["declarations"][number],
+        { readonly kind: "FunctionDeclaration" }
+      > => declaration.kind === "FunctionDeclaration" && declaration.name === "main",
+    );
+
+    if (main?.params.length !== 1) {
+      return "main();";
+    }
+
+    switch (packageProgram.manifest.runtime) {
+      case "node":
+        return "main(process.argv.slice(2));";
+      case "bun":
+        return "main(Bun.argv.slice(2));";
+      case "deno":
+        return "main(Deno.args);";
+      case undefined:
+        return "main([]);";
     }
   }
 

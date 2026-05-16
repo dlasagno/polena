@@ -359,19 +359,55 @@ function validateMain(packageProgram: PackageProgram): readonly Diagnostic[] {
   }
   if (
     !main.exported ||
-    main.params.length !== 0 ||
+    main.typeParameters.length !== 0 ||
+    !isValidMainParameters(main) ||
     main.returnType.kind !== "PrimitiveType" ||
     main.returnType.name !== "void"
   ) {
     return [
-      error("'main' must have signature 'export fn main(): void'.", main.nameSpan, {
-        code: DiagnosticCode.InvalidMain,
-        sourcePath: entry.path,
-        label: "entry point signature is invalid",
-      }),
+      error(
+        "'main' must have signature 'export fn main(): void' or 'export fn main(args: []string): void'.",
+        main.nameSpan,
+        {
+          code: DiagnosticCode.InvalidMain,
+          sourcePath: entry.path,
+          label: "entry point signature is invalid",
+        },
+      ),
+    ];
+  }
+  if (main.params.length === 1 && packageProgram.manifest.runtime === undefined) {
+    return [
+      error(
+        "'main' with command-line arguments requires a runtime in polena.toml.",
+        main.nameSpan,
+        {
+          code: DiagnosticCode.InvalidMain,
+          sourcePath: entry.path,
+          label: 'add runtime = "node", "bun", or "deno"',
+        },
+      ),
     ];
   }
   return [];
+}
+
+function isValidMainParameters(
+  main: Extract<Program["declarations"][number], { readonly kind: "FunctionDeclaration" }>,
+): boolean {
+  if (main.params.length === 0) {
+    return true;
+  }
+  if (main.params.length !== 1) {
+    return false;
+  }
+
+  const paramType = main.params[0]?.type;
+  return (
+    paramType?.kind === "ArrayType" &&
+    paramType.element.kind === "PrimitiveType" &&
+    paramType.element.name === "string"
+  );
 }
 
 function validateModuleConstInitializers(moduleFile: ModuleFile): readonly Diagnostic[] {

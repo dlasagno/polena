@@ -96,6 +96,25 @@ describe("CLI commands", () => {
     expect(harness.commands).toEqual([["/bin/node", "app/dist/index.js"]]);
   });
 
+  test("passes arguments after -- to run", async () => {
+    const harness = createCliHarness(
+      new Map([
+        ["app/polena.toml", packageManifest('runtime = "node"\n')],
+        ["app/src/index.plna", "export fn main(args: []string): void {}"],
+      ]),
+      { binaries: new Map([["node", "/bin/node"]]) },
+    );
+
+    const exitCode = await runCli({
+      args: ["run", "app", "--", "--name", "Ada"],
+      version: "0.1.0",
+      io: harness.io,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(harness.commands).toEqual([["/bin/node", "app/dist/index.js", "--name", "Ada"]]);
+  });
+
   test("prints rich diagnostics for compiler errors", async () => {
     const harness = createCliHarness(
       new Map([

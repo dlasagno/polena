@@ -265,6 +265,25 @@ describe("run operation", () => {
     expect(harness.commands).toEqual([["/bin/node", "/app/dist/index.js"]]);
   });
 
+  test("passes command-line arguments to the runtime", async () => {
+    const harness = createHarness(
+      new Map([
+        ["/app/polena.toml", packageManifest('runtime = "node"\n')],
+        ["/app/src/index.plna", "export fn main(args: []string): void {}"],
+      ]),
+      { binaries: new Map([["node", "/bin/node"]]) },
+    );
+
+    const result = await runPackage({
+      packageRoot: "/app",
+      args: ["--name", "Ada"],
+      io: harness.io,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(harness.commands).toEqual([["/bin/node", "/app/dist/index.js", "--name", "Ada"]]);
+  });
+
   test("refuses libraries, missing runtimes, and missing runtime binaries", async () => {
     const library = createHarness(
       new Map([

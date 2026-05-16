@@ -179,7 +179,8 @@ The resolved path is interpreted relative to the package root. Absolute paths ar
 
 1. Run the `build` operation. On failure, propagate the failure without invoking the runtime.
 2. Resolve the entry file: `<out-dir>/index.js`.
-3. Invoke the runtime (see §8.3) with the entry file as its program input.
+3. Invoke the runtime (see §8.3) with the entry file as its program input,
+   followed by any command-line arguments supplied by the caller.
 4. The runtime's standard input, standard output, and standard error are connected to the calling process.
 5. The exit code of `run` is the runtime's exit code unchanged.
 
@@ -187,11 +188,11 @@ The resolved path is interpreted relative to the package root. Absolute paths ar
 
 Polena does not bundle a runtime. The following values are recognized.
 
-| `runtime` | Invocation         |
-|-----------|--------------------|
-| `"node"`  | `node <entry>`     |
-| `"bun"`   | `bun <entry>`      |
-| `"deno"`  | `deno run <entry>` |
+| `runtime` | Invocation                  |
+|-----------|-----------------------------|
+| `"node"`  | `node <entry> ...args`      |
+| `"bun"`   | `bun <entry> ...args`       |
+| `"deno"`  | `deno run <entry> ...args`  |
 
 Other values are rejected at manifest parse time.
 

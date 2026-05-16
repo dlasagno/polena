@@ -2609,9 +2609,16 @@ export fn main(): void {
 
 The `main` function:
 
-- has the signature `fn main(): void`,
+- has the signature `fn main(): void` or, when the package declares a
+  CLI-capable runtime, `fn main(args: []string): void`,
 - must be exported,
 - is invoked exactly once when the compiled program is executed.
+
+When `main` declares one `[]string` parameter, that parameter receives the
+command-line arguments passed to the program, excluding the runtime binary and
+the generated entry module path. The supported `node`, `bun`, and `deno`
+runtimes are CLI-capable. Packages without a runtime, and future runtimes that
+are not CLI-capable, must use `fn main(): void`.
 
 A **library** package must not define `main` in its entry module. Its
 exports form the package's public surface; external consumers reach them

@@ -817,6 +817,47 @@ describe("compiler", () => {
     expect(result.files.find((file) => file.path === "index.js")?.contents).toContain("main();");
   });
 
+  test("passes runtime command-line arguments to main", () => {
+    const result = compilePackage({
+      manifest: { name: "app", version: "0.1.0", target: "executable", runtime: "node" },
+      rootDir: "app",
+      sourceDir: "app/src",
+      files: [
+        {
+          path: "app/src/index.plna",
+          source: "export fn main(args: []string): void { println(args[0]); }",
+        },
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    expect(result.files.find((file) => file.path === "index.js")?.contents).toContain(
+      "main(process.argv.slice(2));",
+    );
+  });
+
+  test("requires a runtime for main command-line arguments", () => {
+    const result = compilePackage({
+      manifest: { name: "app", version: "0.1.0", target: "executable" },
+      rootDir: "app",
+      sourceDir: "app/src",
+      files: [
+        {
+          path: "app/src/index.plna",
+          source: "export fn main(args: []string): void {}",
+        },
+      ],
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "'main' with command-line arguments requires a runtime in polena.toml.",
+    );
+  });
+
   test("rejects missing current-package modules", () => {
     const result = compilePackage({
       manifest: { name: "app", version: "0.1.0", target: "executable" },

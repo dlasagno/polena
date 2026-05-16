@@ -18,7 +18,7 @@ type CommandKind = "build" | "init" | "run";
 type CliCommand =
   | { readonly kind: "build"; readonly packageDir: string; readonly outDir?: string }
   | { readonly kind: "init"; readonly targetDir: string; readonly name?: string }
-  | { readonly kind: "run"; readonly packageDir: string }
+  | { readonly kind: "run"; readonly packageDir: string; readonly args: readonly string[] }
   | { readonly kind: "help"; readonly command?: CommandKind }
   | { readonly kind: "version" }
   | { readonly kind: "error"; readonly message: string; readonly command?: CommandKind };
@@ -69,6 +69,7 @@ export async function runCli(options: RunCliOptions): Promise<number> {
     case "run": {
       const result = await runPackage({
         packageRoot: command.packageDir,
+        args: command.args,
         io: options.io,
       });
       if (!result.ok) {
@@ -107,7 +108,7 @@ export function formatHelp(command?: CommandKind): string {
     case "run":
       return [
         "Usage:",
-        "  polena run [path]",
+        "  polena run [path] [-- args...]",
         "",
         "Options:",
         "  -h, --help     Show this help message",
@@ -139,7 +140,10 @@ export function formatHelp(command?: CommandKind): string {
 }
 
 function parseCommand(args: readonly string[]): CliCommand {
-  if (args.includes("-V") || args.includes("--version")) {
+  const passthroughIndex = args.indexOf("--");
+  const argsBeforePassthrough = passthroughIndex === -1 ? args : args.slice(0, passthroughIndex);
+
+  if (argsBeforePassthrough.includes("-V") || argsBeforePassthrough.includes("--version")) {
     return { kind: "version" };
   }
 
@@ -153,10 +157,13 @@ function parseCommand(args: readonly string[]): CliCommand {
 
   const first = args[0];
   if (first === "build" || first === "init" || first === "run") {
-    if (args.slice(1).includes("-h") || args.slice(1).includes("--help")) {
+    const commandArgs = args.slice(1);
+    const passthroughIndex = commandArgs.indexOf("--");
+    const helpArgs = passthroughIndex === -1 ? commandArgs : commandArgs.slice(0, passthroughIndex);
+    if (helpArgs.includes("-h") || helpArgs.includes("--help")) {
       return { kind: "help", command: first };
     }
-    return parseSubcommand(first, args.slice(1));
+    return parseSubcommand(first, commandArgs);
   }
 
   if (first?.startsWith("-")) {
@@ -167,7 +174,11 @@ function parseCommand(args: readonly string[]): CliCommand {
 }
 
 function parseSubcommand(command: CommandKind, args: readonly string[]): CliCommand {
-  for (const arg of args) {
+  const passthroughIndex = args.indexOf("--");
+  const cliArgs =
+    command === "run" && passthroughIndex !== -1 ? args.slice(0, passthroughIndex) : args;
+
+  for (const arg of cliArgs) {
     if (arg.includes("=") && arg.startsWith("--")) {
       return usageError(
         `error: '${arg}' is not supported; pass flag values as separate arguments`,
@@ -253,8 +264,17 @@ function parseInitCommand(args: readonly string[]): CliCommand {
 
 function parseRunCommand(args: readonly string[]): CliCommand {
   let packageDir: string | undefined;
+  let runtimeArgs: readonly string[] = [];
 
-  for (const arg of args) {
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === undefined) {
+      continue;
+    }
+    if (arg === "--") {
+      runtimeArgs = args.slice(index + 1);
+      break;
+    }
     if (arg.startsWith("-")) {
       return usageError(`error: unknown option '${arg}'`, "run");
     }
@@ -264,7 +284,7 @@ function parseRunCommand(args: readonly string[]): CliCommand {
     packageDir = arg;
   }
 
-  return { kind: "run", packageDir: packageDir ?? "." };
+  return { kind: "run", packageDir: packageDir ?? ".", args: runtimeArgs };
 }
 
 function usageError(message: string, command?: CommandKind): CliCommand {

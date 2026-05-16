@@ -72,10 +72,12 @@ Runs the init operation defined in build spec §6.
 ## 6. `polena run`
 
 ```
-polena run [path]
+polena run [path] [-- args...]
 ```
 
 - `path` — package directory. Defaults to `.`.
+- `args` — command-line arguments passed to the executed program. Arguments are
+  only treated as program arguments after the `--` delimiter.
 
 Runs the run operation defined in build spec §8. The CLI does not interpret or modify the runtime's input or output; they are connected directly to the calling process.
 
@@ -97,6 +99,8 @@ The exact wording and layout of help text is implementation-defined and not part
 - Long flags that take a value use the form `--flag <value>` (separate arguments). The `--flag=value` form is not supported.
 - Short flags are not combined: `-Vh` is a usage error; use `-V` or `-h`.
 - The first non-flag argument after the subcommand is the positional `path`. A second non-flag argument is a usage error.
+- For `polena run`, arguments after `--` are passed through to the runtime and
+  are not parsed as Polena CLI flags.
 - Unknown flags are usage errors.
 - Usage errors print a one-line error to stderr, followed by the relevant help text, and exit with code 1.
 

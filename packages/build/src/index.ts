@@ -368,6 +368,7 @@ export async function initPackage(input: {
 export async function runPackage(input: {
   readonly packageRoot: string;
   readonly outDirOverride?: string;
+  readonly args?: readonly string[];
   readonly io: BuildIo;
 }): Promise<RunResult> {
   const buildResult = await buildPackage(input);
@@ -392,8 +393,11 @@ export async function runPackage(input: {
   }
 
   const entryPath = join(buildResult.outDir, "index.js");
+  const args = input.args ?? [];
   const command =
-    runtime === "deno" ? [runtimeBinary, "run", entryPath] : [runtimeBinary, entryPath];
+    runtime === "deno"
+      ? [runtimeBinary, "run", entryPath, ...args]
+      : [runtimeBinary, entryPath, ...args];
   const exitCode = await input.io.spawn(command);
   return { ok: true, exitCode };
 }
@@ -412,11 +416,13 @@ function compilerManifestFromBuildManifest(manifest: BuildManifest): {
   readonly name: string;
   readonly version: string;
   readonly target: PackageTarget;
+  readonly runtime?: PackageRuntime;
 } {
   return {
     name: manifest.name,
     version: manifest.version,
     target: manifest.target,
+    ...(manifest.runtime === undefined ? {} : { runtime: manifest.runtime }),
   };
 }
 
