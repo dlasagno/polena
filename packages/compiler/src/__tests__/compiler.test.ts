@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import type { CompileResult } from "../compiler";
-import { compile, lex, parse } from "../compiler";
+import { compile, compilePackage, lex, parse } from "../compiler";
 
 describe("lexer", () => {
   test("tokenizes declarations and skips line comments", () => {
@@ -225,10 +225,10 @@ describe("lexer", () => {
   });
 
   test("reports invalid characters", () => {
-    const result = lex("const value = @;");
+    const result = lex("const value = #;");
 
     expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
-      "Unexpected character '@'.",
+      "Unexpected character '#'.",
     );
   });
 });
@@ -668,11 +668,15 @@ const value = match message {
   });
 
   test("parses assignment statements", () => {
-    const lexResult = lex("let count = 0;\ncount = count + 1;");
+    const lexResult = lex("fn run(): void { let count = 0;\ncount = count + 1; }");
     const parseResult = parse(lexResult.tokens);
 
     expect(parseResult.diagnostics).toHaveLength(0);
-    expect(parseResult.program.declarations[1]?.kind).toBe("AssignmentStatement");
+    const declaration = parseResult.program.declarations[0];
+    expect(declaration?.kind).toBe("FunctionDeclaration");
+    expect(
+      declaration?.kind === "FunctionDeclaration" && declaration.body.statements[1]?.kind,
+    ).toBe("AssignmentStatement");
   });
 
   test("parses field and index assignment statements", () => {
@@ -772,6 +776,67 @@ const value = match message {
 });
 
 describe("compiler", () => {
+  test("compiles current-package modules to ESM files", () => {
+    const result = compilePackage({
+      manifest: { name: "app", version: "0.1.0", target: "executable" },
+      rootDir: "app",
+      sourceDir: "app/src",
+      files: [
+        {
+          path: "app/src/index.plna",
+          source: [
+            "import @/users.{type User, parseUser} as users;",
+            "export fn main(): void {",
+            '  const user: User = users.parseUser("Ada");',
+            "  println(user.name);",
+            "}",
+          ].join("\n"),
+        },
+        {
+          path: "app/src/users.plna",
+          source: [
+            "export type User = { name: string };",
+            "export fn parseUser(name: string): User {",
+            "  { name: name }",
+            "}",
+          ].join("\n"),
+        },
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    expect(result.files.map((file) => file.path).sort()).toEqual(["index.js", "users.js"]);
+    expect(result.files.find((file) => file.path === "index.js")?.contents).toContain(
+      'import * as users from "./users.js";',
+    );
+    expect(result.files.find((file) => file.path === "index.js")?.contents).toContain(
+      'import { parseUser } from "./users.js";',
+    );
+    expect(result.files.find((file) => file.path === "index.js")?.contents).toContain("main();");
+  });
+
+  test("rejects missing current-package modules", () => {
+    const result = compilePackage({
+      manifest: { name: "app", version: "0.1.0", target: "executable" },
+      rootDir: "app",
+      sourceDir: "app/src",
+      files: [
+        {
+          path: "app/src/index.plna",
+          source: "import @/missing;\nexport fn main(): void {}",
+        },
+      ],
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Missing module '@/missing'.",
+    );
+  });
+
   test("compiles and runs a tiny program", () => {
     const result = expectCompileOk(`
 fn add(a: number, b: number): number {

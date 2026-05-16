@@ -8,16 +8,28 @@ import type {
   LoopContinuation,
   MatchExpression,
   MatchPattern,
+  ImportDeclaration,
   Program,
   Statement,
   TopLevelDeclaration,
   VariableDeclaration,
   WhileExpression,
 } from "./ast";
+import type { ModuleFile, ModuleGraph, PackageProgram } from "./modules";
+import { relativeJsImportPath } from "./modules";
 import { getPreludeFunction, preludeEnumTypes } from "./prelude";
 
 export function generateJavaScript(program: Program): string {
   return new JavaScriptEmitter().emitProgram(program);
+}
+
+export function generateJavaScriptModule(input: {
+  readonly module: ModuleFile;
+  readonly packageProgram: PackageProgram;
+  readonly moduleGraph: ModuleGraph;
+  readonly isEntry: boolean;
+}): string {
+  return new JavaScriptEmitter().emitModule(input);
 }
 
 type LoopEmitContext = {
@@ -37,7 +49,48 @@ class JavaScriptEmitter {
 
   public emitProgram(program: Program): string {
     const lines: string[] = [];
+    this.registerEnumTypes(program);
 
+    for (const declaration of program.declarations) {
+      lines.push(...this.emitTopLevelDeclaration(declaration));
+    }
+
+    this.prependHelpers(lines);
+    return `${lines.join("\n")}\n`;
+  }
+
+  public emitModule(input: {
+    readonly module: ModuleFile;
+    readonly packageProgram: PackageProgram;
+    readonly moduleGraph: ModuleGraph;
+    readonly isEntry: boolean;
+  }): string {
+    const lines: string[] = [];
+    this.registerEnumTypes(input.module.program);
+
+    lines.push(
+      ...this.emitImportDeclarations(input.module, input.moduleGraph, input.packageProgram),
+    );
+    if (lines.length > 0) {
+      lines.push("");
+    }
+
+    for (const declaration of input.module.program.declarations) {
+      lines.push(...this.emitTopLevelDeclaration(declaration));
+    }
+
+    if (input.isEntry && input.packageProgram.manifest.target === "executable") {
+      if (lines.length > 0) {
+        lines.push("");
+      }
+      lines.push("main();");
+    }
+
+    this.prependHelpers(lines);
+    return `${lines.join("\n")}\n`;
+  }
+
+  private registerEnumTypes(program: Program): void {
     for (const enumType of preludeEnumTypes) {
       this.enumTypes.set(
         enumType.name,
@@ -63,11 +116,9 @@ class JavaScriptEmitter {
         );
       }
     }
+  }
 
-    for (const declaration of program.declarations) {
-      lines.push(...this.emitTopLevelDeclaration(declaration));
-    }
-
+  private prependHelpers(lines: string[]): void {
     if (this.usesIndexHelper) {
       lines.unshift(...emitIndexHelper(), "");
     }
@@ -83,8 +134,43 @@ class JavaScriptEmitter {
     if (this.usesIndexUpdateHelper) {
       lines.unshift(...emitIndexUpdateHelper(), "");
     }
+  }
 
-    return `${lines.join("\n")}\n`;
+  private emitImportDeclarations(
+    moduleFile: ModuleFile,
+    graph: ModuleGraph,
+    packageProgram: PackageProgram,
+  ): string[] {
+    const lines: string[] = [];
+    const resolvedImports = graph.importsByModule.get(moduleFile.id) ?? [];
+    for (const importDeclaration of moduleFile.program.imports) {
+      const resolved = resolvedImports.find(
+        (candidate) => candidate.declaration.nodeId === importDeclaration.nodeId,
+      );
+      if (resolved === undefined) {
+        continue;
+      }
+      const importedModule = packageProgram.modules[resolved.moduleId];
+      if (importedModule === undefined) {
+        continue;
+      }
+      const path = relativeJsImportPath(moduleFile.name, importedModule.name);
+      const alias = importDeclaration.alias?.name ?? defaultImportAlias(importDeclaration);
+      lines.push(`import * as ${emitIdentifier(alias)} from ${JSON.stringify(path)};`);
+
+      const valueItems = importDeclaration.items.filter((item) => item.namespace === "value");
+      if (valueItems.length > 0) {
+        const names = valueItems
+          .map((item) =>
+            item.alias === undefined
+              ? emitIdentifier(item.name)
+              : `${emitIdentifier(item.name)} as ${emitIdentifier(item.alias.name)}`,
+          )
+          .join(", ");
+        lines.push(`import { ${names} } from ${JSON.stringify(path)};`);
+      }
+    }
+    return lines;
   }
 
   private emitTopLevelDeclaration(declaration: TopLevelDeclaration): string[] {
@@ -107,8 +193,9 @@ class JavaScriptEmitter {
 
   private emitFunctionDeclaration(declaration: FunctionDeclaration): string[] {
     const params = declaration.params.map((param) => emitIdentifier(param.name)).join(", ");
+    const prefix = declaration.exported ? "export " : "";
     return [
-      `function ${emitIdentifier(declaration.name)}(${params}) {`,
+      `${prefix}function ${emitIdentifier(declaration.name)}(${params}) {`,
       ...this.emitValueBlock(declaration.body, "  "),
       "}",
     ];
@@ -231,7 +318,8 @@ class JavaScriptEmitter {
     indent: string,
     loopContext?: LoopEmitContext,
   ): string {
-    return `${indent}${declaration.mutability} ${emitIdentifier(declaration.name)} = ${this.emitExpression(
+    const exportPrefix = indent === "" && declaration.exported ? "export " : "";
+    return `${indent}${exportPrefix}${declaration.mutability} ${emitIdentifier(declaration.name)} = ${this.emitExpression(
       declaration.initializer,
       indent,
       loopContext,
@@ -866,6 +954,10 @@ function emitIdentifier(name: string): string {
   }
 
   return name;
+}
+
+function defaultImportAlias(declaration: ImportDeclaration): string {
+  return declaration.path.segments[declaration.path.segments.length - 1] ?? "module";
 }
 
 function encodeIdentifier(name: string): string {

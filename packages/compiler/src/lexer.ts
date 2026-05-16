@@ -5,6 +5,9 @@ import type { Token, TokenKind } from "./token";
 
 const keywords = new Map<string, TokenKind>([
   ["const", "Const"],
+  ["import", "Import"],
+  ["export", "Export"],
+  ["as", "As"],
   ["let", "Let"],
   ["type", "Type"],
   ["fn", "Fn"],
@@ -88,6 +91,9 @@ class Lexer {
         return;
       case "]":
         this.addToken("RightBracket", start);
+        return;
+      case "@":
+        this.addToken("At", start);
         return;
       case ".":
         this.addToken("Dot", start);

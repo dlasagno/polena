@@ -35,10 +35,13 @@ programs end-to-end. It supports:
   assignment, property access, and field assignment
 - Fieldless and associated-data enum declarations, enum values, enum equality
   for fieldless enums, and exhaustive `match` expressions with wildcard arms
+- Package compilation from `polena.toml` and `src/index.plna`
+- Current-package module imports with `@/module`, exported declarations, and
+  multi-file ESM output
 
 It intentionally does not yet support object field readonly controls,
-modules/imports, explicit generic function call type arguments, or the full type
-system from the language draft.
+external packages, standard-library imports, workspaces, explicit generic
+function call type arguments, or the full type system from the language draft.
 
 Example:
 
@@ -94,10 +97,25 @@ bun run cursor:install
 bun run vscode:install
 ```
 
-Compile a file to JavaScript:
+Compile a package to JavaScript modules:
 
 ```sh
-bun run compile example.plna
+bun run compile examples/basic --out-dir dist/basic
+```
+
+A package contains a `polena.toml` manifest and a `src/index.plna` entry module:
+
+```toml
+name = "my_app"
+version = "0.1.0"
+target = "executable"
+```
+
+```tsx
+// src/index.plna
+export fn main(): void {
+  println("Hello");
+}
 ```
 
 Build a standalone executable for the current platform:
@@ -114,7 +132,7 @@ The CLI also supports explicit commands and standard help/version flags:
 ```sh
 bun run packages/cli/src/index.ts --help
 bun run packages/cli/src/index.ts --version
-bun run packages/cli/src/index.ts compile example.plna --out example.js
+bun run packages/cli/src/index.ts compile examples/basic --out-dir dist/basic
 ./dist/polena --version
 ```
 

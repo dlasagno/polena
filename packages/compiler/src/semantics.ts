@@ -59,6 +59,20 @@ export type ReferenceTarget =
       readonly definitionNodeId: NodeId;
       readonly nameSpan: Span;
       readonly fullSpan: Span;
+    }
+  | {
+      readonly kind: "Module";
+      readonly moduleName: string;
+      readonly definitionNodeId?: NodeId;
+      readonly fullSpan: Span;
+    }
+  | {
+      readonly kind: "Imported";
+      readonly moduleName: string;
+      readonly exportName: string;
+      readonly definitionNodeId: NodeId;
+      readonly nameSpan: Span;
+      readonly fullSpan: Span;
     };
 
 export type Semantics = {

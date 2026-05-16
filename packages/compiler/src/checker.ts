@@ -59,6 +59,42 @@ import {
 export type CheckResult = {
   readonly diagnostics: readonly Diagnostic[];
   readonly semantics: Semantics;
+  readonly exports: ModuleExports;
+};
+
+export type ExportedValueSymbol = SymbolInfo;
+
+export type ExportedTypeSymbol = {
+  readonly name: string;
+  readonly type: Type;
+  readonly span: Span;
+  readonly definitionNodeId: number;
+  readonly fullSpan: Span;
+};
+
+export type ModuleExports = {
+  readonly values: Map<string, ExportedValueSymbol>;
+  readonly types: Map<string, ExportedTypeSymbol>;
+};
+
+export type ImportedModule = {
+  readonly moduleName: string;
+  readonly alias: string;
+  readonly values: ReadonlyMap<string, ExportedValueSymbol>;
+  readonly types: ReadonlyMap<string, ExportedTypeSymbol>;
+};
+
+export type ImportedName = {
+  readonly localName: string;
+  readonly exportedName: string;
+  readonly moduleName: string;
+  readonly symbol: ExportedValueSymbol | ExportedTypeSymbol;
+};
+
+export type CheckOptions = {
+  readonly qualifiedImports?: readonly ImportedModule[];
+  readonly valueImports?: readonly ImportedName[];
+  readonly typeImports?: readonly ImportedName[];
 };
 
 type LoopContext = {
@@ -93,8 +129,8 @@ type TypeSymbol = {
 
 type TypeEnvironment = ReadonlyMap<string, Type>;
 
-export function check(program: Program): CheckResult {
-  const checker = new Checker();
+export function check(program: Program, options: CheckOptions = {}): CheckResult {
+  const checker = new Checker(options);
   return checker.check(program);
 }
 
@@ -198,10 +234,14 @@ class Checker {
   private readonly resolvingTypeSymbols = new Set<string>();
   private readonly resolvingGenericTypeSymbols = new Set<string>();
 
+  public constructor(private readonly options: CheckOptions = {}) {}
+
   public check(program: Program): CheckResult {
     const scope = new Scope();
     this.declarePreludeTypes(program.span);
     this.declarePrelude(scope, program.span);
+    this.declareImportedTypes();
+    this.declareImportedValues(scope);
 
     for (const declaration of program.declarations) {
       if (declaration.kind !== "TypeDeclaration") {
@@ -255,7 +295,133 @@ class Checker {
       }
     }
 
-    return { diagnostics: this.diagnostics, semantics: this.semantics };
+    return {
+      diagnostics: this.diagnostics,
+      semantics: this.semantics,
+      exports: this.collectExports(program, scope),
+    };
+  }
+
+  private declareImportedTypes(): void {
+    for (const imported of this.options.typeImports ?? []) {
+      if (imported.symbol.type === undefined) {
+        continue;
+      }
+      const symbol = imported.symbol as ExportedTypeSymbol;
+      this.resolvedTypeSymbols.set(imported.localName, symbol.type);
+      this.typeSymbols.set(imported.localName, {
+        name: imported.localName,
+        typeParameters: [],
+        value: {
+          kind: "UnknownType",
+          nodeId: symbol.definitionNodeId,
+          span: symbol.span,
+        },
+        span: symbol.span,
+        definitionNodeId: symbol.definitionNodeId,
+        fullSpan: symbol.fullSpan,
+      });
+    }
+
+    for (const moduleImport of this.options.qualifiedImports ?? []) {
+      for (const [name, symbol] of moduleImport.types) {
+        this.resolvedTypeSymbols.set(`${moduleImport.alias}.${name}`, symbol.type);
+        this.typeSymbols.set(`${moduleImport.alias}.${name}`, {
+          name: `${moduleImport.alias}.${name}`,
+          typeParameters: [],
+          value: {
+            kind: "UnknownType",
+            nodeId: symbol.definitionNodeId,
+            span: symbol.span,
+          },
+          span: symbol.span,
+          definitionNodeId: symbol.definitionNodeId,
+          fullSpan: symbol.fullSpan,
+        });
+      }
+    }
+  }
+
+  private declareImportedValues(scope: Scope): void {
+    for (const moduleImport of this.options.qualifiedImports ?? []) {
+      const fields = [...moduleImport.values].map(([name, symbol]) => ({
+        name,
+        type: symbol.type,
+        nodeId: symbol.definitionNodeId,
+        nameSpan: symbol.span,
+        span: symbol.fullSpan,
+      }));
+      this.declareName(
+        scope,
+        {
+          name: moduleImport.alias,
+          type: objectType(fields),
+          span: moduleImport.values.values().next().value?.span ??
+            moduleImport.types.values().next().value?.span ?? {
+              start: { offset: 0, line: 1, column: 1 },
+              end: { offset: 0, line: 1, column: 1 },
+            },
+          assignability: "immutable-binding",
+        },
+        "Local",
+        {
+          duplicateMessage: `Duplicate import name '${moduleImport.alias}'.`,
+          duplicateLabel: "this import name is already defined",
+        },
+      );
+    }
+
+    for (const imported of this.options.valueImports ?? []) {
+      const symbol = imported.symbol as ExportedValueSymbol;
+      this.declareName(
+        scope,
+        {
+          name: imported.localName,
+          type: symbol.type,
+          span: symbol.span,
+          definitionNodeId: symbol.definitionNodeId,
+          fullSpan: symbol.fullSpan,
+          assignability: "immutable-binding",
+        },
+        symbol.type.kind === "function" ? "Function" : "Local",
+        {
+          duplicateMessage: `Duplicate import name '${imported.localName}'.`,
+          duplicateLabel: "this import name is already defined",
+        },
+      );
+    }
+  }
+
+  private collectExports(program: Program, scope: Scope): ModuleExports {
+    const values = new Map<string, ExportedValueSymbol>();
+    const types = new Map<string, ExportedTypeSymbol>();
+    for (const declaration of program.declarations) {
+      if (
+        declaration.kind !== "TypeDeclaration" &&
+        declaration.kind !== "FunctionDeclaration" &&
+        declaration.kind !== "VariableDeclaration"
+      ) {
+        continue;
+      }
+      if (!declaration.exported) {
+        continue;
+      }
+      if (declaration.kind === "TypeDeclaration") {
+        types.set(declaration.name, {
+          name: declaration.name,
+          type: this.resolveTypeDeclaration(declaration),
+          span: declaration.nameSpan,
+          definitionNodeId: declaration.nodeId,
+          fullSpan: declaration.span,
+        });
+        continue;
+      }
+      const symbol = scope.lookupLocal(declaration.name);
+      if (symbol !== undefined) {
+        values.set(declaration.name, symbol);
+      }
+    }
+    return { values, types };
   }
 
   private declarePrelude(scope: Scope, span: Span): void {
@@ -364,6 +530,11 @@ class Checker {
         }),
       );
       return unknownType();
+    }
+
+    const resolvedImport = this.resolvedTypeSymbols.get(name);
+    if (resolvedImport !== undefined && symbol.value.kind === "UnknownType") {
+      return resolvedImport;
     }
 
     if (referenceNodeId !== undefined) {

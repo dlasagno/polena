@@ -460,7 +460,7 @@ function findAstNodeInExpression(expression: Expression, nodeId: NodeId): AstNod
         (expression.continuation === undefined
           ? undefined
           : expression.continuation.kind === "AssignmentStatement"
-            ? findAstNodeInTopLevelDeclaration(expression.continuation, nodeId)
+            ? findAstNodeInStatement(expression.continuation, nodeId)
             : findAstNodeInExpression(expression.continuation, nodeId)) ??
         findAstNodeInBlock(expression.body, nodeId) ??
         (expression.elseBlock === undefined

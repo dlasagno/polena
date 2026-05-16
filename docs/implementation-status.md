@@ -180,7 +180,7 @@ Status values:
 
 | Feature | Status | Notes |
 |---|---|---|
-| Modules/imports/exports | Not implemented | Still TBD in the spec. |
+| Modules/imports/exports | Partially implemented | Package compilation supports current-package `@/` imports, declaration exports, cycle/missing-module diagnostics, and ESM output. External packages, `@std`, workspaces, and re-exports are not implemented. |
 | JavaScript/TypeScript interop declarations | Not implemented | Still TBD in the spec. |
 | TypeScript declaration generation | Not implemented | Goal, not MVP behavior. |
 | Async functions | Not implemented | Still TBD in the spec. |
@@ -193,8 +193,8 @@ Status values:
 
 | Feature | Status | Notes |
 |---|---|---|
-| JavaScript code generation | Implemented | Covers the MVP language surface. |
-| CLI compile command | Implemented | Compiles `.plna` and `.polena` files. |
+| JavaScript code generation | Implemented | Covers the MVP language surface and package ESM output. |
+| CLI compile command | Implemented | Compiles package directories with `polena compile <package-dir> --out-dir <dir>`. |
 | Diagnostics with spans | Implemented | Compiler and CLI render source locations. |
 | Diagnostic codes | Implemented | Current diagnostics use stable codes. |
 | Language server diagnostics | Implemented | Diagnostics-first LSP support exists. |

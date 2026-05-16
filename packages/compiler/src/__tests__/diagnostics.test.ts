@@ -27,11 +27,11 @@ type DiagnosticSummary = {
 
 describe("diagnostic regressions", () => {
   test("reports invalid characters with a stable code, span, and label", () => {
-    const result = lex("const value = @;");
+    const result = lex("const value = #;");
 
     expectDiagnostic(result.diagnostics[0], {
       code: DiagnosticCode.UnexpectedCharacter,
-      message: "Unexpected character '@'.",
+      message: "Unexpected character '#'.",
       label: "this character is not part of Polena syntax",
       span: span(14, 1, 15, 15, 1, 16),
     });

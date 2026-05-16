@@ -1,0 +1,6 @@
+import @/users.{type User, greeting} as users;
+
+export fn main(): void {
+  const user: User = { name: "Ada" };
+  println(users.greeting(user));
+}

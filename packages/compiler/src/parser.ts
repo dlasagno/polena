@@ -8,6 +8,10 @@ import type {
   Expression,
   FunctionDeclaration,
   IfExpression,
+  ImportAlias,
+  ImportDeclaration,
+  ImportItem,
+  ImportPath,
   LoopContinuation,
   EnumPayloadPattern,
   MatchArm,
@@ -42,13 +46,17 @@ export type ParseResult = {
   readonly diagnostics: readonly Diagnostic[];
 };
 
+export type ParseOptions = {
+  readonly moduleMode?: boolean;
+};
+
 type DocCommentBlock = {
   readonly text: string;
   readonly span: Span;
 };
 
-export function parse(tokens: readonly Token[]): ParseResult {
-  const parser = new Parser(tokens);
+export function parse(tokens: readonly Token[], options: ParseOptions = {}): ParseResult {
+  const parser = new Parser(tokens, options);
   return parser.parse();
 }
 
@@ -57,16 +65,49 @@ class Parser {
   private index = 0;
   private nextNodeId = 0;
 
-  public constructor(private readonly tokens: readonly Token[]) {}
+  public constructor(
+    private readonly tokens: readonly Token[],
+    private readonly options: ParseOptions,
+  ) {}
 
   public parse(): ParseResult {
     this.nextNodeId = 0;
+    if (this.options.moduleMode !== true) {
+      return this.parseLegacyProgram();
+    }
+    const imports: ImportDeclaration[] = [];
     const declarations: TopLevelDeclaration[] = [];
     const moduleDoc = this.parseModuleDocCommentBlock();
+    let sawDeclaration = false;
 
     while (!this.check("Eof")) {
       const startIndex = this.index;
-      declarations.push(this.parseTopLevelDeclaration());
+      const misplacedModuleDoc = this.parseModuleDocCommentBlock();
+      this.reportMisplacedModuleDocComment(misplacedModuleDoc);
+      if (misplacedModuleDoc !== undefined && this.check("Eof")) {
+        this.ensureProgress(startIndex);
+        continue;
+      }
+
+      if (this.check("Import")) {
+        const importDeclaration = this.parseImportDeclaration();
+        if (sawDeclaration) {
+          this.diagnostics.push(
+            error(
+              "Import declarations must appear before other module declarations.",
+              importDeclaration.span,
+              {
+                code: DiagnosticCode.ModuleImportAfterDeclaration,
+                label: "move this import to the top of the module",
+              },
+            ),
+          );
+        }
+        imports.push(importDeclaration);
+      } else {
+        sawDeclaration = true;
+        declarations.push(this.parseTopLevelDeclaration());
+      }
       this.ensureProgress(startIndex);
     }
 
@@ -76,6 +117,7 @@ class Parser {
     return {
       program: this.node({
         kind: "Program",
+        imports,
         declarations,
         span: spanFrom(start, end),
         ...(moduleDoc === undefined ? {} : { doc: moduleDoc.text, docSpan: moduleDoc.span }),
@@ -84,7 +126,32 @@ class Parser {
     };
   }
 
-  private parseTopLevelDeclaration(): TopLevelDeclaration {
+  private parseLegacyProgram(): ParseResult {
+    const declarations: TopLevelDeclaration[] = [];
+    const moduleDoc = this.parseModuleDocCommentBlock();
+
+    while (!this.check("Eof")) {
+      const startIndex = this.index;
+      declarations.push(this.parseLegacyTopLevelDeclaration());
+      this.ensureProgress(startIndex);
+    }
+
+    const start = this.tokens[0]?.span.start ?? makeLocation(0, 1, 1);
+    const end = this.current().span.end;
+
+    return {
+      program: this.node({
+        kind: "Program",
+        imports: [],
+        declarations,
+        span: spanFrom(start, end),
+        ...(moduleDoc === undefined ? {} : { doc: moduleDoc.text, docSpan: moduleDoc.span }),
+      }),
+      diagnostics: this.diagnostics,
+    };
+  }
+
+  private parseLegacyTopLevelDeclaration(): TopLevelDeclaration {
     const misplacedModuleDoc = this.parseModuleDocCommentBlock();
     this.reportMisplacedModuleDocComment(misplacedModuleDoc);
     if (misplacedModuleDoc !== undefined && this.check("Eof")) {
@@ -146,7 +213,185 @@ class Parser {
     });
   }
 
-  private parseTypeDeclaration(doc: string | undefined): TypeDeclaration {
+  private parseTopLevelDeclaration(): TopLevelDeclaration {
+    const doc = this.parseDocCommentBlock();
+    const exportToken = this.match("Export") ? this.previous() : undefined;
+    const exported = exportToken !== undefined;
+
+    if (this.check("Type")) {
+      return this.parseTypeDeclaration(doc?.text, exported);
+    }
+
+    if (this.check("Fn")) {
+      return this.parseFunctionDeclaration(doc?.text, exported);
+    }
+
+    if (this.check("Const")) {
+      return this.parseVariableDeclaration(true, doc?.text, exported);
+    }
+
+    this.reportMisplacedDocComment(doc, "doc comments can only document declarations here");
+
+    const token = exportToken ?? this.current();
+    const message = exported
+      ? "The 'export' keyword can only be used with 'type', 'const', or 'fn' declarations."
+      : this.check("Let")
+        ? "Module scope only allows imports and declarations; use 'const' for module bindings."
+        : "Module scope only allows imports and declarations.";
+    this.diagnostics.push(
+      error(message, token.span, {
+        code: exported ? DiagnosticCode.InvalidExport : DiagnosticCode.ModuleTopLevelStatement,
+        label: "invalid module-level syntax",
+      }),
+    );
+
+    while (!this.check("Semicolon") && !this.check("Eof")) {
+      if (this.check("LeftBrace")) {
+        this.recoverToClosingBrace();
+      }
+      this.advance();
+    }
+    const end = this.match("Semicolon") ? this.previous() : token;
+    const initializer = this.node({
+      kind: "NumberLiteral" as const,
+      value: 0,
+      text: "0",
+      span: token.span,
+    });
+
+    return this.node({
+      kind: "VariableDeclaration",
+      exported: false,
+      mutability: "const",
+      name: "__invalid_module_declaration",
+      nameSpan: token.span,
+      initializer,
+      span: mergeSpans(token.span, end.span),
+    });
+  }
+
+  private parseImportDeclaration(): ImportDeclaration {
+    const importToken = this.expect("Import", "Expected 'import'.");
+    const path = this.parseImportPath();
+    const items = this.match("Dot") && this.check("LeftBrace") ? this.parseImportItems() : [];
+    const alias = this.parseImportAlias();
+    const semicolon = this.expect("Semicolon", "Expected ';' after import declaration.");
+
+    return this.node({
+      kind: "ImportDeclaration",
+      path,
+      items,
+      ...(alias === undefined ? {} : { alias }),
+      span: mergeSpans(importToken.span, semicolon.span),
+    });
+  }
+
+  private parseImportPath(): ImportPath {
+    const first = this.current();
+    const segments: string[] = [];
+    let prefix: ImportPath["prefix"] = "package";
+    let end = first;
+
+    if (this.match("At")) {
+      prefix = "current-package";
+      if (this.match("Slash")) {
+        if (this.check("Semicolon") || this.check("Dot") || this.check("As")) {
+          this.diagnostics.push(
+            error("Importing the current package root is not implemented yet.", first.span, {
+              code: DiagnosticCode.UnsupportedModuleImport,
+              label: "import a named module under '@/...' instead",
+            }),
+          );
+          end = this.previous();
+        } else {
+          do {
+            const segment = this.expect("Identifier", "Expected module path segment.");
+            segments.push(segment.text);
+            end = segment;
+          } while (this.match("Slash"));
+        }
+      } else if (this.check("Identifier") && this.current().text === "std") {
+        prefix = "std";
+        const std = this.advance();
+        end = std;
+        if (this.match("Slash")) {
+          do {
+            const segment = this.expect("Identifier", "Expected module path segment.");
+            segments.push(segment.text);
+            end = segment;
+          } while (this.match("Slash"));
+        }
+      } else {
+        this.diagnostics.push(
+          error("Expected '/' or 'std' after '@' in import path.", this.current().span, {
+            code: DiagnosticCode.ParseExpectedToken,
+            label: "parser was looking here",
+          }),
+        );
+      }
+    } else {
+      const segment = this.expect("Identifier", "Expected import path.");
+      segments.push(segment.text);
+      end = segment;
+      while (this.match("Slash")) {
+        const next = this.expect("Identifier", "Expected module path segment.");
+        segments.push(next.text);
+        end = next;
+      }
+    }
+
+    const pathText =
+      prefix === "current-package"
+        ? `@/${segments.join("/")}`
+        : prefix === "std"
+          ? `@std/${segments.join("/")}`
+          : segments.join("/");
+    return this.node({
+      kind: "ImportPath",
+      text: pathText,
+      segments,
+      prefix,
+      span: mergeSpans(first.span, end.span),
+    });
+  }
+
+  private parseImportItems(): readonly ImportItem[] {
+    this.expect("LeftBrace", "Expected '{' before import list.");
+    const items: ImportItem[] = [];
+    if (!this.check("RightBrace")) {
+      do {
+        if (this.check("RightBrace")) {
+          break;
+        }
+        const typeToken = this.match("Type") ? this.previous() : undefined;
+        const namespace = typeToken === undefined ? "value" : "type";
+        const name = this.expect("Identifier", "Expected imported name.");
+        const alias = this.parseImportAlias();
+        items.push(
+          this.node({
+            kind: "ImportItem" as const,
+            namespace,
+            name: name.text,
+            nameSpan: name.span,
+            ...(alias === undefined ? {} : { alias }),
+            span: mergeSpans(typeToken?.span ?? name.span, alias?.nameSpan ?? name.span),
+          }),
+        );
+      } while (this.match("Comma"));
+    }
+    this.expectClosingDelimiter("RightBrace", "Expected '}' after import list.");
+    return items;
+  }
+
+  private parseImportAlias(): ImportAlias | undefined {
+    if (!this.match("As")) {
+      return undefined;
+    }
+    const name = this.expect("Identifier", "Expected alias after 'as'.");
+    return { name: name.text, nameSpan: name.span };
+  }
+
+  private parseTypeDeclaration(doc: string | undefined, exported = false): TypeDeclaration {
     const typeToken = this.expect("Type", "Expected 'type'.");
     const name = this.expect("Identifier", "Expected type name.");
     const typeParameters = this.parseTypeParameters();
@@ -156,6 +401,7 @@ class Parser {
 
     return this.node({
       kind: "TypeDeclaration",
+      exported,
       name: name.text,
       nameSpan: name.span,
       typeParameters,
@@ -193,7 +439,7 @@ class Parser {
     return params;
   }
 
-  private parseFunctionDeclaration(doc: string | undefined): FunctionDeclaration {
+  private parseFunctionDeclaration(doc: string | undefined, exported = false): FunctionDeclaration {
     const fnToken = this.expect("Fn", "Expected 'fn'.");
     const name = this.expect("Identifier", "Expected function name.");
     const typeParameters = this.parseTypeParameters();
@@ -213,6 +459,7 @@ class Parser {
 
     return this.node({
       kind: "FunctionDeclaration",
+      exported,
       name: name.text,
       nameSpan: name.span,
       typeParameters,
@@ -342,6 +589,7 @@ class Parser {
   private parseVariableDeclaration(
     requireSemicolon: boolean,
     doc: string | undefined = undefined,
+    exported = false,
   ): VariableDeclaration {
     const keyword = this.match("Const")
       ? this.previous()
@@ -364,6 +612,7 @@ class Parser {
 
     return this.node({
       kind: "VariableDeclaration",
+      exported,
       mutability,
       name: name.text,
       nameSpan: name.span,
@@ -533,16 +782,21 @@ class Parser {
     if (type === undefined) {
       if (token.kind === "Identifier") {
         this.advance();
+        let name = token.text;
+        let nameSpan = token.span;
+        if (this.match("Dot")) {
+          const member = this.expect("Identifier", "Expected type name after '.'.");
+          name = `${name}.${member.text}`;
+          nameSpan = mergeSpans(token.span, member.span);
+        }
         const typeArguments = this.parseTypeArguments();
         return this.node({
           kind: "NamedType",
-          name: token.text,
-          nameSpan: token.span,
+          name,
+          nameSpan,
           typeArguments,
           span:
-            typeArguments.length === 0
-              ? token.span
-              : mergeSpans(token.span, last(typeArguments).span),
+            typeArguments.length === 0 ? nameSpan : mergeSpans(nameSpan, last(typeArguments).span),
         });
       }
 
@@ -1699,7 +1953,7 @@ function parseInterpolationSource(
     return undefined;
   }
 
-  const parser = new Parser(remapTokenSpans(lexResult.tokens, sourceStart));
+  const parser = new Parser(remapTokenSpans(lexResult.tokens, sourceStart), {});
   const result = parser.parseInterpolationExpression();
   if (result.diagnostics.length > 0 || !result.consumedAll) {
     diagnostics.push(

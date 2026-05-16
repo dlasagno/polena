@@ -267,7 +267,7 @@
       "patterns": [
         {
           "name": "keyword.other.reserved.polena",
-          "match": "\\b(?:as|comptime|impl|trait|unknown)\\b"
+          "match": "\\b(?:comptime|impl|trait|unknown)\\b"
         }
       ]
     },
@@ -280,6 +280,10 @@
         {
           "name": "keyword.declaration.enum.polena",
           "match": "\\benum\\b"
+        },
+        {
+          "name": "keyword.declaration.module.polena",
+          "match": "\\b(?:as|export|import)\\b"
         },
         {
           "name": "keyword.operator.word.polena",

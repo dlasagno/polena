@@ -1,18 +1,26 @@
-import { compile, renderDiagnostics } from "@polena/compiler";
+import {
+  compilePackage,
+  parsePackageManifest,
+  renderDiagnostics,
+  type SourceFile,
+} from "@polena/compiler";
 
 const supportedSourceExtensions = [".plna", ".polena"] as const;
 
 export type CliIo = {
   readonly readTextFile: (path: string) => Promise<string>;
   readonly writeTextFile: (path: string, contents: string) => Promise<void>;
+  readonly readDir: (path: string) => Promise<readonly string[]>;
+  readonly stat: (path: string) => Promise<"file" | "directory" | "missing">;
+  readonly mkdirp: (path: string) => Promise<void>;
   readonly stdout: (text: string) => void;
   readonly stderr: (text: string) => void;
 };
 
 type CompileCommand = {
   readonly kind: "compile";
-  readonly inputPath: string;
-  readonly outputPath?: string;
+  readonly packageDir: string;
+  readonly outDir: string;
 };
 
 type CliCommand =
@@ -54,22 +62,21 @@ export function formatHelp(): string {
     "Polena programming language compiler",
     "",
     "Usage:",
-    "  polena <file>",
-    "  polena compile <file> [options]",
+    "  polena compile <package-dir> --out-dir <dir>",
     "  polena help",
     "  polena version",
     "",
     "Commands:",
-    "  compile <file>  Compile a Polena source file to JavaScript",
-    "  help            Show this help message",
-    "  version         Show the compiler version",
+    "  compile <package-dir>  Compile a Polena package to JavaScript modules",
+    "  help                   Show this help message",
+    "  version                Show the compiler version",
     "",
     "Options:",
-    "  -o, --out <file>  Write JavaScript output to a file",
-    "  -h, --help        Show this help message",
-    "  -V, --version     Show the compiler version",
+    "  --out-dir <dir>  Write JavaScript output files to a directory",
+    "  -h, --help       Show this help message",
+    "  -V, --version    Show the compiler version",
     "",
-    "Source files must end in .plna or .polena.",
+    "Packages must contain polena.toml and src/index.plna.",
   ].join("\n");
 }
 
@@ -96,12 +103,12 @@ function parseCommand(args: readonly string[]): CliCommand {
     return { kind: "error", message: `error: unknown option '${first}'` };
   }
 
-  return parseCompileCommand(args);
+  return { kind: "error", message: "error: expected command 'compile'" };
 }
 
 function parseCompileCommand(args: readonly string[]): CliCommand {
-  let inputPath: string | undefined;
-  let outputPath: string | undefined;
+  let packageDir: string | undefined;
+  let outDir: string | undefined;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -115,11 +122,18 @@ function parseCompileCommand(args: readonly string[]): CliCommand {
     }
 
     if (arg === "-o" || arg === "--out") {
+      return {
+        kind: "error",
+        message: `error: '${arg}' is not supported for package compilation; use --out-dir`,
+      };
+    }
+
+    if (arg === "--out-dir") {
       const value = args[index + 1];
       if (value === undefined || value.startsWith("-")) {
-        return { kind: "error", message: `error: expected a file path after '${arg}'` };
+        return { kind: "error", message: `error: expected a directory path after '${arg}'` };
       }
-      outputPath = value;
+      outDir = value;
       index += 1;
       continue;
     }
@@ -128,60 +142,111 @@ function parseCompileCommand(args: readonly string[]): CliCommand {
       return { kind: "error", message: `error: unknown option '${arg}'` };
     }
 
-    if (inputPath !== undefined) {
+    if (packageDir !== undefined) {
       return { kind: "error", message: `error: unexpected argument '${arg}'` };
     }
 
-    inputPath = arg;
+    packageDir = arg;
   }
 
-  if (inputPath === undefined) {
-    return { kind: "error", message: "error: expected a source file to compile" };
+  if (packageDir === undefined) {
+    return { kind: "error", message: "error: expected a package directory to compile" };
   }
 
-  if (!isSupportedSourceFile(inputPath)) {
-    return {
-      kind: "error",
-      message: "error: expected a Polena source file ending in .plna or .polena",
-    };
+  if (outDir === undefined) {
+    return { kind: "error", message: "error: expected --out-dir for package compilation" };
   }
 
-  return outputPath === undefined
-    ? { kind: "compile", inputPath }
-    : { kind: "compile", inputPath, outputPath };
+  return { kind: "compile", packageDir, outDir };
 }
 
 async function runCompile(command: CompileCommand, io: CliIo): Promise<number> {
-  let source: string;
+  const manifestPath = joinPath(command.packageDir, "polena.toml");
+  const sourceDir = joinPath(command.packageDir, "src");
+  const entryPath = joinPath(sourceDir, "index.plna");
 
-  try {
-    source = await io.readTextFile(command.inputPath);
-  } catch (reason) {
-    io.stderr(`error: could not read '${command.inputPath}': ${formatUnknownError(reason)}`);
+  if ((await io.stat(manifestPath)) !== "file") {
+    io.stderr(`error: package is missing '${manifestPath}'`);
+    return 1;
+  }
+  if ((await io.stat(entryPath)) !== "file") {
+    io.stderr(`error: package is missing '${entryPath}'`);
     return 1;
   }
 
-  const result = compile(source);
+  let manifestSource: string;
+  try {
+    manifestSource = await io.readTextFile(manifestPath);
+  } catch (reason) {
+    io.stderr(`error: could not read '${manifestPath}': ${formatUnknownError(reason)}`);
+    return 1;
+  }
+
+  const manifestResult = parsePackageManifest(manifestSource);
+  if (!manifestResult.ok) {
+    io.stderr(renderDiagnostics(manifestResult.diagnostics, manifestSource, manifestPath));
+    return 1;
+  }
+
+  const files = await readSourceFiles(sourceDir, io);
+  const result = compilePackage({
+    manifest: manifestResult.manifest,
+    rootDir: command.packageDir,
+    sourceDir,
+    files,
+  });
 
   if (!result.ok) {
-    io.stderr(renderDiagnostics(result.diagnostics, source, command.inputPath));
+    const firstFile = files[0];
+    io.stderr(
+      renderDiagnostics(result.diagnostics, firstFile?.source ?? "", firstFile?.path ?? entryPath),
+    );
     return 1;
   }
 
-  if (command.outputPath !== undefined) {
-    try {
-      await io.writeTextFile(command.outputPath, result.js);
-    } catch (reason) {
-      io.stderr(`error: could not write '${command.outputPath}': ${formatUnknownError(reason)}`);
-      return 1;
+  try {
+    await io.mkdirp(command.outDir);
+    for (const file of result.files) {
+      const outputPath = joinPath(command.outDir, file.path);
+      await io.mkdirp(dirname(outputPath));
+      await io.writeTextFile(outputPath, file.contents);
     }
-    return 0;
+  } catch (reason) {
+    io.stderr(`error: could not write output: ${formatUnknownError(reason)}`);
+    return 1;
   }
 
-  io.stdout(result.js);
   return 0;
+}
+
+async function readSourceFiles(sourceDir: string, io: CliIo): Promise<readonly SourceFile[]> {
+  const files: SourceFile[] = [];
+
+  async function visit(dir: string): Promise<void> {
+    for (const entry of await io.readDir(dir)) {
+      const path = joinPath(dir, entry);
+      const kind = await io.stat(path);
+      if (kind === "directory") {
+        await visit(path);
+      } else if (kind === "file" && isSupportedSourceFile(path)) {
+        files.push({ path, source: await io.readTextFile(path) });
+      }
+    }
+  }
+
+  await visit(sourceDir);
+  return files.sort((left, right) => left.path.localeCompare(right.path));
 }
 
 function formatUnknownError(reason: unknown): string {
   return reason instanceof Error ? reason.message : String(reason);
+}
+
+function joinPath(base: string, path: string): string {
+  return `${base.replace(/\/$/, "")}/${path.replace(/^\//, "")}`;
+}
+
+function dirname(path: string): string {
+  const index = path.lastIndexOf("/");
+  return index < 0 ? "." : path.slice(0, index);
 }

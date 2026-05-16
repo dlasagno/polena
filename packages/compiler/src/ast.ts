@@ -66,6 +66,7 @@ export type EnumVariantTypeNode = {
 export type Program = {
   readonly kind: "Program";
   readonly nodeId: NodeId;
+  readonly imports: readonly ImportDeclaration[];
   readonly declarations: readonly TopLevelDeclaration[];
   readonly span: Span;
   readonly doc?: string;
@@ -81,9 +82,42 @@ export type TopLevelDeclaration =
   | ContinueStatement
   | ExpressionStatement;
 
+export type ImportDeclaration = {
+  readonly kind: "ImportDeclaration";
+  readonly nodeId: NodeId;
+  readonly path: ImportPath;
+  readonly items: readonly ImportItem[];
+  readonly alias?: ImportAlias;
+  readonly span: Span;
+};
+
+export type ImportPath = {
+  readonly kind: "ImportPath";
+  readonly text: string;
+  readonly segments: readonly string[];
+  readonly prefix: "current-package" | "std" | "package";
+  readonly span: Span;
+};
+
+export type ImportItem = {
+  readonly kind: "ImportItem";
+  readonly nodeId: NodeId;
+  readonly namespace: "type" | "value";
+  readonly name: string;
+  readonly nameSpan: Span;
+  readonly alias?: ImportAlias;
+  readonly span: Span;
+};
+
+export type ImportAlias = {
+  readonly name: string;
+  readonly nameSpan: Span;
+};
+
 export type TypeDeclaration = {
   readonly kind: "TypeDeclaration";
   readonly nodeId: NodeId;
+  readonly exported: boolean;
   readonly name: string;
   readonly nameSpan: Span;
   readonly typeParameters: readonly TypeParameter[];
@@ -103,6 +137,7 @@ export type TypeParameter = {
 export type FunctionDeclaration = {
   readonly kind: "FunctionDeclaration";
   readonly nodeId: NodeId;
+  readonly exported: boolean;
   readonly name: string;
   readonly nameSpan: Span;
   readonly typeParameters: readonly TypeParameter[];
@@ -142,6 +177,7 @@ export type Statement =
 export type VariableDeclaration = {
   readonly kind: "VariableDeclaration";
   readonly nodeId: NodeId;
+  readonly exported: boolean;
   readonly mutability: "const" | "let";
   readonly name: string;
   readonly nameSpan: Span;
