@@ -119,8 +119,14 @@ out-dir = "dist"
 
 - A target directory.
 - An optional package name.
+- An optional package target, either `"executable"` or `"library"`.
+- An optional runtime, either `"node"`, `"bun"`, or `"deno"`.
 
 If no name is supplied, the default is the basename of the target directory, sanitized to a valid Polena identifier. If the sanitized basename is empty or otherwise unusable, `init` fails and asks for an explicit name.
+
+If no target is supplied, the default is `"executable"`. If no runtime is
+supplied for an executable package, the default is `"node"`. Library packages do
+not include a runtime field.
 
 ### 6.2 Behavior
 
@@ -129,6 +135,7 @@ If no name is supplied, the default is the basename of the target directory, san
 3. Create `src/`.
 4. Write `polena.toml` using the template in §6.3.
 5. Write `src/index.plna` using the template in §6.3.
+6. Write `.gitignore` using the template in §6.3.
 
 ### 6.3 Templates
 
@@ -141,12 +148,29 @@ target = "executable"
 runtime = "node"
 ```
 
-`src/index.plna`:
+For library packages, `target` is `"library"` and the `runtime` field is
+omitted.
+
+Executable `src/index.plna`:
 
 ```tsx
 export fn main(): void {
   println("Hello, Polena!");
 }
+```
+
+Library `src/index.plna`:
+
+```tsx
+export fn hello(): string {
+  return "Hello, Polena!";
+}
+```
+
+`.gitignore`:
+
+```gitignore
+dist/
 ```
 
 The `[build]` section is intentionally omitted; the default output directory is sufficient for new packages.

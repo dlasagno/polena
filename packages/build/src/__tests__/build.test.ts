@@ -222,21 +222,38 @@ describe("init operation", () => {
     expect(result.ok).toBe(true);
     expect(harness.writes.get("/tmp/my-app/polena.toml")).toContain('name = "my_app"');
     expect(harness.writes.get("/tmp/my-app/src/index.plna")).toContain("Hello, Polena!");
+    expect(harness.writes.get("/tmp/my-app/.gitignore")).toBe("dist/\n");
   });
 
-  test("honors explicit names and rejects existing manifests", async () => {
+  test("creates library packages without runtimes", async () => {
+    const harness = createHarness();
+    const result = await initPackage({
+      targetDir: "/tmp/lib",
+      target: "library",
+      io: harness.io,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(harness.writes.get("/tmp/lib/polena.toml")).toContain('target = "library"');
+    expect(harness.writes.get("/tmp/lib/polena.toml")).not.toContain("runtime");
+    expect(harness.writes.get("/tmp/lib/src/index.plna")).toContain("export fn hello()");
+  });
+
+  test("honors explicit names and runtimes and rejects existing manifests", async () => {
     const named = createHarness();
     const existing = createHarness(new Map([["/app/polena.toml", packageManifest()]]));
 
     const namedResult = await initPackage({
       targetDir: "/tmp/ignored",
       name: "custom",
+      runtime: "bun",
       io: named.io,
     });
     const existingResult = await initPackage({ targetDir: "/app", io: existing.io });
 
     expect(namedResult.ok).toBe(true);
     expect(named.writes.get("/tmp/ignored/polena.toml")).toContain('name = "custom"');
+    expect(named.writes.get("/tmp/ignored/polena.toml")).toContain('runtime = "bun"');
     expect(existingResult.ok).toBe(false);
     expect(existing.writes.size).toBe(0);
   });

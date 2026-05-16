@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 
 import { mkdir, readdir, stat } from "node:fs/promises";
+import { createInterface } from "node:readline/promises";
 import packageJson from "../package.json";
 import { runCli, type CliIo } from "./cli";
 
@@ -35,6 +36,14 @@ if (import.meta.main) {
     },
     stdout: (text) => console.log(text),
     stderr: (text) => console.error(text),
+    prompt: async (question) => {
+      const readline = createInterface({ input: process.stdin, output: process.stdout });
+      try {
+        return await readline.question(question);
+      } finally {
+        readline.close();
+      }
+    },
   };
 
   const exitCode = await runCli({

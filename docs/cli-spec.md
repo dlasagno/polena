@@ -20,7 +20,7 @@ This document defines how Polena operations are surfaced to users on the command
 
 ```
 polena build [path] [--out-dir <dir>]
-polena init  [path] [--name <name>]
+polena init  [path] [--name <name>] [--yes]
 polena run   [path]
 polena --version | -V | version
 polena --help    | -h | help
@@ -59,11 +59,19 @@ Runs the build operation defined in build spec §5.
 ## 5. `polena init`
 
 ```
-polena init [path] [--name <name>]
+polena init [path] [--name <name>] [--yes]
 ```
 
 - `path` — directory to initialize. Defaults to `.`.
 - `--name <name>` — package name written into `polena.toml`. Defaults to the basename of `path`, sanitized to a valid Polena identifier. If sanitization cannot produce a valid name, the CLI fails with a diagnostic asking for an explicit `--name`.
+- `-y`, `--yes` — skip interactive questions and use the default package setup.
+
+Without `--yes`, the CLI prompts for the package name, target, and runtime.
+The runtime question is only asked for executable packages. Empty answers accept
+the displayed default.
+
+With `--yes`, the default setup is an executable package using the `node`
+runtime.
 
 Runs the init operation defined in build spec §6.
 

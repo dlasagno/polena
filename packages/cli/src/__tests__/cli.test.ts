@@ -71,7 +71,7 @@ describe("CLI commands", () => {
     const harness = createCliHarness();
 
     const exitCode = await runCli({
-      args: ["init", "app", "--name", "my_app"],
+      args: ["init", "app", "--name", "my_app", "--yes"],
       version: "0.1.0",
       io: harness.io,
     });
@@ -79,6 +79,43 @@ describe("CLI commands", () => {
     expect(exitCode).toBe(0);
     expect(harness.writes.get("app/polena.toml")).toContain('name = "my_app"');
     expect(harness.writes.get("app/src/index.plna")).toContain("Hello, Polena!");
+    expect(harness.writes.get("app/.gitignore")).toBe("dist/\n");
+    expect(harness.prompts).toEqual([]);
+  });
+
+  test("initializes a package from interactive answers", async () => {
+    const harness = createCliHarness(new Map(), { promptAnswers: ["custom_lib", "library"] });
+
+    const exitCode = await runCli({
+      args: ["init", "app"],
+      version: "0.1.0",
+      io: harness.io,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(harness.prompts).toEqual([
+      "Package name (app): ",
+      "Package target (executable/library) [executable]: ",
+    ]);
+    expect(harness.writes.get("app/polena.toml")).toContain('name = "custom_lib"');
+    expect(harness.writes.get("app/polena.toml")).toContain('target = "library"');
+    expect(harness.writes.get("app/polena.toml")).not.toContain("runtime");
+    expect(harness.writes.get("app/src/index.plna")).toContain("export fn hello()");
+  });
+
+  test("uses interactive defaults for empty answers", async () => {
+    const harness = createCliHarness(new Map(), { promptAnswers: ["", "", ""] });
+
+    const exitCode = await runCli({
+      args: ["init", "app"],
+      version: "0.1.0",
+      io: harness.io,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(harness.writes.get("app/polena.toml")).toContain('name = "app"');
+    expect(harness.writes.get("app/polena.toml")).toContain('target = "executable"');
+    expect(harness.writes.get("app/polena.toml")).toContain('runtime = "node"');
   });
 
   test("runs a package", async () => {
@@ -176,6 +213,7 @@ function createCliHarness(
     readonly failWrites?: boolean;
     readonly binaries?: ReadonlyMap<string, string>;
     readonly spawnExitCode?: number;
+    readonly promptAnswers?: readonly string[];
   } = {},
 ): {
   readonly io: CliIo;
@@ -183,11 +221,14 @@ function createCliHarness(
   readonly stderr: string[];
   readonly writes: Map<string, string>;
   readonly commands: string[][];
+  readonly prompts: string[];
 } {
   const stdout: string[] = [];
   const stderr: string[] = [];
   const writes = new Map<string, string>();
   const commands: string[][] = [];
+  const prompts: string[] = [];
+  let promptIndex = 0;
 
   return {
     io: {
@@ -235,10 +276,17 @@ function createCliHarness(
       },
       stdout: (text) => stdout.push(text),
       stderr: (text) => stderr.push(text),
+      prompt: async (question) => {
+        prompts.push(question);
+        const answer = options.promptAnswers?.[promptIndex] ?? "";
+        promptIndex += 1;
+        return answer;
+      },
     },
     stdout,
     stderr,
     writes,
     commands,
+    prompts,
   };
 }

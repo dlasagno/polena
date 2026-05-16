@@ -3,21 +3,31 @@ import {
   initPackage,
   isSupportedSourceFile,
   runPackage,
+  sanitizePackageName,
   type BuildDiagnostic,
   type BuildIo,
+  type PackageRuntime,
+  type PackageTarget,
 } from "@polena/build";
+import { basename, resolve } from "node:path";
 import { renderDiagnostics } from "@polena/compiler";
 
 export type CliIo = BuildIo & {
   readonly stdout: (text: string) => void;
   readonly stderr: (text: string) => void;
+  readonly prompt: (question: string) => Promise<string>;
 };
 
 type CommandKind = "build" | "init" | "run";
 
 type CliCommand =
   | { readonly kind: "build"; readonly packageDir: string; readonly outDir?: string }
-  | { readonly kind: "init"; readonly targetDir: string; readonly name?: string }
+  | {
+      readonly kind: "init";
+      readonly targetDir: string;
+      readonly name?: string;
+      readonly yes: boolean;
+    }
   | { readonly kind: "run"; readonly packageDir: string; readonly args: readonly string[] }
   | { readonly kind: "help"; readonly command?: CommandKind }
   | { readonly kind: "version" }
@@ -55,9 +65,19 @@ export async function runCli(options: RunCliOptions): Promise<number> {
       return 0;
     }
     case "init": {
+      const initOptions = command.yes
+        ? {
+            ok: true as const,
+            options: { ...(command.name === undefined ? {} : { name: command.name }) },
+          }
+        : await promptForInitOptions(command.targetDir, command.name, options.io);
+      if (!initOptions.ok) {
+        options.io.stderr(initOptions.message);
+        return 1;
+      }
       const result = await initPackage({
         targetDir: command.targetDir,
-        name: command.name,
+        ...initOptions.options,
         io: options.io,
       });
       if (!result.ok) {
@@ -98,10 +118,11 @@ export function formatHelp(command?: CommandKind): string {
     case "init":
       return [
         "Usage:",
-        "  polena init [path] [--name <name>]",
+        "  polena init [path] [--name <name>] [--yes]",
         "",
         "Options:",
         "  --name <name>  Package name to write into polena.toml",
+        "  -y, --yes      Use the default package setup without prompts",
         "  -h, --help     Show this help message",
         "  -V, --version  Show the compiler version",
       ].join("\n");
@@ -120,7 +141,7 @@ export function formatHelp(command?: CommandKind): string {
         "",
         "Usage:",
         "  polena build [path] [--out-dir <dir>]",
-        "  polena init  [path] [--name <name>]",
+        "  polena init  [path] [--name <name>] [--yes]",
         "  polena run   [path]",
         "  polena help",
         "  polena version",
@@ -234,6 +255,7 @@ function parseBuildCommand(args: readonly string[]): CliCommand {
 function parseInitCommand(args: readonly string[]): CliCommand {
   let targetDir: string | undefined;
   let name: string | undefined;
+  let yes = false;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -244,6 +266,10 @@ function parseInitCommand(args: readonly string[]): CliCommand {
       }
       name = value;
       index += 1;
+      continue;
+    }
+    if (arg === "-y" || arg === "--yes") {
+      yes = true;
       continue;
     }
     if (arg?.startsWith("-")) {
@@ -259,7 +285,82 @@ function parseInitCommand(args: readonly string[]): CliCommand {
     kind: "init",
     targetDir: targetDir ?? ".",
     ...(name === undefined ? {} : { name }),
+    yes,
   };
+}
+
+async function promptForInitOptions(
+  targetDir: string,
+  explicitName: string | undefined,
+  io: Pick<CliIo, "prompt">,
+): Promise<
+  | {
+      readonly ok: true;
+      readonly options: {
+        readonly name: string;
+        readonly target: PackageTarget;
+        readonly runtime?: PackageRuntime;
+      };
+    }
+  | { readonly ok: false; readonly message: string }
+> {
+  const defaultName = explicitName ?? sanitizePackageName(basename(resolve(targetDir)));
+  if (defaultName === undefined) {
+    return {
+      ok: false,
+      message: "error: could not infer a valid package name; pass --name explicitly",
+    };
+  }
+
+  const name = explicitName ?? (await promptForPackageName(io, "Package name", defaultName));
+  const target = await promptForChoice(io, "Package target", "executable", [
+    "executable",
+    "library",
+  ]);
+  const runtime =
+    target === "executable"
+      ? await promptForChoice(io, "Runtime", "node", ["node", "bun", "deno"])
+      : undefined;
+
+  return {
+    ok: true,
+    options: {
+      name,
+      target,
+      ...(runtime === undefined ? {} : { runtime }),
+    },
+  };
+}
+
+async function promptForPackageName(
+  io: Pick<CliIo, "prompt">,
+  label: string,
+  defaultValue: string,
+): Promise<string> {
+  while (true) {
+    const answer = (await io.prompt(`${label} (${defaultValue}): `)).trim();
+    const value = answer === "" ? defaultValue : answer;
+    if (sanitizePackageName(value) === value) {
+      return value;
+    }
+  }
+}
+
+async function promptForChoice<const T extends string>(
+  io: Pick<CliIo, "prompt">,
+  label: string,
+  defaultValue: T,
+  choices: readonly T[],
+): Promise<T> {
+  while (true) {
+    const answer = (await io.prompt(`${label} (${choices.join("/")}) [${defaultValue}]: `)).trim();
+    if (answer === "") {
+      return defaultValue;
+    }
+    if (choices.includes(answer as T)) {
+      return answer as T;
+    }
+  }
 }
 
 function parseRunCommand(args: readonly string[]): CliCommand {

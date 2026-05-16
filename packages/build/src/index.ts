@@ -326,12 +326,15 @@ export async function buildPackage(input: {
 export async function initPackage(input: {
   readonly targetDir: string;
   readonly name?: string;
+  readonly target?: PackageTarget;
+  readonly runtime?: PackageRuntime;
   readonly io: Pick<BuildIo, "stat" | "mkdirp" | "writeTextFile">;
 }): Promise<InitResult> {
   const targetDir = normalize(input.targetDir);
   const manifestPath = join(targetDir, "polena.toml");
   const sourceDir = join(targetDir, "src");
   const entryPath = join(sourceDir, "index.plna");
+  const gitignorePath = join(targetDir, ".gitignore");
 
   if ((await input.io.stat(manifestPath)) === "file") {
     return failMessage(`error: package already exists at '${manifestPath}'`);
@@ -342,27 +345,19 @@ export async function initPackage(input: {
     return failMessage("error: could not infer a valid package name; pass --name explicitly");
   }
 
+  const target = input.target ?? "executable";
+  const runtime = input.runtime ?? (target === "executable" ? "node" : undefined);
+
   try {
     await input.io.mkdirp(sourceDir);
-    await input.io.writeTextFile(
-      manifestPath,
-      [
-        `name = "${packageName}"`,
-        'version = "0.1.0"',
-        'target = "executable"',
-        'runtime = "node"',
-        "",
-      ].join("\n"),
-    );
-    await input.io.writeTextFile(
-      entryPath,
-      ["export fn main(): void {", '  println("Hello, Polena!");', "}", ""].join("\n"),
-    );
+    await input.io.writeTextFile(manifestPath, formatInitManifest(packageName, target, runtime));
+    await input.io.writeTextFile(entryPath, formatInitEntryModule(target));
+    await input.io.writeTextFile(gitignorePath, ["dist/", ""].join("\n"));
   } catch (reason) {
     return failMessage(`error: could not initialize package: ${formatUnknownError(reason)}`);
   }
 
-  return { ok: true, files: [manifestPath, entryPath] };
+  return { ok: true, files: [manifestPath, entryPath, gitignorePath] };
 }
 
 export async function runPackage(input: {
@@ -410,6 +405,27 @@ export function sanitizePackageName(name: string): string | undefined {
     .replaceAll(/_+/g, "_")
     .replaceAll(/^_+$/g, "");
   return sanitized.length === 0 || !isValidPackageName(sanitized) ? undefined : sanitized;
+}
+
+function formatInitManifest(
+  packageName: string,
+  target: PackageTarget,
+  runtime: PackageRuntime | undefined,
+): string {
+  const lines = [`name = "${packageName}"`, 'version = "0.1.0"', `target = "${target}"`];
+  if (runtime !== undefined) {
+    lines.push(`runtime = "${runtime}"`);
+  }
+  lines.push("");
+  return lines.join("\n");
+}
+
+function formatInitEntryModule(target: PackageTarget): string {
+  if (target === "library") {
+    return ["export fn hello(): string {", '  return "Hello, Polena!";', "}", ""].join("\n");
+  }
+
+  return ["export fn main(): void {", '  println("Hello, Polena!");', "}", ""].join("\n");
 }
 
 function compilerManifestFromBuildManifest(manifest: BuildManifest): {
