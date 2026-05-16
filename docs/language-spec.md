@@ -2568,13 +2568,26 @@ Fields:
   An **executable** package must define `export fn main(): void` in its
   entry module (section 30.7). A **library** package must not define
   `main` in its entry module.
+- **`runtime`** — `"node"`, `"bun"`, or `"deno"`. Optional package metadata
+  used by the build system's `run` operation. It is required to run an
+  executable package and ignored for libraries.
+
+The optional `[build]` section may contain:
+
+- **`out-dir`** — output directory for emitted JavaScript. It is resolved
+  relative to the package root unless absolute and defaults to `dist`.
 
 The `target` field declares what the package produces, not the compilation
 target (browser, Node, and similar) — that concept is separate and **TBD**.
 
+The complete manifest and package build behavior are specified in
+[`docs/build-spec.md`](build-spec.md). Command-line behavior is specified in
+[`docs/cli-spec.md`](cli-spec.md).
+
 Combining library and executable roles in a single package is **TBD**.
 
-Dependency declarations and other `polena.toml` fields are **TBD**.
+Dependency declarations, workspaces, and other `polena.toml` fields are
+**TBD**.
 
 ---
 

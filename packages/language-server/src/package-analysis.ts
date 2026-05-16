@@ -1,19 +1,19 @@
 import {
+  findPackageRoot,
+  isSupportedSourceFile,
+  parseBuildManifest,
+  readPackageSources,
+  type BuildIo,
+} from "@polena/build";
+import {
   analyzePackage,
-  parsePackageManifest,
   type Diagnostic as PolenaDiagnostic,
   type SourceFile,
 } from "@polena/compiler";
 import { dirname, isAbsolute, join, normalize, relative } from "node:path";
 import { pathToFileURL } from "node:url";
 
-const supportedSourceExtensions = [".plna", ".polena"] as const;
-
-export type LanguageServerIo = {
-  readonly readTextFile: (path: string) => Promise<string>;
-  readonly readDir: (path: string) => Promise<readonly string[]>;
-  readonly stat: (path: string) => Promise<"file" | "directory" | "missing">;
-};
+export type LanguageServerIo = Pick<BuildIo, "readTextFile" | "readDir" | "stat">;
 
 export type OpenDocumentSnapshot = {
   readonly uri: string;
@@ -41,7 +41,7 @@ export async function analyzePackageForDocument(input: {
   const manifestSource =
     input.openDocuments.find((document) => normalize(document.path) === normalize(manifestPath))
       ?.text ?? (await input.io.readTextFile(manifestPath));
-  const manifestResult = parsePackageManifest(manifestSource);
+  const manifestResult = parseBuildManifest(manifestSource);
   if (!manifestResult.ok) {
     return {
       packageRoot,
@@ -50,7 +50,7 @@ export async function analyzePackageForDocument(input: {
   }
 
   const filesByPath = new Map<string, SourceFile>();
-  for (const file of await readSourceFiles(sourceDir, input.io)) {
+  for (const file of await readPackageSources(packageRoot, input.io)) {
     filesByPath.set(normalize(file.path), file);
   }
 
@@ -65,7 +65,11 @@ export async function analyzePackageForDocument(input: {
   }
 
   const result = analyzePackage({
-    manifest: manifestResult.manifest,
+    manifest: {
+      name: manifestResult.manifest.name,
+      version: manifestResult.manifest.version,
+      target: manifestResult.manifest.target,
+    },
     rootDir: packageRoot,
     sourceDir,
     files: [...filesByPath.values()].sort((left, right) => left.path.localeCompare(right.path)),
@@ -92,48 +96,6 @@ export async function analyzePackageForDocument(input: {
   return { packageRoot, diagnosticsByUri };
 }
 
-async function findPackageRoot(
-  startDir: string,
-  io: LanguageServerIo,
-): Promise<string | undefined> {
-  let current = normalize(startDir);
-
-  while (true) {
-    if ((await io.stat(join(current, "polena.toml"))) === "file") {
-      return current;
-    }
-
-    const parent = dirname(current);
-    if (parent === current) {
-      return undefined;
-    }
-    current = parent;
-  }
-}
-
-async function readSourceFiles(sourceDir: string, io: LanguageServerIo): Promise<SourceFile[]> {
-  const files: SourceFile[] = [];
-
-  async function visit(dir: string): Promise<void> {
-    if ((await io.stat(dir)) !== "directory") {
-      return;
-    }
-
-    for (const entry of await io.readDir(dir)) {
-      const path = join(dir, entry);
-      const kind = await io.stat(path);
-      if (kind === "directory") {
-        await visit(path);
-      } else if (kind === "file" && isSupportedSourceFile(path)) {
-        files.push({ path: normalize(path), source: await io.readTextFile(path) });
-      }
-    }
-  }
-
-  await visit(sourceDir);
-  return files;
-}
-
 function isPackageSourcePath(path: string, sourceDir: string): boolean {
   if (!isSupportedSourceFile(path)) {
     return false;
@@ -141,8 +103,4 @@ function isPackageSourcePath(path: string, sourceDir: string): boolean {
 
   const relativePath = relative(normalize(sourceDir), normalize(path));
   return relativePath !== "" && !relativePath.startsWith("..") && !isAbsolute(relativePath);
-}
-
-function isSupportedSourceFile(path: string): boolean {
-  return supportedSourceExtensions.some((extension) => path.endsWith(extension));
 }

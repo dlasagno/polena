@@ -1,33 +1,27 @@
 import {
-  compilePackage,
-  parsePackageManifest,
-  renderDiagnostics,
-  type SourceFile,
-} from "@polena/compiler";
+  buildPackage,
+  initPackage,
+  isSupportedSourceFile,
+  runPackage,
+  type BuildDiagnostic,
+  type BuildIo,
+} from "@polena/build";
+import { renderDiagnostics } from "@polena/compiler";
 
-const supportedSourceExtensions = [".plna", ".polena"] as const;
-
-export type CliIo = {
-  readonly readTextFile: (path: string) => Promise<string>;
-  readonly writeTextFile: (path: string, contents: string) => Promise<void>;
-  readonly readDir: (path: string) => Promise<readonly string[]>;
-  readonly stat: (path: string) => Promise<"file" | "directory" | "missing">;
-  readonly mkdirp: (path: string) => Promise<void>;
+export type CliIo = BuildIo & {
   readonly stdout: (text: string) => void;
   readonly stderr: (text: string) => void;
 };
 
-type CompileCommand = {
-  readonly kind: "compile";
-  readonly packageDir: string;
-  readonly outDir: string;
-};
+type CommandKind = "build" | "init" | "run";
 
 type CliCommand =
-  | CompileCommand
-  | { readonly kind: "help" }
+  | { readonly kind: "build"; readonly packageDir: string; readonly outDir?: string }
+  | { readonly kind: "init"; readonly targetDir: string; readonly name?: string }
+  | { readonly kind: "run"; readonly packageDir: string }
+  | { readonly kind: "help"; readonly command?: CommandKind }
   | { readonly kind: "version" }
-  | { readonly kind: "error"; readonly message: string };
+  | { readonly kind: "error"; readonly message: string; readonly command?: CommandKind };
 
 export type RunCliOptions = {
   readonly args: readonly string[];
@@ -40,213 +34,258 @@ export async function runCli(options: RunCliOptions): Promise<number> {
 
   switch (command.kind) {
     case "help":
-      options.io.stdout(formatHelp());
+      options.io.stdout(formatHelp(command.command));
       return 0;
     case "version":
       options.io.stdout(`polena ${options.version}`);
       return 0;
     case "error":
-      options.io.stderr(`${command.message}\n\n${formatHelp()}`);
+      options.io.stderr(`${command.message}\n\n${formatHelp(command.command)}`);
       return 1;
-    case "compile":
-      return runCompile(command, options.io);
+    case "build": {
+      const result = await buildPackage({
+        packageRoot: command.packageDir,
+        outDirOverride: command.outDir,
+        io: options.io,
+      });
+      if (!result.ok) {
+        await renderBuildDiagnostics(result.diagnostics, options.io);
+        return 1;
+      }
+      return 0;
+    }
+    case "init": {
+      const result = await initPackage({
+        targetDir: command.targetDir,
+        name: command.name,
+        io: options.io,
+      });
+      if (!result.ok) {
+        await renderBuildDiagnostics(result.diagnostics, options.io);
+        return 1;
+      }
+      return 0;
+    }
+    case "run": {
+      const result = await runPackage({
+        packageRoot: command.packageDir,
+        io: options.io,
+      });
+      if (!result.ok) {
+        await renderBuildDiagnostics(result.diagnostics, options.io);
+        return 1;
+      }
+      return result.exitCode;
+    }
   }
 }
 
-export function isSupportedSourceFile(path: string): boolean {
-  return supportedSourceExtensions.some((extension) => path.endsWith(extension));
-}
+export { isSupportedSourceFile };
 
-export function formatHelp(): string {
-  return [
-    "Polena programming language compiler",
-    "",
-    "Usage:",
-    "  polena compile <package-dir> --out-dir <dir>",
-    "  polena help",
-    "  polena version",
-    "",
-    "Commands:",
-    "  compile <package-dir>  Compile a Polena package to JavaScript modules",
-    "  help                   Show this help message",
-    "  version                Show the compiler version",
-    "",
-    "Options:",
-    "  --out-dir <dir>  Write JavaScript output files to a directory",
-    "  -h, --help       Show this help message",
-    "  -V, --version    Show the compiler version",
-    "",
-    "Packages must contain polena.toml and src/index.plna.",
-  ].join("\n");
+export function formatHelp(command?: CommandKind): string {
+  switch (command) {
+    case "build":
+      return [
+        "Usage:",
+        "  polena build [path] [--out-dir <dir>]",
+        "",
+        "Options:",
+        "  --out-dir <dir>  Override the manifest output directory",
+        "  -h, --help       Show this help message",
+        "  -V, --version    Show the compiler version",
+      ].join("\n");
+    case "init":
+      return [
+        "Usage:",
+        "  polena init [path] [--name <name>]",
+        "",
+        "Options:",
+        "  --name <name>  Package name to write into polena.toml",
+        "  -h, --help     Show this help message",
+        "  -V, --version  Show the compiler version",
+      ].join("\n");
+    case "run":
+      return [
+        "Usage:",
+        "  polena run [path]",
+        "",
+        "Options:",
+        "  -h, --help     Show this help message",
+        "  -V, --version  Show the compiler version",
+      ].join("\n");
+    case undefined:
+      return [
+        "Polena programming language tools",
+        "",
+        "Usage:",
+        "  polena build [path] [--out-dir <dir>]",
+        "  polena init  [path] [--name <name>]",
+        "  polena run   [path]",
+        "  polena help",
+        "  polena version",
+        "",
+        "Commands:",
+        "  build    Build a Polena package to JavaScript modules",
+        "  init     Create a new Polena package",
+        "  run      Build and run an executable Polena package",
+        "  help     Show this help message",
+        "  version  Show the compiler version",
+        "",
+        "Options:",
+        "  -h, --help     Show this help message",
+        "  -V, --version  Show the compiler version",
+      ].join("\n");
+  }
 }
 
 function parseCommand(args: readonly string[]): CliCommand {
-  if (args.length === 0) {
-    return { kind: "error", message: "error: expected a source file or command" };
-  }
-
-  const first = args[0];
-
-  if (first === "-h" || first === "--help" || first === "help") {
-    return { kind: "help" };
-  }
-
-  if (first === "-V" || first === "--version" || first === "version") {
+  if (args.includes("-V") || args.includes("--version")) {
     return { kind: "version" };
   }
 
-  if (first === "compile") {
-    return parseCompileCommand(args.slice(1));
+  if (args.length === 0 || args[0] === "help" || args[0] === "-h" || args[0] === "--help") {
+    return { kind: "help" };
+  }
+
+  if (args[0] === "version") {
+    return { kind: "version" };
+  }
+
+  const first = args[0];
+  if (first === "build" || first === "init" || first === "run") {
+    if (args.slice(1).includes("-h") || args.slice(1).includes("--help")) {
+      return { kind: "help", command: first };
+    }
+    return parseSubcommand(first, args.slice(1));
   }
 
   if (first?.startsWith("-")) {
-    return { kind: "error", message: `error: unknown option '${first}'` };
+    return usageError(`error: unknown option '${first}'`);
   }
 
-  return { kind: "error", message: "error: expected command 'compile'" };
+  return usageError(`error: unknown command '${first}'`);
 }
 
-function parseCompileCommand(args: readonly string[]): CliCommand {
+function parseSubcommand(command: CommandKind, args: readonly string[]): CliCommand {
+  for (const arg of args) {
+    if (arg.includes("=") && arg.startsWith("--")) {
+      return usageError(
+        `error: '${arg}' is not supported; pass flag values as separate arguments`,
+        command,
+      );
+    }
+    if (/^-[A-Za-z]{2,}$/.test(arg)) {
+      return usageError(`error: combined short flags are not supported: '${arg}'`, command);
+    }
+  }
+
+  switch (command) {
+    case "build":
+      return parseBuildCommand(args);
+    case "init":
+      return parseInitCommand(args);
+    case "run":
+      return parseRunCommand(args);
+  }
+}
+
+function parseBuildCommand(args: readonly string[]): CliCommand {
   let packageDir: string | undefined;
   let outDir: string | undefined;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
-
-    if (arg === "-h" || arg === "--help") {
-      return { kind: "help" };
-    }
-
-    if (arg === "-V" || arg === "--version") {
-      return { kind: "version" };
-    }
-
-    if (arg === "-o" || arg === "--out") {
-      return {
-        kind: "error",
-        message: `error: '${arg}' is not supported for package compilation; use --out-dir`,
-      };
-    }
-
     if (arg === "--out-dir") {
       const value = args[index + 1];
       if (value === undefined || value.startsWith("-")) {
-        return { kind: "error", message: `error: expected a directory path after '${arg}'` };
+        return usageError("error: expected a directory path after '--out-dir'", "build");
       }
       outDir = value;
       index += 1;
       continue;
     }
-
     if (arg?.startsWith("-")) {
-      return { kind: "error", message: `error: unknown option '${arg}'` };
+      return usageError(`error: unknown option '${arg}'`, "build");
     }
-
     if (packageDir !== undefined) {
-      return { kind: "error", message: `error: unexpected argument '${arg}'` };
+      return usageError(`error: unexpected argument '${arg}'`, "build");
     }
-
     packageDir = arg;
   }
 
-  if (packageDir === undefined) {
-    return { kind: "error", message: "error: expected a package directory to compile" };
-  }
-
-  if (outDir === undefined) {
-    return { kind: "error", message: "error: expected --out-dir for package compilation" };
-  }
-
-  return { kind: "compile", packageDir, outDir };
+  return {
+    kind: "build",
+    packageDir: packageDir ?? ".",
+    ...(outDir === undefined ? {} : { outDir }),
+  };
 }
 
-async function runCompile(command: CompileCommand, io: CliIo): Promise<number> {
-  const manifestPath = joinPath(command.packageDir, "polena.toml");
-  const sourceDir = joinPath(command.packageDir, "src");
-  const entryPath = joinPath(sourceDir, "index.plna");
+function parseInitCommand(args: readonly string[]): CliCommand {
+  let targetDir: string | undefined;
+  let name: string | undefined;
 
-  if ((await io.stat(manifestPath)) !== "file") {
-    io.stderr(`error: package is missing '${manifestPath}'`);
-    return 1;
-  }
-  if ((await io.stat(entryPath)) !== "file") {
-    io.stderr(`error: package is missing '${entryPath}'`);
-    return 1;
-  }
-
-  let manifestSource: string;
-  try {
-    manifestSource = await io.readTextFile(manifestPath);
-  } catch (reason) {
-    io.stderr(`error: could not read '${manifestPath}': ${formatUnknownError(reason)}`);
-    return 1;
-  }
-
-  const manifestResult = parsePackageManifest(manifestSource);
-  if (!manifestResult.ok) {
-    io.stderr(renderDiagnostics(manifestResult.diagnostics, manifestSource, manifestPath));
-    return 1;
-  }
-
-  const files = await readSourceFiles(sourceDir, io);
-  const result = compilePackage({
-    manifest: manifestResult.manifest,
-    rootDir: command.packageDir,
-    sourceDir,
-    files,
-  });
-
-  if (!result.ok) {
-    const firstFile = files[0];
-    io.stderr(
-      renderDiagnostics(result.diagnostics, firstFile?.source ?? "", firstFile?.path ?? entryPath),
-    );
-    return 1;
-  }
-
-  try {
-    await io.mkdirp(command.outDir);
-    for (const file of result.files) {
-      const outputPath = joinPath(command.outDir, file.path);
-      await io.mkdirp(dirname(outputPath));
-      await io.writeTextFile(outputPath, file.contents);
-    }
-  } catch (reason) {
-    io.stderr(`error: could not write output: ${formatUnknownError(reason)}`);
-    return 1;
-  }
-
-  return 0;
-}
-
-async function readSourceFiles(sourceDir: string, io: CliIo): Promise<readonly SourceFile[]> {
-  const files: SourceFile[] = [];
-
-  async function visit(dir: string): Promise<void> {
-    for (const entry of await io.readDir(dir)) {
-      const path = joinPath(dir, entry);
-      const kind = await io.stat(path);
-      if (kind === "directory") {
-        await visit(path);
-      } else if (kind === "file" && isSupportedSourceFile(path)) {
-        files.push({ path, source: await io.readTextFile(path) });
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === "--name") {
+      const value = args[index + 1];
+      if (value === undefined || value.startsWith("-")) {
+        return usageError("error: expected a package name after '--name'", "init");
       }
+      name = value;
+      index += 1;
+      continue;
     }
+    if (arg?.startsWith("-")) {
+      return usageError(`error: unknown option '${arg}'`, "init");
+    }
+    if (targetDir !== undefined) {
+      return usageError(`error: unexpected argument '${arg}'`, "init");
+    }
+    targetDir = arg;
   }
 
-  await visit(sourceDir);
-  return files.sort((left, right) => left.path.localeCompare(right.path));
+  return {
+    kind: "init",
+    targetDir: targetDir ?? ".",
+    ...(name === undefined ? {} : { name }),
+  };
 }
 
-function formatUnknownError(reason: unknown): string {
-  return reason instanceof Error ? reason.message : String(reason);
+function parseRunCommand(args: readonly string[]): CliCommand {
+  let packageDir: string | undefined;
+
+  for (const arg of args) {
+    if (arg.startsWith("-")) {
+      return usageError(`error: unknown option '${arg}'`, "run");
+    }
+    if (packageDir !== undefined) {
+      return usageError(`error: unexpected argument '${arg}'`, "run");
+    }
+    packageDir = arg;
+  }
+
+  return { kind: "run", packageDir: packageDir ?? "." };
 }
 
-function joinPath(base: string, path: string): string {
-  return `${base.replace(/\/$/, "")}/${path.replace(/^\//, "")}`;
+function usageError(message: string, command?: CommandKind): CliCommand {
+  return { kind: "error", message, ...(command === undefined ? {} : { command }) };
 }
 
-function dirname(path: string): string {
-  const index = path.lastIndexOf("/");
-  return index < 0 ? "." : path.slice(0, index);
+async function renderBuildDiagnostics(
+  diagnostics: readonly BuildDiagnostic[],
+  io: CliIo,
+): Promise<void> {
+  for (const diagnostic of diagnostics) {
+    if (diagnostic.kind === "message") {
+      io.stderr(diagnostic.message);
+      continue;
+    }
+    let source = "";
+    try {
+      source = await io.readTextFile(diagnostic.path);
+    } catch {
+      source = "";
+    }
+    io.stderr(renderDiagnostics([diagnostic.diagnostic], source, diagnostic.path));
+  }
 }

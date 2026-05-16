@@ -24,6 +24,15 @@ if (import.meta.main) {
     mkdirp: async (path) => {
       await mkdir(path, { recursive: true });
     },
+    which: async (binary) => Bun.which(binary) ?? undefined,
+    spawn: async (command) => {
+      const child = Bun.spawn([...command], {
+        stdin: "inherit",
+        stdout: "inherit",
+        stderr: "inherit",
+      });
+      return await child.exited;
+    },
     stdout: (text) => console.log(text),
     stderr: (text) => console.error(text),
   };

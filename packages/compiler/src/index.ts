@@ -8,7 +8,6 @@ export {
   lex,
   moduleNameFromPath,
   parse,
-  parsePackageManifest,
 } from "./compiler";
 export { renderDiagnostic, renderDiagnostics } from "./diagnostic-renderer";
 export { findHoverTarget, findNodeAt } from "./query";

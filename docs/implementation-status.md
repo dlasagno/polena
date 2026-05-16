@@ -194,7 +194,8 @@ Status values:
 | Feature | Status | Notes |
 |---|---|---|
 | JavaScript code generation | Implemented | Covers the MVP language surface and package ESM output. |
-| CLI compile command | Implemented | Compiles package directories with `polena compile <package-dir> --out-dir <dir>`. |
+| Build-system package split | Implemented | `@polena/build` owns manifest parsing, package layout, build, init, and run operations; the compiler operates on in-memory sources. |
+| CLI build/init/run commands | Implemented | `polena build [path] [--out-dir <dir>]`, `polena init [path] [--name <name>]`, and `polena run [path]` are implemented. |
 | Diagnostics with spans | Implemented | Compiler and CLI render source locations. |
 | Diagnostic codes | Implemented | Current diagnostics use stable codes. |
 | Language server diagnostics and completions | Implemented | Diagnostics-first LSP support exists, including package-aware diagnostics for current-package `@/` imports and manifest completions for `polena.toml`. |

@@ -450,7 +450,6 @@ function isModuleConstExpression(expression: Expression): boolean {
 export { generateJavaScript } from "./codegen";
 export { lex } from "./lexer";
 export { parse } from "./parser";
-export { parsePackageManifest } from "./manifest";
 export { moduleNameFromPath } from "./modules";
 export { findHoverTarget, findNodeAt } from "./query";
 export type { Diagnostic } from "./diagnostic";

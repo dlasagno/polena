@@ -35,7 +35,7 @@ programs end-to-end. It supports:
   assignment, property access, and field assignment
 - Fieldless and associated-data enum declarations, enum values, enum equality
   for fieldless enums, and exhaustive `match` expressions with wildcard arms
-- Package compilation from `polena.toml` and `src/index.plna`
+- Package builds from `polena.toml` and `src/index.plna`
 - Current-package module imports with `@/module`, exported declarations, and
   multi-file ESM output
 
@@ -65,7 +65,9 @@ Polena is organized as a small Bun workspace:
 
 - `packages/compiler` contains the compiler core, diagnostics, parser, checker,
   and JavaScript code generator.
-- `packages/cli` contains the `polena` command line entrypoint and file I/O.
+- `packages/build` contains manifest parsing, package layout, build, init, and
+  run operations.
+- `packages/cli` contains the `polena` command line entrypoint and process I/O.
 - `packages/language-server` contains the diagnostics-first language server.
 - `packages/vscode-extension` contains the VS Code grammar and LSP client.
 
@@ -97,10 +99,10 @@ bun run cursor:install
 bun run vscode:install
 ```
 
-Compile a package to JavaScript modules:
+Build a package to JavaScript modules:
 
 ```sh
-bun run compile examples/basic --out-dir dist/basic
+bun run build:example examples/basic --out-dir dist/basic
 ```
 
 A package contains a `polena.toml` manifest and a `src/index.plna` entry module:
@@ -109,6 +111,7 @@ A package contains a `polena.toml` manifest and a `src/index.plna` entry module:
 name = "my_app"
 version = "0.1.0"
 target = "executable"
+runtime = "node"
 ```
 
 ```tsx
@@ -132,7 +135,8 @@ The CLI also supports explicit commands and standard help/version flags:
 ```sh
 bun run packages/cli/src/index.ts --help
 bun run packages/cli/src/index.ts --version
-bun run packages/cli/src/index.ts compile examples/basic --out-dir dist/basic
+bun run packages/cli/src/index.ts build examples/basic --out-dir dist/basic
+bun run packages/cli/src/index.ts run examples/basic
 ./dist/polena --version
 ```
 

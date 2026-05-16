@@ -69,7 +69,7 @@ describe("LSP package analysis", () => {
         {
           uri: pathToFileURL("/app/polena.toml").href,
           path: "/app/polena.toml",
-          text: 'name = "app"\nversion = "0.1.0"\ntarget = "invalid"\n',
+          text: 'name = "app"\nversion = "0.1.0"\ntarget = "executable"\nruntime = "invalid"\n',
         },
       ],
       io,
@@ -77,7 +77,7 @@ describe("LSP package analysis", () => {
 
     const diagnostics = result?.diagnosticsByUri.get(pathToFileURL("/app/polena.toml").href);
     expect(diagnostics?.map((diagnostic) => diagnostic.message)).toContain(
-      "Invalid package target 'invalid'.",
+      "Invalid package runtime 'invalid'.",
     );
   });
 });

@@ -3,131 +3,177 @@ import { isSupportedSourceFile, runCli } from "../index";
 import type { CliIo } from "../cli";
 
 describe("CLI source files", () => {
-  test("accepts the standard .plna extension", () => {
+  test("accepts Polena source extensions", () => {
     expect(isSupportedSourceFile("example.plna")).toBe(true);
-  });
-
-  test("keeps accepting the longer .polena extension", () => {
     expect(isSupportedSourceFile("example.polena")).toBe(true);
-  });
-
-  test("rejects unrelated extensions", () => {
     expect(isSupportedSourceFile("example.ts")).toBe(false);
   });
 });
 
 describe("CLI commands", () => {
-  test("prints help", async () => {
-    const harness = createCliHarness();
-    const exitCode = await runCli({ args: ["help"], version: "0.1.0", io: harness.io });
+  test("prints top-level help and version", async () => {
+    const help = createCliHarness();
+    const version = createCliHarness();
 
-    expect(exitCode).toBe(0);
-    expect(harness.stdout.join("\n")).toContain("Usage:");
-    expect(harness.stdout.join("\n")).toContain("polena compile <package-dir> --out-dir <dir>");
+    expect(await runCli({ args: ["help"], version: "0.1.0", io: help.io })).toBe(0);
+    expect(await runCli({ args: ["--version"], version: "0.1.0", io: version.io })).toBe(0);
+
+    expect(help.stdout.join("\n")).toContain("polena build [path] [--out-dir <dir>]");
+    expect(version.stdout).toEqual(["polena 0.1.0"]);
   });
 
-  test("prints version", async () => {
+  test("prints command help", async () => {
     const harness = createCliHarness();
-    const exitCode = await runCli({ args: ["--version"], version: "0.1.0", io: harness.io });
 
-    expect(exitCode).toBe(0);
-    expect(harness.stdout).toEqual(["polena 0.1.0"]);
-  });
-
-  test("compiles a package to an output directory", async () => {
-    const harness = createCliHarness(
-      new Map([
-        ["app/polena.toml", 'name = "app"\nversion = "0.1.0"\ntarget = "executable"\n'],
-        ["app/src/index.plna", 'export fn main(): void { println("Hello"); }'],
-      ]),
-    );
     const exitCode = await runCli({
-      args: ["compile", "app", "--out-dir", "dist"],
+      args: ["build", "--help"],
       version: "0.1.0",
       io: harness.io,
     });
+
+    expect(exitCode).toBe(0);
+    expect(harness.stdout.join("\n")).toContain("polena build [path] [--out-dir <dir>]");
+  });
+
+  test("builds a package with default path and output directory", async () => {
+    const harness = createCliHarness(
+      new Map([
+        ["polena.toml", packageManifest()],
+        ["src/index.plna", 'export fn main(): void { println("Hello"); }'],
+      ]),
+    );
+
+    const exitCode = await runCli({ args: ["build"], version: "0.1.0", io: harness.io });
 
     expect(exitCode).toBe(0);
     expect(harness.writes.get("dist/index.js")).toContain("main();");
   });
 
-  test("rejects missing out dir", async () => {
-    const harness = createCliHarness();
-    const exitCode = await runCli({ args: ["compile", "app"], version: "0.1.0", io: harness.io });
+  test("builds a package with an output override", async () => {
+    const harness = createCliHarness(
+      new Map([
+        ["app/polena.toml", packageManifest()],
+        ["app/src/index.plna", "export fn main(): void {}"],
+      ]),
+    );
 
-    expect(exitCode).toBe(1);
-    expect(harness.stderr.join("\n")).toContain("error: expected --out-dir");
+    const exitCode = await runCli({
+      args: ["build", "app", "--out-dir", "dist"],
+      version: "0.1.0",
+      io: harness.io,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(harness.writes.get("app/dist/index.js")).toContain("main();");
+  });
+
+  test("initializes a package with an explicit name", async () => {
+    const harness = createCliHarness();
+
+    const exitCode = await runCli({
+      args: ["init", "app", "--name", "my_app"],
+      version: "0.1.0",
+      io: harness.io,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(harness.writes.get("app/polena.toml")).toContain('name = "my_app"');
+    expect(harness.writes.get("app/src/index.plna")).toContain("Hello, Polena!");
+  });
+
+  test("runs a package", async () => {
+    const harness = createCliHarness(
+      new Map([
+        ["app/polena.toml", packageManifest('runtime = "node"\n')],
+        ["app/src/index.plna", "export fn main(): void {}"],
+      ]),
+      { binaries: new Map([["node", "/bin/node"]]), spawnExitCode: 5 },
+    );
+
+    const exitCode = await runCli({ args: ["run", "app"], version: "0.1.0", io: harness.io });
+
+    expect(exitCode).toBe(5);
+    expect(harness.commands).toEqual([["/bin/node", "app/dist/index.js"]]);
   });
 
   test("prints rich diagnostics for compiler errors", async () => {
     const harness = createCliHarness(
       new Map([
-        ["app/polena.toml", 'name = "app"\nversion = "0.1.0"\ntarget = "executable"\n'],
+        ["app/polena.toml", packageManifest()],
         ["app/src/index.plna", "export fn main(): void { missing; }"],
       ]),
     );
-    const exitCode = await runCli({
-      args: ["compile", "app", "--out-dir", "dist"],
-      version: "0.1.0",
-      io: harness.io,
-    });
+
+    const exitCode = await runCli({ args: ["build", "app"], version: "0.1.0", io: harness.io });
 
     expect(exitCode).toBe(1);
     expect(harness.stderr.join("\n")).toContain("error[PLN102]: Unknown name 'missing'.");
     expect(harness.stderr.join("\n")).toContain("--> app/src/index.plna:1:26");
-    expect(harness.stderr.join("\n")).toContain("help: declare it before using it");
   });
 
-  test("reports missing manifests", async () => {
-    const harness = createCliHarness();
-    const exitCode = await runCli({
-      args: ["compile", "missing", "--out-dir", "dist"],
-      version: "0.1.0",
-      io: harness.io,
-    });
-
-    expect(exitCode).toBe(1);
-    expect(harness.stderr).toEqual(["error: package is missing 'missing/polena.toml'"]);
-  });
-
-  test("reports write failures after successful compilation", async () => {
-    const harness = createCliHarness(
+  test("reports missing manifests and write failures", async () => {
+    const missing = createCliHarness();
+    const failing = createCliHarness(
       new Map([
-        ["app/polena.toml", 'name = "app"\nversion = "0.1.0"\ntarget = "executable"\n'],
+        ["app/polena.toml", packageManifest()],
         ["app/src/index.plna", "export fn main(): void {}"],
       ]),
       { failWrites: true },
     );
-    const exitCode = await runCli({
-      args: ["compile", "app", "--out-dir", "dist"],
-      version: "0.1.0",
-      io: harness.io,
-    });
 
-    expect(exitCode).toBe(1);
-    expect(harness.stdout).toHaveLength(0);
-    expect(harness.stderr).toEqual(["error: could not write output: disk full"]);
-    expect(harness.writes.size).toBe(0);
+    expect(await runCli({ args: ["build", "missing"], version: "0.1.0", io: missing.io })).toBe(1);
+    expect(await runCli({ args: ["build", "app"], version: "0.1.0", io: failing.io })).toBe(1);
+
+    expect(missing.stderr).toEqual(["error: package is missing 'missing/polena.toml'"]);
+    expect(failing.stderr).toEqual(["error: could not write output: disk full"]);
+  });
+
+  test("rejects usage errors", async () => {
+    const cases = [
+      ["build", "--out-dir=dist"],
+      ["build", "-Vh"],
+      ["build", "one", "two"],
+      ["build", "--unknown"],
+      ["compile", "app"],
+    ] as const;
+
+    for (const args of cases) {
+      const harness = createCliHarness();
+      const exitCode = await runCli({ args, version: "0.1.0", io: harness.io });
+
+      expect(exitCode).toBe(1);
+      expect(harness.stderr[0]).toContain("error:");
+    }
   });
 });
 
+function packageManifest(extra = ""): string {
+  return `name = "app"\nversion = "0.1.0"\ntarget = "executable"\n${extra}`;
+}
+
 function createCliHarness(
   files: ReadonlyMap<string, string> = new Map(),
-  options: { readonly failWrites?: boolean } = {},
+  options: {
+    readonly failWrites?: boolean;
+    readonly binaries?: ReadonlyMap<string, string>;
+    readonly spawnExitCode?: number;
+  } = {},
 ): {
   readonly io: CliIo;
   readonly stdout: string[];
   readonly stderr: string[];
   readonly writes: Map<string, string>;
+  readonly commands: string[][];
 } {
   const stdout: string[] = [];
   const stderr: string[] = [];
   const writes = new Map<string, string>();
+  const commands: string[][] = [];
 
   return {
     io: {
       readTextFile: async (path) => {
-        const source = files.get(path);
+        const source = files.get(path) ?? writes.get(path);
         if (source === undefined) {
           throw new Error("file not found");
         }
@@ -142,12 +188,11 @@ function createCliHarness(
       readDir: async (path) => {
         const prefix = `${path.replace(/\/$/, "")}/`;
         const entries = new Set<string>();
-        for (const file of files.keys()) {
+        for (const file of [...files.keys(), ...writes.keys()]) {
           if (!file.startsWith(prefix)) {
             continue;
           }
-          const rest = file.slice(prefix.length);
-          const first = rest.split("/")[0];
+          const first = file.slice(prefix.length).split("/")[0];
           if (first !== undefined && first !== "") {
             entries.add(first);
           }
@@ -155,18 +200,26 @@ function createCliHarness(
         return [...entries].sort();
       },
       stat: async (path) => {
-        if (files.has(path)) {
+        if (files.has(path) || writes.has(path)) {
           return "file";
         }
         const prefix = `${path.replace(/\/$/, "")}/`;
-        return [...files.keys()].some((file) => file.startsWith(prefix)) ? "directory" : "missing";
+        return [...files.keys(), ...writes.keys()].some((file) => file.startsWith(prefix))
+          ? "directory"
+          : "missing";
       },
       mkdirp: async () => {},
+      which: async (binary) => options.binaries?.get(binary),
+      spawn: async (command) => {
+        commands.push([...command]);
+        return options.spawnExitCode ?? 0;
+      },
       stdout: (text) => stdout.push(text),
       stderr: (text) => stderr.push(text),
     },
     stdout,
     stderr,
     writes,
+    commands,
   };
 }

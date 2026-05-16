@@ -1,0 +1,19 @@
+{
+  "name": "@polena/build",
+  "version": "0.1.0",
+  "description": "Polena build system",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@polena/compiler": "workspace:*",
+    "smol-toml": "^1.6.1"
+  },
+  "scripts": {
+    "build": "bun build ./src/index.ts --outfile ./dist/index.js --target node",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  }
+}
