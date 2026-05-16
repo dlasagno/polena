@@ -279,6 +279,37 @@ describe("parser", () => {
     });
   });
 
+  test("reports misplaced doc comments", () => {
+    const source = [
+      "/// Expressions cannot be documented.",
+      "1;",
+      "fn value(): number {",
+      "  /// Return statements cannot be documented.",
+      "  return 1;",
+      "}",
+      "type User = {",
+      "  /// This has no field.",
+      "};",
+      "type Status = enum {",
+      "  /// This has no variant.",
+      "};",
+    ].join("\n");
+    const result = parse(lex(source).tokens);
+
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+      "PLN015",
+      "PLN015",
+      "PLN015",
+      "PLN015",
+    ]);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toEqual([
+      "Misplaced doc comment.",
+      "Misplaced doc comment.",
+      "Misplaced doc comment.",
+      "Misplaced doc comment.",
+    ]);
+  });
+
   test("parses function declarations and operator precedence", () => {
     const lexResult = lex('fn value(): string { "a" ++ "b" + "c" }');
     const parseResult = parse(lexResult.tokens);

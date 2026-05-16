@@ -42,6 +42,11 @@ export type ParseResult = {
   readonly diagnostics: readonly Diagnostic[];
 };
 
+type DocCommentBlock = {
+  readonly text: string;
+  readonly span: Span;
+};
+
 export function parse(tokens: readonly Token[]): ParseResult {
   const parser = new Parser(tokens);
   return parser.parse();
@@ -85,16 +90,18 @@ class Parser {
     const doc = this.parseDocCommentBlock();
 
     if (this.check("Type")) {
-      return this.parseTypeDeclaration(doc);
+      return this.parseTypeDeclaration(doc?.text);
     }
 
     if (this.check("Fn")) {
-      return this.parseFunctionDeclaration(doc);
+      return this.parseFunctionDeclaration(doc?.text);
     }
 
     if (this.check("Const") || this.check("Let")) {
-      return this.parseVariableDeclaration(true, doc);
+      return this.parseVariableDeclaration(true, doc?.text);
     }
+
+    this.reportMisplacedDocComment(doc, "doc comments can only document declarations here");
 
     if (this.isAssignmentStatementStart()) {
       return this.parseAssignmentStatement();
@@ -239,10 +246,12 @@ class Parser {
       const doc = this.parseDocCommentBlock();
 
       if (this.check("Const") || this.check("Let")) {
-        statements.push(this.parseVariableDeclaration(true, doc));
+        statements.push(this.parseVariableDeclaration(true, doc?.text));
         this.ensureProgress(startIndex);
         continue;
       }
+
+      this.reportMisplacedDocComment(doc, "doc comments can only document local declarations here");
 
       if (this.check("Return")) {
         statements.push(this.parseReturnStatement());
@@ -442,10 +451,18 @@ class Parser {
         do {
           const doc = this.parseDocCommentBlock();
           if (this.check("RightBrace")) {
+            this.reportMisplacedDocComment(
+              doc,
+              "doc comments can only document object type fields here",
+            );
             break;
           }
 
           if (!this.check("Identifier")) {
+            this.reportMisplacedDocComment(
+              doc,
+              "doc comments can only document object type fields here",
+            );
             this.diagnostics.push(
               error("Expected field name in object type.", this.current().span, {
                 code: DiagnosticCode.ParseExpectedToken,
@@ -466,7 +483,7 @@ class Parser {
               nameSpan: name.span,
               type,
               span: mergeSpans(name.span, type.span),
-              ...(doc === undefined ? {} : { doc }),
+              ...(doc === undefined ? {} : { doc: doc.text }),
             }),
           );
         } while (this.match("Comma"));
@@ -555,9 +572,13 @@ class Parser {
       do {
         const doc = this.parseDocCommentBlock();
         if (this.check("RightBrace")) {
+          this.reportMisplacedDocComment(doc, "doc comments can only document enum variants here");
           break;
         }
 
+        if (!this.check("Identifier")) {
+          this.reportMisplacedDocComment(doc, "doc comments can only document enum variants here");
+        }
         const name = this.expect("Identifier", "Expected enum variant name.");
         let span = name.span;
         const payload: TypeNode[] = [];
@@ -605,7 +626,7 @@ class Parser {
             nameSpan: name.span,
             payload,
             span,
-            ...(doc === undefined ? {} : { doc }),
+            ...(doc === undefined ? {} : { doc: doc.text }),
           }),
         );
       } while (this.match("Comma"));
@@ -821,6 +842,20 @@ class Parser {
     }
 
     const token = this.current();
+    if (token.kind === "DocComment") {
+      const doc = this.parseDocCommentBlock();
+      this.reportMisplacedDocComment(
+        doc,
+        "doc comments can only document declarations, object type fields, or enum variants",
+      );
+      return this.node({
+        kind: "NumberLiteral",
+        value: 0,
+        text: "0",
+        span: doc?.span ?? token.span,
+      });
+    }
+
     this.diagnostics.push(
       error("Expected an expression.", token.span, {
         code: DiagnosticCode.ExpectedExpression,
@@ -1139,16 +1174,32 @@ class Parser {
     return token;
   }
 
-  private parseDocCommentBlock(): string | undefined {
+  private parseDocCommentBlock(): DocCommentBlock | undefined {
     if (!this.check("DocComment")) {
       return undefined;
     }
 
     const lines: string[] = [];
+    const first = this.current();
+    let last = first;
     while (this.check("DocComment")) {
-      lines.push(this.advance().text);
+      last = this.advance();
+      lines.push(last.text);
     }
-    return lines.join("\n");
+    return { text: lines.join("\n"), span: mergeSpans(first.span, last.span) };
+  }
+
+  private reportMisplacedDocComment(doc: DocCommentBlock | undefined, label: string): void {
+    if (doc === undefined) {
+      return;
+    }
+
+    this.diagnostics.push(
+      error("Misplaced doc comment.", doc.span, {
+        code: DiagnosticCode.MisplacedDocComment,
+        label,
+      }),
+    );
   }
 
   private skipModuleDocComments(): void {
