@@ -234,6 +234,23 @@ describe("lexer", () => {
 });
 
 describe("parser", () => {
+  test("attaches module doc comments to programs", () => {
+    const source = ["//! Module docs.", "//!", "//! More module docs.", "const answer = 42;"].join(
+      "\n",
+    );
+    const result = parse(lex(source).tokens);
+
+    expect(result.diagnostics).toHaveLength(0);
+    expect(result.program).toMatchObject({
+      doc: "Module docs.\n\nMore module docs.",
+      docSpan: {
+        start: { line: 1, column: 1 },
+        end: { line: 3, column: 22 },
+      },
+      declarations: [{ kind: "VariableDeclaration", name: "answer" }],
+    });
+  });
+
   test("attaches doc comments to declarations", () => {
     const source =
       "/// Adds one.\n///\n/// Returns the next value.\nfn next(value: number): number { value + 1 }";
@@ -307,6 +324,25 @@ describe("parser", () => {
       "Misplaced doc comment.",
       "Misplaced doc comment.",
       "Misplaced doc comment.",
+    ]);
+  });
+
+  test("reports misplaced module doc comments", () => {
+    const source = [
+      "const answer = 42;",
+      "//! Module docs must be first.",
+      "const other = 1;",
+      "fn value(): number {",
+      "  //! Module docs cannot be in blocks.",
+      "  return other;",
+      "}",
+    ].join("\n");
+    const result = parse(lex(source).tokens);
+
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(["PLN015", "PLN015"]);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toEqual([
+      "Misplaced module doc comment.",
+      "Misplaced module doc comment.",
     ]);
   });
 

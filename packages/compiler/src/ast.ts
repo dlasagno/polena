@@ -68,6 +68,8 @@ export type Program = {
   readonly nodeId: NodeId;
   readonly declarations: readonly TopLevelDeclaration[];
   readonly span: Span;
+  readonly doc?: string;
+  readonly docSpan?: Span;
 };
 
 export type TopLevelDeclaration =

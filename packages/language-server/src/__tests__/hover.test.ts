@@ -4,6 +4,21 @@ import { TextDocument } from "vscode-languageserver-textdocument";
 import { getHover } from "../hover";
 
 describe("LSP hover", () => {
+  test("returns module doc hovers at the top of the file", () => {
+    const source = ["//! Module docs.", "//!", "//! More module docs.", "const answer = 42;"].join(
+      "\n",
+    );
+    const document = TextDocument.create("file:///example.plna", "polena", 1, source);
+    const analysis = analyze(source);
+
+    expect(hoverText(document, analysis, source.indexOf("Module"))).toBe(
+      "Module docs.\n\nMore module docs.",
+    );
+    expect(hoverText(document, analysis, source.indexOf("answer"))).toBe(
+      "```polena\nconst answer: number\n```",
+    );
+  });
+
   test("returns useful expression hovers and null for punctuation", () => {
     const source = "const x = 1 + 2;\nconst y = x;";
     const document = TextDocument.create("file:///example.plna", "polena", 1, source);

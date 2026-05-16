@@ -62,13 +62,10 @@ class Parser {
   public parse(): ParseResult {
     this.nextNodeId = 0;
     const declarations: TopLevelDeclaration[] = [];
+    const moduleDoc = this.parseModuleDocCommentBlock();
 
     while (!this.check("Eof")) {
       const startIndex = this.index;
-      this.skipModuleDocComments();
-      if (this.check("Eof")) {
-        break;
-      }
       declarations.push(this.parseTopLevelDeclaration());
       this.ensureProgress(startIndex);
     }
@@ -81,12 +78,29 @@ class Parser {
         kind: "Program",
         declarations,
         span: spanFrom(start, end),
+        ...(moduleDoc === undefined ? {} : { doc: moduleDoc.text, docSpan: moduleDoc.span }),
       }),
       diagnostics: this.diagnostics,
     };
   }
 
   private parseTopLevelDeclaration(): TopLevelDeclaration {
+    const misplacedModuleDoc = this.parseModuleDocCommentBlock();
+    this.reportMisplacedModuleDocComment(misplacedModuleDoc);
+    if (misplacedModuleDoc !== undefined && this.check("Eof")) {
+      const expression = this.node({
+        kind: "NumberLiteral" as const,
+        value: 0,
+        text: "0",
+        span: misplacedModuleDoc.span,
+      });
+      return this.node({
+        kind: "ExpressionStatement",
+        expression,
+        span: misplacedModuleDoc.span,
+      });
+    }
+
     const doc = this.parseDocCommentBlock();
 
     if (this.check("Type")) {
@@ -244,6 +258,14 @@ class Parser {
     while (!this.check("RightBrace") && !this.check("Eof")) {
       const startIndex = this.index;
       const doc = this.parseDocCommentBlock();
+      this.reportMisplacedModuleDocComment(this.parseModuleDocCommentBlock());
+      if (this.check("RightBrace")) {
+        this.reportMisplacedDocComment(
+          doc,
+          "doc comments can only document local declarations here",
+        );
+        break;
+      }
 
       if (this.check("Const") || this.check("Let")) {
         statements.push(this.parseVariableDeclaration(true, doc?.text));
@@ -450,6 +472,7 @@ class Parser {
       if (!this.check("RightBrace")) {
         do {
           const doc = this.parseDocCommentBlock();
+          this.reportMisplacedModuleDocComment(this.parseModuleDocCommentBlock());
           if (this.check("RightBrace")) {
             this.reportMisplacedDocComment(
               doc,
@@ -571,6 +594,7 @@ class Parser {
     if (!this.check("RightBrace")) {
       do {
         const doc = this.parseDocCommentBlock();
+        this.reportMisplacedModuleDocComment(this.parseModuleDocCommentBlock());
         if (this.check("RightBrace")) {
           this.reportMisplacedDocComment(doc, "doc comments can only document enum variants here");
           break;
@@ -848,6 +872,17 @@ class Parser {
         doc,
         "doc comments can only document declarations, object type fields, or enum variants",
       );
+      return this.node({
+        kind: "NumberLiteral",
+        value: 0,
+        text: "0",
+        span: doc?.span ?? token.span,
+      });
+    }
+
+    if (token.kind === "ModuleDocComment") {
+      const doc = this.parseModuleDocCommentBlock();
+      this.reportMisplacedModuleDocComment(doc);
       return this.node({
         kind: "NumberLiteral",
         value: 0,
@@ -1189,6 +1224,21 @@ class Parser {
     return { text: lines.join("\n"), span: mergeSpans(first.span, last.span) };
   }
 
+  private parseModuleDocCommentBlock(): DocCommentBlock | undefined {
+    if (!this.check("ModuleDocComment")) {
+      return undefined;
+    }
+
+    const lines: string[] = [];
+    const first = this.current();
+    let last = first;
+    while (this.check("ModuleDocComment")) {
+      last = this.advance();
+      lines.push(last.text);
+    }
+    return { text: lines.join("\n"), span: mergeSpans(first.span, last.span) };
+  }
+
   private reportMisplacedDocComment(doc: DocCommentBlock | undefined, label: string): void {
     if (doc === undefined) {
       return;
@@ -1202,10 +1252,17 @@ class Parser {
     );
   }
 
-  private skipModuleDocComments(): void {
-    while (this.check("ModuleDocComment")) {
-      this.advance();
+  private reportMisplacedModuleDocComment(doc: DocCommentBlock | undefined): void {
+    if (doc === undefined) {
+      return;
     }
+
+    this.diagnostics.push(
+      error("Misplaced module doc comment.", doc.span, {
+        code: DiagnosticCode.MisplacedDocComment,
+        label: "module doc comments must appear at the top of the file before declarations",
+      }),
+    );
   }
 
   private expectClosingDelimiter(

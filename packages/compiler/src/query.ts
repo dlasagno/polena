@@ -16,6 +16,7 @@ import type {
 import type { Span } from "./span";
 
 export type HoverTargetKind =
+  | "ModuleDoc"
   | "Expression"
   | "MemberName"
   | "TypeReference"
@@ -36,6 +37,10 @@ export function findNodeAt(program: Program, offset: number): NodeId | undefined
 }
 
 export function findHoverTarget(program: Program, offset: number): HoverTarget | undefined {
+  if (program.docSpan !== undefined && contains(program.docSpan, offset)) {
+    return target("ModuleDoc", program.nodeId, program.docSpan);
+  }
+
   for (const declaration of program.declarations) {
     const found = findInTopLevelDeclaration(declaration, offset);
     if (found !== undefined) {

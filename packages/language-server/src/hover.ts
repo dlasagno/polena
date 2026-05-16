@@ -55,6 +55,8 @@ export function getHover(
 
 function renderHover(analysis: AnalyzeResult, target: HoverTarget): string | undefined {
   switch (target.kind) {
+    case "ModuleDoc":
+      return analysis.program.doc;
     case "Expression":
       return renderExpressionHover(analysis, target.nodeId);
     case "MemberName":
