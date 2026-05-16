@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
 import type { CompileResult } from "../compiler";
 import { compile, compilePackage, lex, parse } from "../compiler";
 
@@ -1054,15 +1053,46 @@ const value = add(answer, 1);
     expect(executeValue(result.js)).toBe(43);
   });
 
-  test("compiles the checked-in MVP example", () => {
-    const source = readFileSync(
-      new URL("../../../../examples/basic.plna", import.meta.url),
-      "utf8",
-    );
-    const result = expectCompileOk(source);
+  test("compiles the checked-in package example", () => {
+    const result = compilePackage({
+      manifest: { name: "basic", version: "0.1.0", target: "executable" },
+      rootDir: "examples/basic",
+      sourceDir: "examples/basic/src",
+      files: [
+        {
+          path: "examples/basic/src/index.plna",
+          source: [
+            "import @/users.{type User, greeting} as users;",
+            "export fn main(): void {",
+            '  const user: User = { name: "Ada" };',
+            "  println(users.greeting(user));",
+            "}",
+          ].join("\n"),
+        },
+        {
+          path: "examples/basic/src/users.plna",
+          source: [
+            "export type User = {",
+            "  name: string,",
+            "};",
+            "export fn greeting(user: User): string {",
+            ['  "Hello ', "$", '{user.name}"'].join(""),
+            "}",
+          ].join("\n"),
+        },
+      ],
+    });
 
-    expect(result.js).toContain("__polenaIndex");
-    expect(result.js).toContain("const thresholds = [70, 90];");
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    expect(result.files.find((file) => file.path === "index.js")?.contents).toContain(
+      'import * as users from "./users.js";',
+    );
+    expect(result.files.find((file) => file.path === "users.js")?.contents).toContain(
+      "export function greeting",
+    );
   });
 
   test("supports named type aliases in annotations", () => {

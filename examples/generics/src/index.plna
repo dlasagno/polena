@@ -12,20 +12,6 @@ type Page<T> = {
 
 type StringPair<V> = Pair<string, V>;
 
-const scorePair: StringPair<number> = {
-  first: "Ada",
-  second: 98,
-};
-
-const names: Page<string> = {
-  items: ["Ada", "Grace"],
-  page: 1,
-};
-
-const present = Option.Some(scorePair.second);
-const missing: Option<number> = .None;
-const nested: Option<Option<number>> = .Some(present);
-
 fn describeScore(score: Option<number>): string {
   match score {
     .Some(value) => "score ${value}",
@@ -45,9 +31,6 @@ type ParseError = enum {
   Invalid,
 };
 
-const parsed: Result<number, ParseError> = .Ok(42);
-const failed: Result<number, ParseError> = .Err(ParseError.Empty);
-
 fn describeResult(result: Result<number, ParseError>): string {
   match result {
     .Ok(value) => "parsed ${value}",
@@ -58,13 +41,31 @@ fn describeResult(result: Result<number, ParseError>): string {
   }
 }
 
-println("pair ${scorePair.first}: ${scorePair.second}");
-println("page ${names.page}: ${names.items[0]}, ${names.items[1]}");
-println(describeScore(present));
-println(describeScore(missing));
-println(describeNested(nested));
-println(describeResult(parsed));
-println(describeResult(failed));
+export fn main(): void {
+  const scorePair: StringPair<number> = {
+    first: "Ada",
+    second: 98,
+  };
+
+  const names: Page<string> = {
+    items: ["Ada", "Grace"],
+    page: 1,
+  };
+
+  const present = Option.Some(scorePair.second);
+  const missing: Option<number> = .None;
+  const nested: Option<Option<number>> = .Some(present);
+  const parsed: Result<number, ParseError> = .Ok(42);
+  const failed: Result<number, ParseError> = .Err(ParseError.Empty);
+
+  println("pair ${scorePair.first}: ${scorePair.second}");
+  println("page ${names.page}: ${names.items[0]}, ${names.items[1]}");
+  println(describeScore(present));
+  println(describeScore(missing));
+  println(describeNested(nested));
+  println(describeResult(parsed));
+  println(describeResult(failed));
+}
 
 // Invalid generic behavior, shown here as comments so this example still compiles:
 // const missingTypeArgument: Option = .None;

@@ -22,13 +22,13 @@ describe("diagnostic renderer", () => {
         ],
       },
       source,
-      fileName: "examples/basic.plna",
+      fileName: "examples/basic/src/index.plna",
     });
 
     expect(rendered).toBe(
       [
         "error[PLN202]: Expected 'boolean', got 'number'.",
-        "  --> examples/basic.plna:1:4",
+        "  --> examples/basic/src/index.plna:1:4",
         "  |",
         "1 | if 123 {",
         "  |    ^^^ condition must be a boolean",

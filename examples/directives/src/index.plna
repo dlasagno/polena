@@ -1,0 +1,42 @@
+// Compiler directives are design documentation today. The package compiles, and
+// the proposed directive syntax is preserved below as commented source.
+
+type SchemaKind = enum {
+  String,
+  Array,
+};
+
+fn zString(): SchemaKind {
+  .String
+}
+
+fn zArray(): SchemaKind {
+  .Array
+}
+
+export fn main(): void {
+  const userSchema = zArray();
+  const description = match userSchema {
+    .String => "string",
+    .Array => "array",
+  };
+
+  println("schema kind: ${description}");
+}
+
+// Proposed future directive example:
+//
+// const userSchema = zArray(zString());
+//
+// type User = @typeOf({
+//   const schema = userSchema;
+//   match schema {
+//     .String => "",
+//     .Array(items) => [
+//       match items.get(0) {
+//         .String => "",
+//         _ => "",
+//       }
+//     ],
+//   }
+// })
