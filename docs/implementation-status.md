@@ -23,6 +23,7 @@ Status values:
 |---|---|---|
 | UTF-8 source files | Partially implemented | Source is handled as JavaScript strings; no explicit encoding validation. |
 | Line comments with `//` | Implemented | Block comments are not supported. |
+| Doc comments with `///` and `//!` | Implemented | Item and module doc comments are parsed, attached to supported declarations, and surfaced by hover where available. |
 | Identifiers | Partially implemented | ASCII letters, digits, `_`, and `$` are supported. Unicode identifiers are not implemented. |
 | Reserved words | Partially implemented | Only MVP keywords are tokenized. Several spec-reserved future words are not recognized yet. |
 | Invalid character diagnostics | Implemented | Lexer reports invalid characters. |
@@ -198,5 +199,5 @@ Status values:
 | CLI build/init/run commands | Implemented | `polena build [path] [--out-dir <dir>]`, interactive `polena init [path] [--name <name>] [--yes]`, and `polena run [path] [-- args...]` are implemented. |
 | Diagnostics with spans | Implemented | Compiler and CLI render source locations. |
 | Diagnostic codes | Implemented | Current diagnostics use stable codes. |
-| Language server diagnostics and completions | Implemented | Diagnostics-first LSP support exists, including package-aware diagnostics for current-package `@/` imports and manifest completions for `polena.toml`. |
-| VS Code extension | Partially implemented | Syntax highlighting and LSP client exist for the MVP surface. |
+| Language server diagnostics and completions | Implemented | LSP support includes package-aware diagnostics for current-package `@/` imports, manifest completions for `polena.toml`, hover, and document symbols. |
+| VS Code extension | Partially implemented | Syntax highlighting, language configuration, and LSP client exist for the MVP surface. |

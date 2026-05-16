@@ -26,7 +26,6 @@ The following are deliberately out of scope for this draft. They may be specifie
 - Build profiles (debug/release), feature flags, or build scripts.
 - Browser bundling, asset pipelines, and HTML generation.
 - Cross-runtime compatibility shims.
-- Argument forwarding through `polena run`.
 - A clean operation that removes the output directory.
 
 ---
@@ -204,7 +203,8 @@ The resolved path is interpreted relative to the package root. Absolute paths ar
 1. Run the `build` operation. On failure, propagate the failure without invoking the runtime.
 2. Resolve the entry file: `<out-dir>/index.js`.
 3. Invoke the runtime (see §8.3) with the entry file as its program input,
-   followed by any command-line arguments supplied by the caller.
+   followed by any command-line arguments supplied by the caller after the CLI
+   `--` delimiter.
 4. The runtime's standard input, standard output, and standard error are connected to the calling process.
 5. The exit code of `run` is the runtime's exit code unchanged.
 

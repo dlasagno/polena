@@ -1,16 +1,19 @@
 # Roadmap
 
-Status: first draft  
+Status: maintained planning note  
 Scope: compiler, language design, tooling, and eventual Rust port
 
-This roadmap describes a practical path from the current TypeScript compiler MVP
-to a more complete Polena implementation. It is not a commitment to exact dates
-or release contents. The language specification remains the source of truth for
-intended syntax and semantics, and `docs/implementation-status.md` remains the
-source of truth for what the compiler currently supports.
+This roadmap describes the practical next steps from the current TypeScript
+compiler MVP. It is not a release schedule. The language specification remains
+the source of truth for intended syntax and semantics, and
+`docs/implementation-status.md` remains the source of truth for what the
+compiler currently supports.
 
-The main priority is to grow the language without losing compiler correctness,
-diagnostic quality, or a clear architecture that can later be ported to Rust.
+The current MVP already has a useful vertical slice: parsing, checking,
+diagnostics, JavaScript emission, package builds, current-package imports,
+language-server diagnostics, hovers, document symbols, and a VS Code extension.
+The priority now is to harden that surface before expanding into larger
+language areas.
 
 ---
 
@@ -31,331 +34,195 @@ diagnostic quality, or a clear architecture that can later be ported to Rust.
 
 ---
 
-## Phase 0: Stabilize the Existing MVP
+## Current Baseline
 
-Goal: make the current supported language surface reliable, documented, and
-pleasant to use.
+Implemented foundations include:
+
+- Source spans, structured diagnostics, and diagnostic rendering.
+- Lexer and parser coverage for the MVP language surface, including doc
+  comments.
+- Variables, functions, arrays, objects, enums, exhaustive `match`, generics,
+  `Option<T>`, `Result<T, E>`, and expression-valued control flow.
+- JavaScript code generation for single-file and package compilation.
+- Package manifests, recursive source discovery, `build`, `init`, and `run`.
+- Current-package imports with `@/module`, explicit exports, and ESM output.
+- Language-server diagnostics, package analysis, manifest completions, hover,
+  and document symbols.
+- VS Code syntax highlighting and an LSP client.
+
+Important open areas include:
+
+- JavaScript and TypeScript interop declarations.
+- TypeScript declaration generation.
+- Standard-library packaging and runtime profile design.
+- `try`, panic semantics, unsafe operations, async, traits, and compile-time
+  evaluation.
+- External dependencies, workspaces, and package management.
+
+---
+
+## Track 1: Harden the Current MVP
+
+Goal: make the implemented language surface reliable, documented, and pleasant
+to use.
 
 Candidate work:
 
-- Close known gaps between implemented features and their current spec wording.
+- Close gaps between implemented behavior and `docs/language-spec.md`.
 - Expand tests for lexer edge cases, parser recovery, checker diagnostics, code
-  generation, CLI behavior, and language-server diagnostics.
+  generation, package builds, CLI behavior, and language-server features.
 - Audit diagnostic codes for consistency, stable wording, actionable help text,
   and accurate spans.
-- Improve parser recovery where common syntax mistakes currently create noisy
-  cascading diagnostics.
+- Improve parser recovery where common syntax mistakes create noisy cascading
+  diagnostics.
+- Add more end-to-end example programs that exercise imports, generics,
+  objects, enums, `Option`, `Result`, checked indexing, and diagnostics.
+- Add golden tests for emitted JavaScript where output stability matters.
 - Keep `README.md`, `docs/language-spec.md`, `docs/prelude.md`, and
   `docs/implementation-status.md` aligned with compiler behavior.
-- Add more end-to-end example programs that exercise functions, arrays,
-  expression-valued control flow, checked indexing, and diagnostics.
-- Keep equality semantics for unsupported types covered by spec text, checker
-  diagnostics, tests, and implementation status.
-
-CLI:
-
-- Keep CLI code thin and delegate compiler behavior to package APIs.
-- Keep `--help`, `--version`, explicit commands, and error exit codes stable.
-- Add snapshot or fixture-based tests for CLI output where output is intended to
-  be stable.
-
-Language server:
-
-- Keep language-server diagnostics based on the same compiler APIs used by the
-  CLI.
-- Track document versions carefully to avoid reporting stale diagnostics.
-- Add tests for opened documents, changed documents, and syntax errors.
-
-VS Code extension:
-
-- Ensure the bundled language server is built and launched consistently.
-- Keep language configuration, brackets, comments, and indentation behavior
-  aligned with the current language surface.
-- Improve README instructions for local development and VSIX packaging where
-  needed.
 
 Exit criteria:
 
 - `bun run check` is the expected local quality gate.
-- The current MVP examples compile consistently.
+- The examples under `examples/` build consistently.
 - Diagnostics for supported syntax have stable tests.
 - Implementation status accurately reflects all supported behavior.
 
 ---
 
-## Phase 1: Type Declarations and Object Values
+## Track 2: Finish Module and Package Semantics
 
-Goal: introduce named types and object support as the next major foundation for
-real programs.
-
-Candidate work:
-
-- Implement `type Name = ...;` declarations.
-- Add a separate type namespace if that remains the chosen design.
-- Implement object type syntax and object literals.
-- Implement object property access and type checking.
-- Implement object field assignment only after mutability and assignment rules
-  are specified clearly.
-- Add tests for duplicate fields, missing fields, extra fields, field ordering,
-  nested objects, and diagnostic spans.
-
-CLI:
-
-- No dedicated CLI feature work is expected unless object support changes emitted
-  file behavior or diagnostics formats.
-
-Language server:
-
-- Ensure diagnostics for type declarations and objects match compiler behavior.
-- Add document symbols for type and function declarations if declaration data is
-  stable enough.
-
-VS Code extension:
-
-- Update syntax highlighting for `type` declarations, object type syntax, object
-  literals, and property access.
-- Keep bracket and indentation behavior sensible for object literals and object
-  types.
-
-Design questions to settle first:
-
-- Exact structural typing rules for objects.
-- Whether object field order has any semantic significance.
-- Shadowing rules for values and types.
-- Mutability rules for object values and object fields.
-
-Exit criteria:
-
-- Named object types can be parsed, checked, emitted to JavaScript, and diagnosed
-  end-to-end.
-- Object examples are present in the language spec and compiler tests.
-- Unsupported object behavior fails with clear diagnostics.
-
----
-
-## Phase 2: Enums and Exhaustive Match
-
-Goal: add algebraic data modeling and exhaustive control flow.
+Goal: turn current-package imports into a stable foundation for larger programs.
 
 Candidate work:
 
-- Add match guards if they become part of the initial `match` feature.
-
-CLI:
-
-- No dedicated CLI feature work is expected beyond preserving diagnostic output
-  and generated JavaScript behavior.
-
-Language server:
-
-- Add document symbols for enum declarations if declaration data is stable
-  enough.
-
-VS Code extension:
-
-- Update syntax highlighting for enum declarations, variants, `match`, patterns,
-  and match arms.
+- Specify and test all current-package import forms, visibility rules, duplicate
+  imports, private export access, missing modules, and cycles.
+- Decide whether re-exports are in scope for the initial module system.
+- Define package-root discovery behavior explicitly for CLI and tooling.
+- Decide how library packages should expose public APIs to generated output.
+- Add import-chain context to module diagnostics where useful.
+- Keep language-server package analysis identical to CLI package analysis.
 
 Design questions to settle first:
 
-- Whether guards are part of the initial `match` feature.
+- Re-export syntax and semantics.
+- Opaque type visibility rules.
+- Whether `src/index.plna` remains mandatory for every package shape.
+- How external packages will eventually map onto the current `@/` import model.
 
 Exit criteria:
 
-- Fieldless enums, associated-data enums, and exhaustive `match` work
-  end-to-end.
-- The checker can produce focused missing-case and malformed-pattern
-  diagnostics.
-- The generated JavaScript remains readable and stable.
+- Multi-file packages compile through the CLI with predictable ESM output.
+- Module diagnostics include useful source spans and, where relevant, import
+  context.
+- The module rules in the language spec, build spec, and implementation status
+  agree.
 
 ---
 
-## Phase 3: Option, Result, and Error Handling
-
-Goal: support explicit absence and recoverable errors without exposing
-JavaScript `null`, `undefined`, or ordinary exceptions as language-level control
-flow.
-
-Candidate work:
-
-- Decide whether `Option` and `Result` are built-in types, prelude types, or
-  standard-library types.
-- Implement enough generics or compiler-known type forms to express
-  `Option<T>` and `Result<T, E>`.
-- Add construction, matching, and ergonomic access patterns.
-- Implement the `try` operator after `Result` semantics are specified.
-- Define how panics are represented in generated JavaScript.
-- Replace ad hoc runtime failures with the chosen panic model where appropriate.
-- Add tests for explicit handling, rejected implicit truthiness, and diagnostic
-  quality.
-
-CLI:
-
-- No dedicated CLI feature work is expected unless panic or runtime-profile
-  choices require new compile options.
-
-Language server:
-
-- Surface diagnostics for invalid `try` usage and unhandled result-like values if
-  those checks become part of the language.
-
-VS Code extension:
-
-- Update syntax highlighting if `try`, generic type syntax, or related enum
-  patterns add new syntax forms.
-
-Design questions to settle first:
-
-- Generic function syntax and type parameter constraints (basic generic type
-  declarations are specified in section 25 of the language spec).
-- Whether `Option` and `Result` need special checker support.
-- Exact `try` operator syntax and permitted contexts.
-- Boundary behavior for JavaScript exceptions.
-
-Exit criteria:
-
-- Programs can model absence and recoverable errors explicitly.
-- `try` lowers predictably to JavaScript.
-- Diagnostics guide users away from exception-like or truthiness-based patterns.
-
----
-
-## Phase 4: Modules, Imports, and Interop Boundaries
-
-Goal: make multi-file programs and explicit JavaScript/TypeScript interop
-possible.
-
-Candidate work:
-
-- Specify module syntax, file resolution, and export rules.
-- Implement name resolution across source files.
-- Decide how generated JavaScript modules are emitted.
-- Specify JavaScript/TypeScript interop declarations.
-- Define how ambient declarations relate to generated TypeScript declarations.
-- Add tests for duplicate exports, missing imports, cycles, visibility, and
-  stable output paths.
-
-CLI:
-
-- Add support for compiling a module graph.
-- Define output directory behavior before multi-file emission is added.
-- Document supported file extensions, generated output behavior, and common
-  commands.
-- Add machine-readable diagnostics output if needed by tools and editors.
-
-Language server:
-
-- Add go-to definition after cross-file name resolution exists.
-- Report module resolution diagnostics with useful import-chain context.
-- Add completion for imports only after module resolution rules are stable.
-
-VS Code extension:
-
-- Update syntax highlighting for import, export, and interop declaration syntax.
-- Add extension-level configuration only if module resolution needs editor
-  settings.
-
-Design questions to settle first:
-
-- How much JavaScript interop is allowed before the type system is mature.
-- Re-exports and opaque-type syntax.
-- Dependency declaration format in `polena.toml`, both for external
-  dependencies and for workspace-internal references.
-- Compilation-target field in `polena.toml` (browser, Node, and similar).
-
-The module path syntax, import grammar, package layout, workspace layout,
-and the declarations-only/`main` rules are specified in section 30 of the
-language spec.
-
-Exit criteria:
-
-- Multi-file programs compile through the CLI.
-- Interop boundaries are explicit in source code.
-- Module diagnostics include useful source spans and import chains.
-
----
-
-## Phase 5: Standard Library and Runtime Profiles
+## Track 3: Standard Library and Runtime Model
 
 Goal: move from a tiny compiler-provided prelude toward deliberate core library
 support.
 
 Candidate work:
 
-- Split provisional prelude behavior from long-term standard library design.
-- Define runtime profiles for browser, CLI, and shared JavaScript environments.
-- Add basic string, array, numeric, and formatting helpers only when the type
-  system can support their signatures cleanly.
-- Add safe array access such as `.get(index)` after `Option` exists.
+- Decide which prelude items are stable language affordances and which are
+  bootstrap conveniences.
+- Define runtime profiles for Node, Bun, Deno, browser, and shared JavaScript
+  environments only when they affect source checking or emitted code.
+- Add basic string, array, numeric, and formatting helpers when their signatures
+  are representable without special cases.
 - Define parsing helpers that return `Result` or `Option`.
+- Replace ad hoc runtime failures with the chosen panic model where appropriate.
 - Keep runtime helpers small, explicit, and tested.
-
-CLI:
-
-- Add compile options for runtime profile selection if profiles are not inferred
-  from project configuration.
-
-Language server:
-
-- Use the same runtime profile assumptions as the CLI when checking source files.
-
-VS Code extension:
-
-- Expose runtime profile configuration only if the language server needs editor
-  settings to match CLI behavior.
 
 Design questions to settle first:
 
-- Standard library packaging and import model.
-- Runtime profile selection.
-- Whether standard library code is written in Polena, TypeScript, or a mix during
-  the bootstrap period.
+- Standard-library packaging and import model.
+- Panic representation and whether checked indexing should throw
+  `PolenaPanic`, `RangeError`, or another runtime value.
+- Runtime profile selection and whether it belongs in `polena.toml`.
+- Whether standard library code is written in Polena, TypeScript, or a mix
+  during the bootstrap period.
 
 Exit criteria:
 
 - Common small programs do not depend on compiler magic beyond intentional
   built-ins.
 - Runtime helpers have tests and documented behavior.
-- The prelude is documented as either stable or explicitly provisional.
+- The prelude is documented as stable or explicitly provisional.
 
 ---
 
-## Phase 6: TypeScript Declarations
+## Track 4: TypeScript and JavaScript Interop
 
-Goal: generate useful `.d.ts` files for JavaScript and TypeScript consumers.
+Goal: make Polena usable from JavaScript and TypeScript without blurring
+language boundaries.
 
 Candidate work:
 
-- Define which Polena constructs are publicly exportable.
+- Specify JavaScript/TypeScript interop declarations.
+- Define how `unknown`, `null`, `undefined`, exceptions, classes, and async
+  JavaScript APIs are represented at boundaries.
+- Add `.d.ts` declaration generation as a separate compiler phase.
 - Map Polena primitive, array, object, enum, function, `Option`, and `Result`
   types to TypeScript declarations.
-- Decide how explicit interop declarations affect generated `.d.ts` output.
-- Add declaration generation as a separate compiler phase.
 - Add tests that compare emitted JavaScript and emitted declarations.
 
-CLI:
+Design questions to settle first:
 
-- Add an option or command behavior for declaration output after the compiler API
-  supports it.
-
-Language server:
-
-- No dedicated language-server feature work is expected unless generated
-  declarations become visible to editor workflows.
-
-VS Code extension:
-
-- No dedicated VS Code extension work is expected for declaration generation.
+- Native declaration file format.
+- Whether `.d.ts` input is consumed directly or converted into Polena-specific
+  declarations.
+- Class interop shape and whether construction/member access requires special
+  syntax.
+- Boundary behavior for JavaScript exceptions and promises.
 
 Exit criteria:
 
 - Exported Polena APIs produce stable declaration files.
-- Unsupported constructs produce clear diagnostics or documented fallback output.
-- Declaration generation does not leak checker internals into code generation.
+- Interop boundaries are explicit in source code.
+- Unsupported constructs produce clear diagnostics or documented fallback
+  output.
 
 ---
 
-## Phase 7: Rust Port Preparation
+## Track 5: Error Handling, Unsafe, and Async
+
+Goal: complete the control-flow story around recoverable errors, panics,
+unchecked operations, and asynchronous JavaScript hosts.
+
+Candidate work:
+
+- Specify and implement the `try` operator after `Result` conversion rules are
+  clear.
+- Specify panic semantics for checked operations and violated invariants.
+- Define explicit unsafe operations, including unchecked array access if it is
+  accepted into the language.
+- Specify async function syntax and the interaction between async, `Result`, and
+  `try`.
+- Add diagnostics that guide users away from exception-like or truthiness-based
+  patterns.
+
+Design questions to settle first:
+
+- Exact `try` operator syntax and permitted contexts.
+- Error conversion rules.
+- Panic value, stack behavior, and async unwinding.
+- Unsafe block or unsafe operation syntax.
+
+Exit criteria:
+
+- Programs can model absence and recoverable errors ergonomically without
+  exceptions as ordinary control flow.
+- Panics and unsafe operations are explicit and documented.
+- Async behavior maps predictably to JavaScript.
+
+---
+
+## Track 6: Rust Port Preparation
 
 Goal: reduce risk before beginning the actual Rust implementation.
 
@@ -366,7 +233,6 @@ Candidate work:
   unions or Rust-like records.
 - Avoid TypeScript-only patterns in core compiler logic.
 - Build a corpus of accepted and rejected programs with expected diagnostics.
-- Add golden tests for emitted JavaScript where output stability matters.
 - Identify runtime helper behavior that must be preserved byte-for-byte or
   semantically.
 - Decide whether the Rust port starts as a lexer/parser port, a checker port, or
@@ -388,8 +254,8 @@ architecture are stronger:
 
 - Compile-time evaluation and `comptime`.
 - Compiler directives such as enum and object introspection.
-- Async functions and async runtime behavior.
-- Package management and npm ecosystem integration.
+- External package management and npm ecosystem integration.
+- Workspaces and multi-package project commands.
 - Optimization passes.
 - Incremental compilation.
 - Rich formatter support.
@@ -401,13 +267,14 @@ architecture are stronger:
 
 ## Near-Term Recommended Order
 
-The next few useful steps are:
+The next useful steps are:
 
-1. Stabilize diagnostics and tests for the current MVP.
-2. Specify and implement `type` declarations.
-3. Add object types and object literals as an end-to-end feature.
-4. Implement fieldless enums and exhaustive `match`.
-5. Revisit `Option`, `Result`, and generics with concrete enum experience.
+1. Stabilize diagnostics, recovery, and golden tests for the current MVP.
+2. Tighten module/package semantics and update the spec around implemented
+   imports.
+3. Decide the panic model for checked indexing and other runtime failures.
+4. Define the first standard-library boundary beyond the provisional prelude.
+5. Specify JavaScript/TypeScript interop and declaration generation.
 
-This order keeps each milestone useful on its own while building toward the
-language features that unlock larger programs.
+This order keeps each milestone useful on its own while reducing the risk of
+language design changes that would ripple through the compiler.

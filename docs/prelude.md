@@ -5,9 +5,9 @@ Status: provisional
 The prelude is a small set of names that are available in every Polena program
 without an import.
 
-The current prelude is intentionally tiny. It exists to make toy programs useful
-while the language does not yet have modules, imports, runtime profiles, or a
-real standard library.
+The current prelude is intentionally tiny. It exists to make small programs
+useful while the standard library, external packages, and runtime profiles are
+still being designed.
 
 Prelude items are compiler-provided for now. This should be treated as a
 temporary implementation detail, not as the final standard library design.
@@ -115,5 +115,5 @@ design:
 - Numeric parsing should return an explicit `Result` or `Option`.
 - Sleeping is naturally asynchronous in JavaScript, and async functions are not
   part of the current compiler MVP.
-- A real core or standard library depends on the module and import system, which
-  is still unresolved.
+- A real core or standard library depends on a stable package/import model for
+  standard-library code, external packages, and runtime-specific APIs.

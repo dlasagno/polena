@@ -1,13 +1,14 @@
-# polena
+# Polena
 
 Polena programming language
 
 ## Compiler MVP
 
-The current implementation is a very small compiler MVP for testing basic Polena
-programs end-to-end. It supports:
+The current implementation is a compiler MVP for testing Polena programs
+end-to-end. It supports:
 
 - Line comments with `//`
+- Item and module doc comments with `///` and `//!`
 - `number`, `bigint`, `string`, and `boolean` literals
 - String interpolation and multiline strings
 - `const` and `let` declarations with required initializers
@@ -38,6 +39,8 @@ programs end-to-end. It supports:
 - Package builds from `polena.toml` and `src/index.plna`
 - Current-package module imports with `@/module`, exported declarations, and
   multi-file ESM output
+- Language-server diagnostics, manifest completions, hover, and document
+  symbols
 
 It intentionally does not yet support object field readonly controls,
 external packages, standard-library imports, workspaces, explicit generic
@@ -71,7 +74,18 @@ Polena is organized as a small Bun workspace:
 - `packages/language-server` contains the diagnostics-first language server.
 - `packages/vscode-extension` contains the VS Code grammar and LSP client.
 
-## VS Code extension
+## Documentation
+
+- [docs/language-spec.md](docs/language-spec.md) is the source of truth for the
+  intended language design.
+- [docs/implementation-status.md](docs/implementation-status.md) tracks what the
+  current TypeScript compiler actually implements.
+- [docs/prelude.md](docs/prelude.md) documents compiler-provided prelude items.
+- [docs/build-spec.md](docs/build-spec.md) and
+  [docs/cli-spec.md](docs/cli-spec.md) define package and CLI behavior.
+- [docs/roadmap.md](docs/roadmap.md) lists current planning priorities.
+
+## VS Code Extension
 
 A local VS Code extension lives in `packages/vscode-extension`.
 
@@ -84,7 +98,7 @@ code packages/vscode-extension
 
 Then press `F5` in VS Code to launch an Extension Development Host and open any
 `.plna` or `.polena` file in that window. Syntax highlighting works alongside
-language-server diagnostics.
+language-server diagnostics, hover, document symbols, and manifest completions.
 
 Create an installable VSIX:
 
@@ -97,6 +111,14 @@ Build and install the VSIX into Cursor or VS Code:
 ```sh
 bun run cursor:install
 bun run vscode:install
+```
+
+## CLI
+
+Initialize a package:
+
+```sh
+bun run packages/cli/src/index.ts init my_app --yes
 ```
 
 Build a package to JavaScript modules:
@@ -137,6 +159,7 @@ bun run packages/cli/src/index.ts --help
 bun run packages/cli/src/index.ts --version
 bun run packages/cli/src/index.ts build examples/basic --out-dir dist/basic
 bun run packages/cli/src/index.ts run examples/basic
+bun run packages/cli/src/index.ts run examples/basic -- arg1 arg2
 ./dist/polena --version
 ```
 

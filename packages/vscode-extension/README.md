@@ -1,17 +1,21 @@
 # Polena VS Code Extension
 
 This extension adds syntax highlighting, basic language configuration, and
-language-server diagnostics for Polena source files in VS Code.
+language-server support for Polena source files in VS Code.
 
 It currently targets the compiler MVP syntax implemented in this repository,
 including:
 
 - `fn`, `const`, `let`, `if`, `else`, `while`, `break`, `continue`, and `return`
+- `import`, `export`, `type`, `enum`, `match`, and `as`
 - Primitive types: `number`, `bigint`, `string`, `boolean`, and `void`
 - Boolean literals, numeric literals, operators, and punctuation
-- `//` line comments
+- `//` line comments plus `///` and `//!` doc comments
 - Double-quoted strings with `${...}` interpolation
 - Polena multiline strings that use repeated `\\` line prefixes
+
+The bundled language server provides diagnostics, package-aware analysis,
+manifest completions, hover, and document symbols for the current MVP surface.
 
 ## Local development
 
