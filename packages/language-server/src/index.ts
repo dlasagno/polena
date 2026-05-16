@@ -10,6 +10,7 @@ import {
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { toLspDiagnostics } from "./diagnostics";
+import { getDocumentSymbols } from "./document-symbols";
 import { getHover } from "./hover";
 
 const connection = createConnection(ProposedFeatures.all);
@@ -24,6 +25,7 @@ connection.onInitialize(
     capabilities: {
       textDocumentSync: TextDocumentSyncKind.Incremental,
       hoverProvider: true,
+      documentSymbolProvider: true,
     },
   }),
 );
@@ -49,6 +51,15 @@ connection.onHover((params) => {
   }
 
   return getHover(document, getAnalysis(document), params.position);
+});
+
+connection.onDocumentSymbol((params) => {
+  const document = documents.get(params.textDocument.uri);
+  if (document === undefined) {
+    return [];
+  }
+
+  return getDocumentSymbols(document, getAnalysis(document));
 });
 
 function publishDiagnostics(document: TextDocument): void {
