@@ -50,6 +50,7 @@ export type ObjectTypeField = {
   readonly nameSpan: Span;
   readonly type: TypeNode;
   readonly span: Span;
+  readonly doc?: string;
 };
 
 export type EnumVariantTypeNode = {
@@ -59,6 +60,7 @@ export type EnumVariantTypeNode = {
   readonly nameSpan: Span;
   readonly payload: readonly TypeNode[];
   readonly span: Span;
+  readonly doc?: string;
 };
 
 export type Program = {

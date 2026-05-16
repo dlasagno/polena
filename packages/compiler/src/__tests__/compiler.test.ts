@@ -247,6 +247,38 @@ describe("parser", () => {
     });
   });
 
+  test("attaches doc comments to object fields and enum variants", () => {
+    const source = [
+      "type User = {",
+      "  /// Display name.",
+      "  name: string,",
+      "};",
+      "type Status = enum {",
+      "  /// Ready to run.",
+      "  Ready,",
+      "};",
+    ].join("\n");
+    const result = parse(lex(source).tokens);
+    const user = result.program.declarations[0];
+    const status = result.program.declarations[1];
+
+    expect(result.diagnostics).toHaveLength(0);
+    expect(user).toMatchObject({
+      kind: "TypeDeclaration",
+      value: {
+        kind: "ObjectType",
+        fields: [{ kind: "ObjectTypeField", name: "name", doc: "Display name." }],
+      },
+    });
+    expect(status).toMatchObject({
+      kind: "TypeDeclaration",
+      value: {
+        kind: "EnumType",
+        variants: [{ kind: "EnumVariantType", name: "Ready", doc: "Ready to run." }],
+      },
+    });
+  });
+
   test("parses function declarations and operator precedence", () => {
     const lexResult = lex('fn value(): string { "a" ++ "b" + "c" }');
     const parseResult = parse(lexResult.tokens);

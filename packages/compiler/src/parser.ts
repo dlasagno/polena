@@ -440,6 +440,7 @@ class Parser {
 
       if (!this.check("RightBrace")) {
         do {
+          const doc = this.parseDocCommentBlock();
           if (this.check("RightBrace")) {
             break;
           }
@@ -465,6 +466,7 @@ class Parser {
               nameSpan: name.span,
               type,
               span: mergeSpans(name.span, type.span),
+              ...(doc === undefined ? {} : { doc }),
             }),
           );
         } while (this.match("Comma"));
@@ -551,6 +553,7 @@ class Parser {
 
     if (!this.check("RightBrace")) {
       do {
+        const doc = this.parseDocCommentBlock();
         if (this.check("RightBrace")) {
           break;
         }
@@ -602,6 +605,7 @@ class Parser {
             nameSpan: name.span,
             payload,
             span,
+            ...(doc === undefined ? {} : { doc }),
           }),
         );
       } while (this.match("Comma"));

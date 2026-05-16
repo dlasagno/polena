@@ -102,6 +102,37 @@ describe("LSP hover", () => {
       "```polena\nfn greet(name: string): string\n```\n\nA user-facing greeting.\n\nSupports Markdown **emphasis**.",
     );
   });
+
+  test("includes field and enum variant doc comments in hovers", () => {
+    const source = [
+      "type User = {",
+      "  /// Display name.",
+      "  name: string,",
+      "};",
+      "type Status = enum {",
+      "  /// Ready to run.",
+      "  Ready,",
+      "};",
+      'const user: User = { name: "Ada" };',
+      "const userName = user.name;",
+      "const status: Status = .Ready;",
+    ].join("\n");
+    const document = TextDocument.create("file:///example.plna", "polena", 1, source);
+    const analysis = analyze(source);
+
+    expect(hoverText(document, analysis, source.indexOf("name:"))).toBe(
+      "```polena\nname: string\n```\n\nDisplay name.",
+    );
+    expect(hoverText(document, analysis, source.lastIndexOf("name;"))).toBe(
+      "```polena\nname: string\n```\n\nDisplay name.",
+    );
+    expect(hoverText(document, analysis, source.indexOf("Ready,"))).toBe(
+      "```polena\nStatus.Ready: Status\n```\n\nReady to run.",
+    );
+    expect(hoverText(document, analysis, source.lastIndexOf("Ready"))).toBe(
+      "```polena\nStatus.Ready: Status\n```\n\nReady to run.",
+    );
+  });
 });
 
 function hoverText(

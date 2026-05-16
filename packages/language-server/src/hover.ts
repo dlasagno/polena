@@ -112,10 +112,7 @@ function renderReference(reference: ReferenceTarget, analysis: AnalyzeResult): s
     case "TypeAlias":
       return renderNodeHover(analysis, reference.definitionNodeId);
     case "EnumVariant":
-      return renderCodeHover(
-        `${reference.enumName}.${reference.variantName}: ${reference.enumName}`,
-        undefined,
-      );
+      return renderNodeHover(analysis, reference.definitionNodeId);
     case "Field": {
       const node = findAstNode(analysis.program, reference.definitionNodeId);
       return node?.kind === "ObjectTypeField" || node?.kind === "ObjectLiteralField"
@@ -203,7 +200,7 @@ function renderFieldHover(
   field: ObjectTypeField | ObjectLiteralField,
 ): string | undefined {
   if (field.kind === "ObjectTypeField") {
-    return renderCodeHover(`${field.name}: ${formatTypeNode(field.type)}`, undefined);
+    return renderCodeHover(`${field.name}: ${formatTypeNode(field.type)}`, field.doc);
   }
 
   const type = analysis.semantics.expressionTypes.get(field.value.nodeId);
@@ -223,7 +220,7 @@ function renderEnumVariantHover(
     typeDeclaration === undefined
       ? variant.name
       : `${typeDeclaration.name}.${formatEnumVariantTypeNode(variant)}: ${typeDeclaration.name}`;
-  return renderCodeHover(code, undefined);
+  return renderCodeHover(code, variant.doc);
 }
 
 function formatTypeNode(typeNode: TypeNode): string {
