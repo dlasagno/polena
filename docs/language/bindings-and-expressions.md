@@ -64,8 +64,8 @@ count = count + 1;
 
 ### 11.3 Shadowing
 
-The initial compiler MVP does not allow a declaration to reuse a name that is
-already declared in the same scope or in an outer scope.
+A declaration may not reuse a name that is already declared in the same scope or
+in an outer scope.
 
 More expressive shadowing behavior is **TBD**, including Rust-style variable
 redeclaration shadowing where a name may be redeclared to produce a new binding,
@@ -341,4 +341,3 @@ For arrays, both operands must contain the same element type.
 ```tsx
 [1] ++ ["x"] // Invalid.
 ```
-

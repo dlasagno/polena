@@ -66,7 +66,7 @@ type NumberError = enum {
 };
 
 fn parseNumber(input: string): Result<number, NumberError> {
-	// Implementation TBD.
+	// Parsing details omitted.
 }
 
 fn parsePort(input: string): Result<number, NumberError> {
@@ -79,4 +79,3 @@ fn parsePort(input: string): Result<number, NumberError> {
 	.Ok(port)
 }
 ```
-

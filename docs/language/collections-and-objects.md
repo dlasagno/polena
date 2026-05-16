@@ -52,7 +52,7 @@ Arrays expose their length as a property:
 numbers.length
 ```
 
-`length` currently has type `number`.
+`length` has type `number`.
 
 A dedicated array index type is desirable. A likely name is:
 
@@ -84,9 +84,8 @@ If the index is out of bounds, the program panics.
 const value = numbers[index]; // Type: number. Panics if index is invalid.
 ```
 
-The current JavaScript backend emits a runtime bounds check for this operation
-and accepts integer-valued `number` indexes. Negative, fractional, `NaN`, and
-out-of-bounds indexes panic at runtime.
+The JavaScript backend must preserve this checked behavior. Negative,
+fractional, `NaN`, and out-of-bounds indexes panic at runtime.
 
 The intended long-term direction is that arbitrary `number` values should not
 necessarily be valid indexes. Integer literals may be allowed in index contexts:
@@ -116,9 +115,9 @@ Index assignment checks index validity at runtime under the same rules as index
 access. Invalid indexes panic. The assigned value must be compatible with the
 array element type.
 
-In the MVP, array values are mutable sequence values. `const` and `let` control
-whether a binding can be reassigned; they do not freeze or deeply mutate the
-array value itself.
+Array values are mutable sequence values. `const` and `let` control whether a
+binding can be reassigned; they do not freeze or deeply mutate the array value
+itself.
 
 ---
 
@@ -151,7 +150,8 @@ const label = match numbers.get(index) {
 
 ### 16.4 Unsafe Array Access
 
-An explicit unsafe indexing operation may be added later for performance-critical code.
+An explicit unsafe indexing operation may be added later for
+performance-critical code.
 
 Possible syntax:
 
@@ -189,7 +189,8 @@ Build modes may affect:
 
 However, build modes must not silently change the meaning of safe code.
 
-Checked operations remain checked unless the compiler can prove the check unnecessary.
+Checked operations remain checked unless the compiler can prove the check
+unnecessary.
 
 Example:
 
@@ -210,7 +211,8 @@ Explicit unsafe operations are the mechanism for opting out of checks.
 
 Objects are fixed-shape structured values.
 
-They resemble JavaScript object literals syntactically but are semantically closer to structs.
+They resemble JavaScript object literals syntactically but are semantically
+closer to structs.
 
 ```tsx
 const user = {
@@ -226,14 +228,17 @@ Properties are accessed with dot notation:
 user.name
 ```
 
-Objects cannot be used as hash maps. Use a `Map` type for dynamic key/value storage.
+Objects cannot be used as hash maps. Use a future `Map` type for dynamic
+key/value storage.
 
 Dynamic property access is **TBD**.
 
+---
+
 ### 17.1 Mutability
 
-In the MVP, object and array values use JavaScript-like runtime mutability.
-`const` and `let` control binding mutability, not deep value mutability:
+Object and array values use reference-like runtime mutability. `const` and
+`let` control binding mutability, not deep value mutability:
 
 - `const` prevents rebinding,
 - `let` allows rebinding,
@@ -281,8 +286,8 @@ user.email = "a@example.com"; // Invalid: User has no field email.
 user.name = 42; // Invalid: name has type string.
 ```
 
-Mutation through function parameters is allowed in the MVP because object and
-array values are reference-like values at runtime.
+Mutation through function parameters is allowed because object and array values
+are reference-like values at runtime.
 
 ```tsx
 fn rename(user: User): void {
@@ -354,10 +359,6 @@ const named: Named = {
 };
 ```
 
-The current compiler MVP parses and checks object type declarations, object
-literals, structural object assignability, known-field property access, and
-known-field property assignment.
-
 ---
 
 ### 17.4 Property Access Safety
@@ -375,4 +376,3 @@ fn getEmail(user: User): string {
 ```
 
 Property access never produces `undefined`.
-

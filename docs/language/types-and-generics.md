@@ -70,12 +70,6 @@ type Score = number;
 type Scores = []Score;
 ```
 
-Object type bodies, enum type bodies, and generic type parameters are part of
-the implemented MVP surface. See `../implementation-status.md` for the exact
-current coverage.
-
----
-
 ## 25. Generics
 
 Polena supports a basic form of generics: **generic type declarations**.
@@ -240,9 +234,9 @@ const label = match opt {
 ```
 
 Exhaustiveness and arity rules from
-[Match Expressions](algebraic-data-and-errors.md#21-match-expressions) apply unchanged. Type
-substitution is performed before patterns are checked against variant
-payloads.
+[Match Expressions](algebraic-data-and-errors.md#21-match-expressions) apply
+unchanged. Type substitution is performed before patterns are checked against
+variant payloads.
 
 ---
 
@@ -330,16 +324,18 @@ Type parameters are erased at compile time. The JavaScript emit for a
 generic function is a single non-generic JavaScript function; calls to it
 carry no type-argument information at runtime.
 
-Constraints on type parameters remain **TBD**. See [Constraints](#256-constraints).
+Constraints on type parameters remain **TBD**. See
+[Constraints](#256-constraints).
 
 ---
 
 ### 25.6 Constraints
 
-Type parameter constraints are **TBD**. Constraints are expected to be
-designed together with [traits](future-features.md#26-traits): the only meaningful constraints
-in a language without traits are structural, and structural constraints
-would need to be reconciled with whatever trait mechanism is added later.
+Type parameter constraints are **TBD**. Constraints are expected to be designed
+together with [traits](future-features.md#26-traits): the only meaningful
+constraints in a language without traits are structural, and structural
+constraints would need to be reconciled with whatever trait mechanism is added
+later.
 
 ---
 
@@ -360,4 +356,3 @@ fn parseJson(input: string): Result<unknown, JsonError> {
 To use an `unknown` value, it must be validated, matched, or converted.
 
 Exact rules are **TBD**.
-

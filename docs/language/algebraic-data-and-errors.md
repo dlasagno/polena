@@ -2,6 +2,10 @@
 
 `Option`, `Result`, enums, match expressions, and panic behavior.
 
+This document defines the language-level model for algebraic data and error
+handling. Current compiler support is tracked separately in
+[`../implementation-status.md`](../implementation-status.md).
+
 ---
 
 ## 18. Optional Values
@@ -19,9 +23,10 @@ type Option<T> = enum {
 };
 ```
 
-It is considered a fundamental standard-library type. In the current compiler
-MVP, `Option<T>` is provided by the compiler prelude as a generic enum. It
-follows the normal enum construction and match rules.
+It is considered a fundamental standard-library type. During the bootstrap
+period, the compiler may provide `Option<T>` through the prelude before the
+standard library is packaged as ordinary Polena modules. It follows the normal
+enum construction and match rules.
 
 A shorthand surface syntax for optional types, such as `string?` for
 `Option<string>`, is **TBD**. See
@@ -106,9 +111,10 @@ type Result<T, E> = enum {
 };
 ```
 
-It is considered a fundamental standard-library type. In the current compiler
-MVP, `Result<T, E>` is provided by the compiler prelude as a generic enum. It
-follows the normal enum construction and match rules.
+It is considered a fundamental standard-library type. During the bootstrap
+period, the compiler may provide `Result<T, E>` through the prelude before the
+standard library is packaged as ordinary Polena modules. It follows the normal
+enum construction and match rules.
 
 ```tsx
 const result: Result<number, NumberError> = .Ok(42);
@@ -151,7 +157,9 @@ The behavior of `try expr` is:
 - if `expr` evaluates to `.Ok(value)`, the expression evaluates to `value`;
 - if `expr` evaluates to `.Err(error)`, the current function returns `.Err(error)`.
 
-The exact typing and error-conversion rules are **TBD**.
+The exact typing and error-conversion rules are **TBD**. Until those rules are
+settled, programs should use explicit `match` expressions to handle `Result`
+values.
 
 ---
 
@@ -169,19 +177,19 @@ Operations that panic include:
   could not prove at compile time and that occur at runtime through external
   data).
 
-A panic produces an instance of the runtime class `PolenaPanic` and
-terminates the current execution path. The instance carries:
+A panic terminates the current execution path.
+
+For the JavaScript target, the intended runtime representation is an instance
+of `PolenaPanic`, a subclass of JavaScript `Error`. The instance carries:
 
 - a human-readable message describing the panic,
 - a kind tag identifying the panic category,
 - the source span of the panicking operation when available.
 
-For the JavaScript target, `PolenaPanic` is a subclass of the JavaScript
-`Error` class. It is thrown by the runtime at the panic site. Polena has no
-`try`/`catch` syntax that can intercept a `PolenaPanic`; the only way to
-observe one from within Polena is by crossing the JavaScript interop
-boundary
-([JavaScript and TypeScript Interop](modules-and-interop.md#29-javascript-and-typescript-interop)),
+`PolenaPanic` is thrown by the runtime at the panic site. Polena has no
+`try`/`catch` syntax that can intercept a panic; the only way to observe one
+from within Polena is by crossing the JavaScript interop boundary
+([JavaScript and TypeScript Interop](modules-and-interop.md#javascript-and-typescript-interop)),
 at which point JavaScript code is free to catch the underlying `Error` like any
 other.
 
@@ -242,7 +250,7 @@ const names = Color.names; // Invalid.
 ```
 
 Runtime metadata for enum types is not emitted automatically. Enum reflection,
-if provided, must be explicit:
+if provided, must be requested explicitly through compiler directives:
 
 ```tsx
 const names = @enumVariantNames(Color);
@@ -257,11 +265,9 @@ const red = Color.Red;
 The runtime representation of enum values is implementation-defined. Programs
 must not depend on the emitted JavaScript representation of enum values.
 
-For the current JavaScript target, enum values are emitted as tagged plain
-objects of the form `{ tag: "VariantName" }` for fieldless variants and
-`{ tag: "VariantName", payload: [...] }` for variants with associated data.
-This is an informative description and may change without notice; programs
-that introspect this shape are non-conforming.
+An implementation may represent enum values however it chooses. Programs that
+inspect emitted JavaScript object shapes instead of using Polena operations are
+non-conforming.
 
 When the enum type is known from context, the enum name may be omitted:
 
@@ -334,13 +340,13 @@ Named constructor syntax is not supported.
 const message = Message.Move { x: 10, y: 20 }; // Invalid.
 ```
 
-Variants with associated data are not first-class constructor functions in the
-MVP. They may only be used directly in construction syntax.
+Variants with associated data are not first-class constructor functions. They
+may only be used directly in construction syntax.
 
 ```tsx
 const move = Message.Move(1, 2); // Valid.
 
-const makeMove = Message.Move; // Invalid in MVP.
+const makeMove = Message.Move; // Invalid.
 const alsoMove = makeMove(1, 2);
 ```
 
@@ -352,8 +358,8 @@ const alsoMove = makeMove(1, 2);
 
 It is primarily used with enums, `Option`, and `Result`.
 
-The current compiler supports expression-valued match arms over enum variants.
-Block arms and guards are not implemented yet.
+The initial match form uses expression-valued arms over enum variants. Block
+arms and guards are deferred.
 
 ```tsx
 const label = match color {
@@ -431,14 +437,13 @@ const label = match message {
 text // Invalid.
 ```
 
-Because shadowing is disallowed in the MVP, pattern bindings must not shadow
-outer names.
+Under the current shadowing rules, pattern bindings must not shadow outer names.
 
 ```tsx
 const text = "outer";
 
 const label = match message {
-	.Write(text) => text, // Invalid in MVP: shadows outer binding.
+	.Write(text) => text, // Invalid: shadows outer binding.
 	_ => "",
 };
 ```
@@ -531,4 +536,3 @@ const value = match color {
 	.Blue => true,
 };
 ```
-

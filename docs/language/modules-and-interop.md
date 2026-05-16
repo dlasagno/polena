@@ -1,41 +1,13 @@
 # Modules, Packages, and Interop
 
-Module paths, imports, package structure, standard-library imports, workspaces, and JavaScript/TypeScript interop.
+Module paths, imports, package structure, standard-library imports, workspaces,
+and JavaScript/TypeScript interop.
 
 ---
 
-## 29. JavaScript and TypeScript Interop
-
-Interop is not part of the initial core, but the language is designed with JavaScript output and TypeScript ecosystem compatibility in mind.
-
-Planned interop features:
-
-- import JavaScript/TypeScript modules,
-- consume compatible declaration files,
-- generate TypeScript declaration files,
-- optionally convert `.d.ts` files into the language’s own declaration format,
-- represent unsafe/dynamic values as `unknown`,
-- map `null` and `undefined` at boundaries into `Option<T>` where possible.
-
----
-
-### 29.1 Native Declaration Files
-
-The language may define its own declaration file format for external modules.
-
-Possible syntax:
-
-```tsx
-declare module "slugify" {
-	export fn slugify(input: string): string;
-}
-```
-
-A converter may transform compatible `.d.ts` files into native declarations.
-
-Unsupported TypeScript constructs may be converted to `unknown` or rejected.
-
-This is **TBD**.
+This document describes the intended module and package model. Current compiler
+support is narrower and is tracked in
+[`../implementation-status.md`](../implementation-status.md).
 
 ---
 
@@ -53,15 +25,15 @@ modules, identified by a `polena.toml` configuration file.
 Each `.plna` file is a module. The filesystem layout determines the module
 tree directly: there are no separate `mod` declarations.
 
-A module body contains only declarations:
+A module body contains declarations:
 
 - `import` declarations,
 - `type` declarations,
-- `const` declarations (initializer must be a compile-time constant),
+- `const` declarations,
 - `fn` declarations.
 
-Free-standing statements and expressions at module scope are invalid.
-Statements and expressions can only appear inside declaration bodies.
+Free-standing statements and expressions at module scope are invalid in package
+modules. Statements and expressions appear inside declaration bodies.
 
 ```tsx
 const greeting = "Hello"; // OK: declaration with literal initializer.
@@ -73,15 +45,17 @@ fn run(): void {
 }
 ```
 
-Top-level `const` initializers must be evaluable at compile time. Function
-calls and other runtime expressions are not permitted at module scope:
+Top-level `const` initializers in package modules are intended to be compile-time
+constants. Function calls and other runtime expressions are not permitted at
+module scope:
 
 ```tsx
 const port = 8080;     // OK.
 const env = readEnv(); // Invalid: runtime expression.
 ```
 
-The initial set of compile-time-constant initializers includes:
+The exact set of permitted compile-time-constant initializers is **TBD**. The
+likely initial set includes:
 
 - literal values (numbers, strings, booleans),
 - references to other compile-time `const` bindings,
@@ -178,10 +152,10 @@ import @std/io;              // standard library
 import some_dep/foo;         // external dependency
 ```
 
-The `@` sigil is also used elsewhere in the language for compiler directives
-([Compile-Time Evaluation](future-features.md#32-compile-time-evaluation)).
+The `@` sigil is also used elsewhere in the language for compiler directives.
 The import-path forms `@/...` and `@<name>/...` are unambiguous in import
-position.
+position. See
+[Compile-Time Evaluation](future-features.md#32-compile-time-evaluation).
 
 The recommended style is the **qualified import**, which makes the imported
 module available under a local name:
@@ -205,9 +179,8 @@ fn run(): void {
 }
 ```
 
-**Unqualified imports** pull specific names directly into the importing
-module's scope. The unqualified list uses the `type` keyword to import type
-names:
+An import may also pull specific names directly into the importing module's
+scope. The unqualified list uses the `type` keyword to import type names:
 
 ```tsx
 import @/users.{type User, parseUser};
@@ -223,8 +196,8 @@ import @/users.{type User as DbUser, parseUser as parse};
 ```
 
 An unqualified list adds names alongside the qualified module binding. The
-qualified binding is always available. An `as` clause on the import aliases
-the qualified binding and appears after the unqualified list:
+qualified binding is still available. An `as` clause on the import aliases the
+qualified binding and appears after the unqualified list:
 
 ```tsx
 import @/users.{type User, parseUser} as u;
@@ -243,7 +216,7 @@ import some_dep/foo;         // a submodule of some_dep
 Importing the current package's own root module from within the package
 (`import @/;` or `import @;`) is **TBD**.
 
-There are no default exports. There are no glob (`*`) imports.
+There are no default exports and no glob (`*`) imports.
 
 Imports must appear at the top of a module, before any other declaration.
 
@@ -280,8 +253,8 @@ The transitive propagation rule — that a library importing a
 runtime-specific module is itself constrained to that runtime and must
 declare so — is **TBD**.
 
-The full contents of the standard library are **TBD** and intentionally
-small for the prototype. Until specific stdlib modules ship, the prelude
+The full contents of the standard library are **TBD** and intentionally small
+for the prototype. Until specific standard-library modules ship, the prelude
 (see `../prelude.md`) provides a small set of names implicitly, without an
 import declaration.
 
@@ -308,7 +281,7 @@ version = "0.1.0"
 target = "executable"
 ```
 
-Fields:
+Language-level fields:
 
 - **`name`** — the package name. Must be a valid Polena identifier. It is
   the prefix external consumers use to import this package.
@@ -330,8 +303,8 @@ The `target` field declares what the package produces, not the compilation
 target (browser, Node, and similar) — that concept is separate and **TBD**.
 
 The complete manifest and package build behavior are specified in
-[`docs/build-spec.md`](../build-spec.md). Command-line behavior is specified in
-[`docs/cli-spec.md`](../cli-spec.md).
+[`../build-spec.md`](../build-spec.md). Command-line behavior is specified in
+[`../cli-spec.md`](../cli-spec.md).
 
 Combining library and executable roles in a single package is **TBD**.
 
@@ -430,4 +403,40 @@ and between any package and external dependencies, is **TBD**.
 
 Polena modules do not import JavaScript or TypeScript files directly by file
 path. External code is consumed through declaration files described in
-[JavaScript and TypeScript Interop](#29-javascript-and-typescript-interop).
+[JavaScript and TypeScript Interop](#javascript-and-typescript-interop).
+
+---
+
+## JavaScript and TypeScript Interop
+
+Interop is not part of the initial core, but the language is designed with
+JavaScript output and TypeScript ecosystem compatibility in mind.
+
+Planned interop features:
+
+- import JavaScript/TypeScript modules,
+- consume compatible declaration files,
+- generate TypeScript declaration files,
+- optionally convert `.d.ts` files into the language's own declaration format,
+- represent unsafe/dynamic values as `unknown`,
+- map `null` and `undefined` at boundaries into `Option<T>` where possible.
+
+---
+
+### Native Declaration Files
+
+The language may define its own declaration file format for external modules.
+
+Possible syntax:
+
+```tsx
+declare module "slugify" {
+	export fn slugify(input: string): string;
+}
+```
+
+A converter may transform compatible `.d.ts` files into native declarations.
+
+Unsupported TypeScript constructs may be converted to `unknown` or rejected.
+
+This is **TBD**.
