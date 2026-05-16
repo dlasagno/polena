@@ -125,6 +125,8 @@ type TypeSymbol = {
   readonly span: Span;
   readonly definitionNodeId: number;
   readonly fullSpan: Span;
+  readonly importedModuleName?: string;
+  readonly importedExportName?: string;
 };
 
 type TypeEnvironment = ReadonlyMap<string, Type>;
@@ -308,7 +310,10 @@ class Checker {
         continue;
       }
       const symbol = imported.symbol as ExportedTypeSymbol;
-      this.resolvedTypeSymbols.set(imported.localName, symbol.type);
+      this.resolvedTypeSymbols.set(
+        imported.localName,
+        typeWithImportedModule(symbol.type, imported.moduleName),
+      );
       this.typeSymbols.set(imported.localName, {
         name: imported.localName,
         typeParameters: [],
@@ -320,12 +325,17 @@ class Checker {
         span: symbol.span,
         definitionNodeId: symbol.definitionNodeId,
         fullSpan: symbol.fullSpan,
+        importedModuleName: imported.moduleName,
+        importedExportName: imported.exportedName,
       });
     }
 
     for (const moduleImport of this.options.qualifiedImports ?? []) {
       for (const [name, symbol] of moduleImport.types) {
-        this.resolvedTypeSymbols.set(`${moduleImport.alias}.${name}`, symbol.type);
+        this.resolvedTypeSymbols.set(
+          `${moduleImport.alias}.${name}`,
+          typeWithImportedModule(symbol.type, moduleImport.moduleName),
+        );
         this.typeSymbols.set(`${moduleImport.alias}.${name}`, {
           name: `${moduleImport.alias}.${name}`,
           typeParameters: [],
@@ -337,6 +347,8 @@ class Checker {
           span: symbol.span,
           definitionNodeId: symbol.definitionNodeId,
           fullSpan: symbol.fullSpan,
+          importedModuleName: moduleImport.moduleName,
+          importedExportName: name,
         });
       }
     }
@@ -346,10 +358,11 @@ class Checker {
     for (const moduleImport of this.options.qualifiedImports ?? []) {
       const fields = [...moduleImport.values].map(([name, symbol]) => ({
         name,
-        type: symbol.type,
+        type: typeWithImportedModule(symbol.type, moduleImport.moduleName),
         nodeId: symbol.definitionNodeId,
         nameSpan: symbol.span,
         span: symbol.fullSpan,
+        moduleName: moduleImport.moduleName,
       }));
       this.declareName(
         scope,
@@ -377,10 +390,12 @@ class Checker {
         scope,
         {
           name: imported.localName,
-          type: symbol.type,
+          type: typeWithImportedModule(symbol.type, imported.moduleName),
           span: symbol.span,
           definitionNodeId: symbol.definitionNodeId,
           fullSpan: symbol.fullSpan,
+          importedModuleName: imported.moduleName,
+          importedExportName: imported.exportedName,
           assignability: "immutable-binding",
         },
         symbol.type.kind === "function" ? "Function" : "Local",
@@ -533,18 +548,19 @@ class Checker {
     }
 
     const resolvedImport = this.resolvedTypeSymbols.get(name);
-    if (resolvedImport !== undefined && symbol.value.kind === "UnknownType") {
-      return resolvedImport;
-    }
-
     if (referenceNodeId !== undefined) {
       this.recordReference(referenceNodeId, {
         kind: "TypeAlias",
         name,
+        moduleName: symbol.importedModuleName,
         definitionNodeId: symbol.definitionNodeId,
         nameSpan: symbol.span,
         fullSpan: symbol.fullSpan,
       });
+    }
+
+    if (resolvedImport !== undefined && symbol.value.kind === "UnknownType") {
+      return resolvedImport;
     }
 
     if (symbol.typeParameters.length === 0 && typeArguments.length > 0) {
@@ -3220,6 +3236,17 @@ class Checker {
       return { kind: "Prelude", name: symbol.name };
     }
 
+    if (symbol.importedModuleName !== undefined) {
+      return {
+        kind: "Imported",
+        moduleName: symbol.importedModuleName,
+        exportName: symbol.importedExportName ?? symbol.name,
+        definitionNodeId: symbol.definitionNodeId,
+        nameSpan: symbol.span,
+        fullSpan: symbol.fullSpan ?? symbol.span,
+      };
+    }
+
     return {
       kind: symbol.type.kind === "function" ? "Function" : "Local",
       name: symbol.name,
@@ -3237,6 +3264,7 @@ class Checker {
     this.recordReference(nodeId, {
       kind: "Field",
       name,
+      moduleName: field.moduleName,
       definitionNodeId: field.nodeId,
       nameSpan: field.nameSpan,
       fullSpan: field.span,
@@ -3261,6 +3289,7 @@ class Checker {
       kind: "EnumVariant",
       enumName: enumType.name,
       variantName,
+      moduleName: variant.moduleName ?? enumType.moduleName,
       definitionNodeId: variant.nodeId,
       nameSpan: variant.nameSpan,
       fullSpan: variant.span,
@@ -3270,6 +3299,43 @@ class Checker {
 
 function isContextuallyCheckedObjectLiteral(expression: Expression, expectedType: Type): boolean {
   return expression.kind === "ObjectLiteral" && expectedType.kind === "object";
+}
+
+function typeWithImportedModule(type: Type, moduleName: string): Type {
+  switch (type.kind) {
+    case "array":
+      return arrayType(typeWithImportedModule(type.element, moduleName));
+    case "object":
+      return objectType(
+        type.fields.map((field) => ({
+          ...field,
+          type: typeWithImportedModule(field.type, moduleName),
+          moduleName: field.moduleName ?? moduleName,
+        })),
+      );
+    case "enum":
+      return {
+        ...type,
+        moduleName: type.moduleName ?? moduleName,
+        variants: type.variants.map((variant) => ({
+          ...variant,
+          payload: variant.payload.map((payloadType) =>
+            typeWithImportedModule(payloadType, moduleName),
+          ),
+          moduleName: variant.moduleName ?? moduleName,
+        })),
+      };
+    case "function":
+      return functionType(
+        type.params.map((param) => typeWithImportedModule(param, moduleName)),
+        typeWithImportedModule(type.returnType, moduleName),
+        type.typeParameters,
+      );
+    case "primitive":
+    case "typeParameter":
+    case "unknown":
+      return type;
+  }
 }
 
 type ObjectAssignabilityMismatch = {

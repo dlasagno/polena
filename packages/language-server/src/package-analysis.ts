@@ -8,6 +8,7 @@ import {
 import {
   analyzePackage,
   type Diagnostic as PolenaDiagnostic,
+  type ModuleAnalysis,
   type SourceFile,
 } from "@polena/compiler";
 import { dirname, isAbsolute, join, normalize, relative } from "node:path";
@@ -24,6 +25,8 @@ export type OpenDocumentSnapshot = {
 export type PackageDiagnostics = {
   readonly packageRoot: string;
   readonly diagnosticsByUri: ReadonlyMap<string, readonly PolenaDiagnostic[]>;
+  readonly analysesByUri: ReadonlyMap<string, ModuleAnalysis>;
+  readonly analysesByModuleName: ReadonlyMap<string, ModuleAnalysis>;
 };
 
 export async function analyzePackageForDocument(input: {
@@ -46,6 +49,8 @@ export async function analyzePackageForDocument(input: {
     return {
       packageRoot,
       diagnosticsByUri: new Map([[pathToFileURL(manifestPath).href, manifestResult.diagnostics]]),
+      analysesByUri: new Map(),
+      analysesByModuleName: new Map(),
     };
   }
 
@@ -93,7 +98,14 @@ export async function analyzePackageForDocument(input: {
     }
   }
 
-  return { packageRoot, diagnosticsByUri };
+  const analysesByUri = new Map<string, ModuleAnalysis>();
+  const analysesByModuleName = new Map<string, ModuleAnalysis>();
+  for (const analysis of result.analyses) {
+    analysesByUri.set(pathToFileURL(normalize(analysis.path)).href, analysis);
+    analysesByModuleName.set(analysis.moduleName, analysis);
+  }
+
+  return { packageRoot, diagnosticsByUri, analysesByUri, analysesByModuleName };
 }
 
 function isPackageSourcePath(path: string, sourceDir: string): boolean {

@@ -8,6 +8,8 @@ export type SymbolInfo = {
   readonly span: Span;
   readonly definitionNodeId?: NodeId;
   readonly fullSpan?: Span;
+  readonly importedModuleName?: string;
+  readonly importedExportName?: string;
   readonly assignability: "mutable-variable" | "immutable-binding";
 };
 

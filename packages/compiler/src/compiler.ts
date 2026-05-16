@@ -64,11 +64,19 @@ export type AnalyzePackageResult =
       readonly ok: true;
       readonly packageProgram: PackageProgram;
       readonly diagnostics: readonly PackageDiagnostic[];
+      readonly analyses: readonly ModuleAnalysis[];
     }
   | {
       readonly ok: false;
       readonly diagnostics: readonly PackageDiagnostic[];
+      readonly analyses: readonly ModuleAnalysis[];
     };
+
+export type ModuleAnalysis = {
+  readonly moduleName: ModuleName;
+  readonly path: string;
+  readonly analysis: AnalyzeResult;
+};
 
 export function analyze(source: string): AnalyzeResult {
   const lexResult = lex(source);
@@ -122,10 +130,11 @@ export function analyzePackage(input: {
   const packageResult = buildPackageProgram({ ...input, programs });
   diagnostics.push(...packageDiagnostics(packageResult.diagnostics, input.sourceDir));
   if (!packageResult.ok) {
-    return { ok: false, diagnostics };
+    return { ok: false, diagnostics, analyses: [] };
   }
 
   const exportsByModule = new Map<ModuleId, ModuleExports>();
+  const analyses: ModuleAnalysis[] = [];
   const moduleById = new Map(
     packageResult.packageProgram.modules.map((moduleFile) => [moduleFile.id, moduleFile]),
   );
@@ -147,6 +156,15 @@ export function analyzePackage(input: {
     const checkResult = check(moduleFile.program, imports);
     moduleDiagnostics.push(...checkResult.diagnostics);
     diagnostics.push(...diagnosticsForPath(moduleFile.path, moduleDiagnostics));
+    analyses.push({
+      moduleName: moduleFile.name,
+      path: moduleFile.path,
+      analysis: {
+        program: moduleFile.program,
+        diagnostics: moduleDiagnostics,
+        semantics: checkResult.semantics,
+      },
+    });
     exportsByModule.set(moduleFile.id, checkResult.exports);
   }
 
@@ -155,13 +173,14 @@ export function analyzePackage(input: {
   );
 
   if (diagnostics.some((item) => item.diagnostic.severity === "error")) {
-    return { ok: false, diagnostics };
+    return { ok: false, diagnostics, analyses };
   }
 
   return {
     ok: true,
     packageProgram: packageResult.packageProgram,
     diagnostics,
+    analyses,
   };
 }
 

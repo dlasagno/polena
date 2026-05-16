@@ -8,6 +8,7 @@ export type Type =
   | {
       readonly kind: "enum";
       readonly name: string;
+      readonly moduleName?: string;
       readonly typeArguments: readonly Type[];
       readonly variants: readonly EnumVariantType[];
     }
@@ -26,6 +27,7 @@ export type ObjectTypeField = {
   readonly nodeId?: NodeId;
   readonly nameSpan?: Span;
   readonly span?: Span;
+  readonly moduleName?: string;
 };
 
 export type EnumVariantType = {
@@ -34,6 +36,7 @@ export type EnumVariantType = {
   readonly nodeId?: NodeId;
   readonly nameSpan?: Span;
   readonly span?: Span;
+  readonly moduleName?: string;
 };
 
 export function primitiveType(name: PrimitiveType): Type {

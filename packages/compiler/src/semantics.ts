@@ -41,6 +41,7 @@ export type ReferenceTarget =
   | {
       readonly kind: "TypeAlias";
       readonly name: string;
+      readonly moduleName?: string;
       readonly definitionNodeId: NodeId;
       readonly nameSpan: Span;
       readonly fullSpan: Span;
@@ -49,6 +50,7 @@ export type ReferenceTarget =
       readonly kind: "EnumVariant";
       readonly enumName: string;
       readonly variantName: string;
+      readonly moduleName?: string;
       readonly definitionNodeId: NodeId;
       readonly nameSpan: Span;
       readonly fullSpan: Span;
@@ -56,6 +58,7 @@ export type ReferenceTarget =
   | {
       readonly kind: "Field";
       readonly name: string;
+      readonly moduleName?: string;
       readonly definitionNodeId: NodeId;
       readonly nameSpan: Span;
       readonly fullSpan: Span;

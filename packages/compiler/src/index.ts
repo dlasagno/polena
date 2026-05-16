@@ -13,7 +13,13 @@ export { renderDiagnostic, renderDiagnostics } from "./diagnostic-renderer";
 export { findHoverTarget, findNodeAt } from "./query";
 export { formatType } from "./types";
 export type { NodeId, Program } from "./ast";
-export type { AnalyzePackageResult, AnalyzeResult, CompileResult, Diagnostic } from "./compiler";
+export type {
+  AnalyzePackageResult,
+  AnalyzeResult,
+  CompileResult,
+  Diagnostic,
+  ModuleAnalysis,
+} from "./compiler";
 export type {
   CompilePackageResult,
   EmittedFile,

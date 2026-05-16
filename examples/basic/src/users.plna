@@ -1,8 +1,10 @@
+//! Type declarations are exported by default.
+
 export type User = {
   name: string,
 };
 
-/// Returns a greeting for the given user.
+/// Function declarations are exported by default.
 export fn greeting(user: User): string {
   "Hello ${user.name}"
 }

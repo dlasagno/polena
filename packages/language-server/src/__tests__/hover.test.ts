@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { analyze } from "@polena/compiler";
+import { analyze, analyzePackage } from "@polena/compiler";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { getHover } from "../hover";
 
@@ -148,14 +148,89 @@ describe("LSP hover", () => {
       "```polena\nStatus.Ready: Status\n```\n\nReady to run.",
     );
   });
+
+  test("uses package context for imported member hovers", () => {
+    const indexSource = [
+      "import @/users.{type Color, type User, greeting} as users;",
+      "fn test(): string {",
+      '  const user: User = { name: "Ada" };',
+      "  const message = greeting(user);",
+      "  const userName = user.name;",
+      "  const color: Color = .Red;",
+      "  users.greeting(user)",
+      "}",
+    ].join("\n");
+    const usersSource = [
+      "export type User = {",
+      "  /// Display name.",
+      "  name: string,",
+      "};",
+      "export type Color = enum {",
+      "  /// Primary color.",
+      "  Red,",
+      "};",
+      "/// Builds a greeting.",
+      "export fn greeting(user: User): string {",
+      ['  "Hello ', "$", '{user.name}"'].join(""),
+      "}",
+    ].join("\n");
+    const result = analyzePackage({
+      manifest: { name: "hover-test", version: "0.1.0", target: "library" },
+      rootDir: "/app",
+      sourceDir: "/app/src",
+      files: [
+        { path: "/app/src/index.plna", source: indexSource },
+        { path: "/app/src/users.plna", source: usersSource },
+      ],
+    });
+    const document = TextDocument.create("file:///app/src/index.plna", "polena", 1, indexSource);
+    const current = result.analyses.find((analysis) => analysis.moduleName === "@/");
+    const analysesByModuleName = new Map(
+      result.analyses.map((analysis) => [analysis.moduleName, analysis]),
+    );
+
+    expect(result.diagnostics).toHaveLength(0);
+    expect(current).toBeDefined();
+    if (current === undefined) {
+      return;
+    }
+
+    const context = { analysesByModuleName };
+    expect(
+      hoverText(
+        document,
+        current.analysis,
+        indexSource.indexOf("User", indexSource.indexOf("const user")),
+        context,
+      ),
+    ).toBe("```polena\ntype User = { name: string }\n```");
+    expect(
+      hoverText(document, current.analysis, indexSource.indexOf("greeting(user)"), context),
+    ).toBe("```polena\nfn greeting(user: User): string\n```\n\nBuilds a greeting.");
+    expect(hoverText(document, current.analysis, indexSource.lastIndexOf("name"), context)).toBe(
+      "```polena\nname: string\n```\n\nDisplay name.",
+    );
+    expect(hoverText(document, current.analysis, indexSource.lastIndexOf("Red"), context)).toBe(
+      "```polena\nColor.Red: Color\n```\n\nPrimary color.",
+    );
+    expect(
+      hoverText(
+        document,
+        current.analysis,
+        indexSource.indexOf("greeting", indexSource.lastIndexOf("users.")),
+        context,
+      ),
+    ).toBe("```polena\nfn greeting(user: User): string\n```\n\nBuilds a greeting.");
+  });
 });
 
 function hoverText(
   document: TextDocument,
   analysis: ReturnType<typeof analyze>,
   offset: number,
+  context?: Parameters<typeof getHover>[3],
 ): string | undefined {
-  const contents = getHover(document, analysis, document.positionAt(offset))?.contents;
+  const contents = getHover(document, analysis, document.positionAt(offset), context)?.contents;
   if (contents === undefined || typeof contents === "string" || Array.isArray(contents)) {
     return undefined;
   }

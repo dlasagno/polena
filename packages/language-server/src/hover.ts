@@ -3,6 +3,7 @@ import {
   formatType,
   type AnalyzeResult,
   type HoverTarget,
+  type ModuleAnalysis,
   type NodeId,
   type Program,
   type ReferenceTarget,
@@ -33,13 +34,14 @@ export function getHover(
   document: TextDocument,
   analysis: AnalyzeResult,
   position: Position,
+  context: HoverContext = emptyHoverContext,
 ): Hover | null {
   const target = findHoverTarget(analysis.program, document.offsetAt(position));
   if (target === undefined) {
     return null;
   }
 
-  const value = renderHover(analysis, target);
+  const value = renderHover(analysis, target, context);
   if (value === undefined) {
     return null;
   }
@@ -53,17 +55,27 @@ export function getHover(
   };
 }
 
-function renderHover(analysis: AnalyzeResult, target: HoverTarget): string | undefined {
+type HoverContext = {
+  readonly analysesByModuleName?: ReadonlyMap<string, ModuleAnalysis>;
+};
+
+const emptyHoverContext: HoverContext = {};
+
+function renderHover(
+  analysis: AnalyzeResult,
+  target: HoverTarget,
+  context: HoverContext,
+): string | undefined {
   switch (target.kind) {
     case "ModuleDoc":
       return analysis.program.doc;
     case "Expression":
-      return renderExpressionHover(analysis, target.nodeId);
+      return renderExpressionHover(analysis, target.nodeId, context);
     case "MemberName":
-      return renderReferenceHover(analysis, target.nodeId);
+      return renderReferenceHover(analysis, target.nodeId, context);
     case "TypeReference":
       return (
-        renderTypeReferenceHover(analysis, target.nodeId) ??
+        renderTypeReferenceHover(analysis, target.nodeId, context) ??
         renderNodeHover(analysis, target.nodeId)
       );
     case "Declaration":
@@ -75,9 +87,14 @@ function renderHover(analysis: AnalyzeResult, target: HoverTarget): string | und
   }
 }
 
-function renderExpressionHover(analysis: AnalyzeResult, nodeId: NodeId): string | undefined {
+function renderExpressionHover(
+  analysis: AnalyzeResult,
+  nodeId: NodeId,
+  context: HoverContext,
+): string | undefined {
   const reference = analysis.semantics.references.get(nodeId);
-  const referenceHover = reference === undefined ? undefined : renderReference(reference, analysis);
+  const referenceHover =
+    reference === undefined ? undefined : renderReference(reference, analysis, context);
   if (referenceHover !== undefined) {
     return referenceHover;
   }
@@ -90,37 +107,88 @@ function renderExpressionHover(analysis: AnalyzeResult, nodeId: NodeId): string 
   return renderCodeHover(formatType(type), undefined);
 }
 
-function renderReferenceHover(analysis: AnalyzeResult, nodeId: NodeId): string | undefined {
+function renderReferenceHover(
+  analysis: AnalyzeResult,
+  nodeId: NodeId,
+  context: HoverContext,
+): string | undefined {
   const reference = analysis.semantics.references.get(nodeId);
-  return reference === undefined ? undefined : renderReference(reference, analysis);
+  return reference === undefined ? undefined : renderReference(reference, analysis, context);
 }
 
-function renderTypeReferenceHover(analysis: AnalyzeResult, nodeId: NodeId): string | undefined {
+function renderTypeReferenceHover(
+  analysis: AnalyzeResult,
+  nodeId: NodeId,
+  context: HoverContext,
+): string | undefined {
   const reference = analysis.semantics.references.get(nodeId);
   if (reference?.kind !== "TypeAlias") {
     return undefined;
   }
 
-  return renderNodeHover(analysis, reference.definitionNodeId);
+  return renderNodeHover(
+    resolveReferenceAnalysis(reference, analysis, context),
+    reference.definitionNodeId,
+  );
 }
 
-function renderReference(reference: ReferenceTarget, analysis: AnalyzeResult): string | undefined {
+function renderReference(
+  reference: ReferenceTarget,
+  analysis: AnalyzeResult,
+  context: HoverContext,
+): string | undefined {
+  const definitionAnalysis = resolveReferenceAnalysis(reference, analysis, context);
   switch (reference.kind) {
     case "Local":
     case "Function":
-      return renderNodeHover(analysis, reference.definitionNodeId);
+      return renderNodeHover(definitionAnalysis, reference.definitionNodeId);
     case "Prelude":
       return renderCodeHover(reference.name, undefined);
     case "TypeAlias":
-      return renderNodeHover(analysis, reference.definitionNodeId);
+      return renderNodeHover(definitionAnalysis, reference.definitionNodeId);
     case "EnumVariant":
-      return renderNodeHover(analysis, reference.definitionNodeId);
+      return renderNodeHover(definitionAnalysis, reference.definitionNodeId);
     case "Field": {
-      const node = findAstNode(analysis.program, reference.definitionNodeId);
-      return node?.kind === "ObjectTypeField" || node?.kind === "ObjectLiteralField"
-        ? renderFieldHover(analysis, node)
-        : renderCodeHover(reference.name, undefined);
+      const node = findAstNode(definitionAnalysis.program, reference.definitionNodeId);
+      if (node?.kind === "ObjectTypeField" || node?.kind === "ObjectLiteralField") {
+        return renderFieldHover(definitionAnalysis, node);
+      }
+
+      return renderNodeHover(definitionAnalysis, reference.definitionNodeId);
     }
+    case "Imported":
+      return renderNodeHover(definitionAnalysis, reference.definitionNodeId);
+    case "Module":
+      return renderCodeHover(reference.moduleName, undefined);
+  }
+}
+
+function resolveReferenceAnalysis(
+  reference: ReferenceTarget,
+  fallback: AnalyzeResult,
+  context: HoverContext,
+): AnalyzeResult {
+  const moduleName = moduleNameForReference(reference);
+  if (moduleName === undefined) {
+    return fallback;
+  }
+
+  return context.analysesByModuleName?.get(moduleName)?.analysis ?? fallback;
+}
+
+function moduleNameForReference(reference: ReferenceTarget): string | undefined {
+  switch (reference.kind) {
+    case "Imported":
+    case "Module":
+      return reference.moduleName;
+    case "TypeAlias":
+    case "EnumVariant":
+    case "Field":
+      return reference.moduleName;
+    case "Local":
+    case "Function":
+    case "Prelude":
+      return undefined;
   }
 }
 

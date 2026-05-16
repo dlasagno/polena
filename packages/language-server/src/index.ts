@@ -64,7 +64,7 @@ documents.onDidClose((event) => {
   void publishDiagnostics(event.document, { clearFallback: true });
 });
 
-connection.onHover((params) => {
+connection.onHover(async (params) => {
   if (isManifestUri(params.textDocument.uri)) {
     return null;
   }
@@ -72,6 +72,14 @@ connection.onHover((params) => {
   const document = documents.get(params.textDocument.uri);
   if (document === undefined) {
     return null;
+  }
+
+  const packageDiagnostics = await getPackageDiagnostics(document);
+  const packageAnalysis = packageDiagnostics?.analysesByUri.get(document.uri);
+  if (packageAnalysis !== undefined) {
+    return getHover(document, packageAnalysis.analysis, params.position, {
+      analysesByModuleName: packageDiagnostics?.analysesByModuleName,
+    });
   }
 
   return getHover(document, getAnalysis(document), params.position);
