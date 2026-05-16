@@ -75,6 +75,7 @@ export function buildPackageProgram(input: {
       diagnostics.push(
         error(`Duplicate module '${name}'.`, program.span, {
           code: DiagnosticCode.DuplicateModule,
+          sourcePath: file.path,
           label: "this file resolves to a module name that is already used",
           notes: [{ kind: "help", message: `conflicts with ${existing.path}` }],
         }),
@@ -97,6 +98,7 @@ export function buildPackageProgram(input: {
     diagnostics.push(
       error("Package entry module 'src/index.plna' is missing.", emptySpan(), {
         code: DiagnosticCode.MissingModule,
+        sourcePath: `${input.sourceDir.replace(/\/$/, "")}/index.plna`,
         label: "add src/index.plna",
       }),
     );
@@ -110,6 +112,7 @@ export function buildPackageProgram(input: {
         diagnostics.push(
           error(`Unsupported import '${declaration.path.text}'.`, declaration.path.span, {
             code: DiagnosticCode.UnsupportedModuleImport,
+            sourcePath: moduleFile.path,
             label: "only current-package imports beginning with '@/' are implemented",
           }),
         );
@@ -122,6 +125,7 @@ export function buildPackageProgram(input: {
         diagnostics.push(
           error(`Missing module '${importedName}'.`, declaration.path.span, {
             code: DiagnosticCode.MissingModule,
+            sourcePath: moduleFile.path,
             label: "no source file resolves to this module",
           }),
         );
@@ -216,6 +220,7 @@ function detectCycles(
           diagnostics.push(
             error("Circular import detected.", importDecl.path.span, {
               code: DiagnosticCode.CircularImport,
+              sourcePath: modules[from]?.path,
               label: "this import participates in a cycle",
               notes: [{ kind: "help", message: names.join(" -> ") }],
             }),

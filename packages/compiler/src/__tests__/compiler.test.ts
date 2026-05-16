@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { CompileResult } from "../compiler";
-import { compile, compilePackage, lex, parse } from "../compiler";
+import { analyzePackage, compile, compilePackage, lex, parse } from "../compiler";
 
 describe("lexer", () => {
   test("tokenizes declarations and skips line comments", () => {
@@ -833,6 +833,34 @@ describe("compiler", () => {
     expect(result.ok).toBe(false);
     expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
       "Missing module '@/missing'.",
+    );
+  });
+
+  test("analyzes package diagnostics with source paths", () => {
+    const result = analyzePackage({
+      manifest: { name: "app", version: "0.1.0", target: "executable" },
+      rootDir: "app",
+      sourceDir: "app/src",
+      files: [
+        {
+          path: "app/src/index.plna",
+          source: "import @/users.{greeting};\nexport fn main(): void {}",
+        },
+        {
+          path: "app/src/users.plna",
+          source: "export const name = 1;",
+        },
+      ],
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        path: "app/src/index.plna",
+        diagnostic: expect.objectContaining({
+          message: "Module '@/users' does not export value 'greeting'.",
+        }),
+      }),
     );
   });
 

@@ -197,5 +197,5 @@ Status values:
 | CLI compile command | Implemented | Compiles package directories with `polena compile <package-dir> --out-dir <dir>`. |
 | Diagnostics with spans | Implemented | Compiler and CLI render source locations. |
 | Diagnostic codes | Implemented | Current diagnostics use stable codes. |
-| Language server diagnostics | Implemented | Diagnostics-first LSP support exists. |
+| Language server diagnostics | Implemented | Diagnostics-first LSP support exists, including package-aware diagnostics for current-package `@/` imports. |
 | VS Code extension | Partially implemented | Syntax highlighting and LSP client exist for the MVP surface. |

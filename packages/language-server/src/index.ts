@@ -1,4 +1,6 @@
 import { analyze, type AnalyzeResult } from "@polena/compiler";
+import { promises as fs } from "node:fs";
+import { fileURLToPath } from "node:url";
 import {
   createConnection,
   DidChangeConfigurationNotification,
@@ -12,6 +14,11 @@ import { TextDocument } from "vscode-languageserver-textdocument";
 import { toLspDiagnostics } from "./diagnostics";
 import { getDocumentSymbols } from "./document-symbols";
 import { getHover } from "./hover";
+import {
+  analyzePackageForDocument,
+  type LanguageServerIo,
+  type OpenDocumentSnapshot,
+} from "./package-analysis";
 
 const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
@@ -19,6 +26,8 @@ const analysisCache = new Map<
   string,
   { readonly version: number; readonly analysis: AnalyzeResult }
 >();
+const packageDiagnosticUris = new Map<string, Set<string>>();
+const packageRootByUri = new Map<string, string>();
 
 connection.onInitialize(
   (_params: InitializeParams): InitializeResult => ({
@@ -36,12 +45,18 @@ connection.onInitialized(() => {
   });
 });
 
-documents.onDidOpen((event) => publishDiagnostics(event.document));
-documents.onDidChangeContent((event) => publishDiagnostics(event.document));
-documents.onDidSave((event) => publishDiagnostics(event.document));
+documents.onDidOpen((event) => {
+  void publishDiagnostics(event.document);
+});
+documents.onDidChangeContent((event) => {
+  void publishDiagnostics(event.document);
+});
+documents.onDidSave((event) => {
+  void publishDiagnostics(event.document);
+});
 documents.onDidClose((event) => {
   analysisCache.delete(event.document.uri);
-  connection.sendDiagnostics({ uri: event.document.uri, diagnostics: [] });
+  void publishDiagnostics(event.document, { clearFallback: true });
 });
 
 connection.onHover((params) => {
@@ -62,12 +77,77 @@ connection.onDocumentSymbol((params) => {
   return getDocumentSymbols(document, getAnalysis(document));
 });
 
-function publishDiagnostics(document: TextDocument): void {
+async function publishDiagnostics(
+  document: TextDocument,
+  options: { readonly clearFallback?: boolean } = {},
+): Promise<void> {
+  const packageDiagnostics = await getPackageDiagnostics(document);
+  if (packageDiagnostics !== undefined) {
+    const previousUris = packageDiagnosticUris.get(packageDiagnostics.packageRoot) ?? new Set();
+    const nextUris = new Set(packageDiagnostics.diagnosticsByUri.keys());
+
+    for (const [uri, diagnostics] of packageDiagnostics.diagnosticsByUri) {
+      packageRootByUri.set(uri, packageDiagnostics.packageRoot);
+      connection.sendDiagnostics({
+        uri,
+        diagnostics: toLspDiagnostics(diagnostics, uri),
+      });
+    }
+
+    for (const uri of previousUris) {
+      if (!nextUris.has(uri)) {
+        packageRootByUri.delete(uri);
+        connection.sendDiagnostics({ uri, diagnostics: [] });
+      }
+    }
+
+    packageDiagnosticUris.set(packageDiagnostics.packageRoot, nextUris);
+    return;
+  }
+
+  if (options.clearFallback === true) {
+    clearPreviousPackageDiagnostics(document.uri);
+    connection.sendDiagnostics({ uri: document.uri, diagnostics: [] });
+    return;
+  }
+
+  clearPreviousPackageDiagnostics(document.uri);
   const analysis = getAnalysis(document);
   connection.sendDiagnostics({
     uri: document.uri,
     diagnostics: toLspDiagnostics(analysis.diagnostics, document.uri),
   });
+}
+
+function clearPreviousPackageDiagnostics(uri: string): void {
+  const previousRoot = packageRootByUri.get(uri);
+  if (previousRoot === undefined) {
+    return;
+  }
+
+  for (const packageUri of packageDiagnosticUris.get(previousRoot) ?? []) {
+    packageRootByUri.delete(packageUri);
+    connection.sendDiagnostics({ uri: packageUri, diagnostics: [] });
+  }
+  packageDiagnosticUris.delete(previousRoot);
+}
+
+async function getPackageDiagnostics(document: TextDocument) {
+  const documentPath = pathFromUri(document.uri);
+  if (documentPath === undefined) {
+    return undefined;
+  }
+
+  try {
+    return await analyzePackageForDocument({
+      documentPath,
+      openDocuments: openDocumentSnapshots(),
+      io: nodeIo,
+    });
+  } catch (reason) {
+    connection.console.error(`Package analysis failed: ${formatUnknownError(reason)}`);
+    return undefined;
+  }
 }
 
 function getAnalysis(document: TextDocument): AnalyzeResult {
@@ -79,6 +159,61 @@ function getAnalysis(document: TextDocument): AnalyzeResult {
   const analysis = analyze(document.getText());
   analysisCache.set(document.uri, { version: document.version, analysis });
   return analysis;
+}
+
+function openDocumentSnapshots(): readonly OpenDocumentSnapshot[] {
+  const snapshots: OpenDocumentSnapshot[] = [];
+  for (const document of documents.all()) {
+    const path = pathFromUri(document.uri);
+    if (path !== undefined) {
+      snapshots.push({
+        uri: document.uri,
+        path,
+        text: document.getText(),
+      });
+    }
+  }
+  return snapshots;
+}
+
+function pathFromUri(uri: string): string | undefined {
+  try {
+    return fileURLToPath(uri);
+  } catch {
+    return undefined;
+  }
+}
+
+const nodeIo: LanguageServerIo = {
+  readTextFile: (path) => fs.readFile(path, "utf8"),
+  readDir: (path) => fs.readdir(path),
+  stat: async (path) => {
+    try {
+      const info = await fs.stat(path);
+      if (info.isFile()) {
+        return "file";
+      }
+      if (info.isDirectory()) {
+        return "directory";
+      }
+      return "missing";
+    } catch (reason) {
+      if (isNotFoundError(reason)) {
+        return "missing";
+      }
+      throw reason;
+    }
+  },
+};
+
+function isNotFoundError(reason: unknown): boolean {
+  return (
+    typeof reason === "object" && reason !== null && "code" in reason && reason.code === "ENOENT"
+  );
+}
+
+function formatUnknownError(reason: unknown): string {
+  return reason instanceof Error ? reason.message : String(reason);
 }
 
 documents.listen(connection);

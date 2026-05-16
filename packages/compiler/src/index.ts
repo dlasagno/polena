@@ -2,6 +2,7 @@ export { check } from "./checker";
 export { generateJavaScript, generateJavaScriptModule } from "./codegen";
 export {
   analyze,
+  analyzePackage,
   compile,
   compilePackage,
   lex,
@@ -13,7 +14,7 @@ export { renderDiagnostic, renderDiagnostics } from "./diagnostic-renderer";
 export { findHoverTarget, findNodeAt } from "./query";
 export { formatType } from "./types";
 export type { NodeId, Program } from "./ast";
-export type { AnalyzeResult, CompileResult, Diagnostic } from "./compiler";
+export type { AnalyzePackageResult, AnalyzeResult, CompileResult, Diagnostic } from "./compiler";
 export type {
   CompilePackageResult,
   EmittedFile,
@@ -22,6 +23,7 @@ export type {
   ModuleName,
   PackageManifest,
   PackageProgram,
+  PackageDiagnostic,
   SourceFile,
 } from "./compiler";
 export type { RenderDiagnosticOptions } from "./diagnostic-renderer";

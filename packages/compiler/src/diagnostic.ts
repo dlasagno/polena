@@ -14,6 +14,7 @@ export type Diagnostic = {
   readonly severity: DiagnosticSeverity;
   readonly code?: string;
   readonly message: string;
+  readonly sourcePath?: string;
   readonly span?: Span;
   readonly label?: string;
   readonly notes?: readonly DiagnosticNote[];
@@ -21,6 +22,7 @@ export type Diagnostic = {
 
 export type DiagnosticOptions = {
   readonly code?: string;
+  readonly sourcePath?: string;
   readonly label?: string;
   readonly notes?: readonly DiagnosticNote[];
 };
@@ -29,6 +31,7 @@ export function error(message: string, span?: Span, options: DiagnosticOptions =
   return {
     severity: "error",
     message,
+    ...(options.sourcePath === undefined ? {} : { sourcePath: options.sourcePath }),
     ...(span === undefined ? {} : { span }),
     ...(options.code === undefined ? {} : { code: options.code }),
     ...(options.label === undefined ? {} : { label: options.label }),
