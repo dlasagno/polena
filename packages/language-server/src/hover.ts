@@ -69,6 +69,10 @@ function renderHover(
   switch (target.kind) {
     case "ModuleDoc":
       return analysis.program.doc;
+    case "ModuleReference":
+      return renderModuleReferenceHover(target, context);
+    case "ImportMember":
+      return renderImportMemberHover(target, context);
     case "Expression":
       return renderExpressionHover(analysis, target.nodeId, context);
     case "MemberName":
@@ -85,6 +89,67 @@ function renderHover(
     case "EnumVariantDefinition":
       return renderNodeHover(analysis, target.nodeId);
   }
+}
+
+function renderModuleReferenceHover(
+  target: HoverTarget,
+  context: HoverContext,
+): string | undefined {
+  const moduleName = target.moduleName;
+  if (moduleName === undefined) {
+    return undefined;
+  }
+
+  return renderModuleHover(moduleName, context);
+}
+
+function renderModuleHover(moduleName: string, context: HoverContext): string {
+  const moduleDoc = context.analysesByModuleName?.get(moduleName)?.analysis.program.doc;
+  return renderCodeHover(`import ${moduleName};`, moduleDoc);
+}
+
+function renderImportMemberHover(target: HoverTarget, context: HoverContext): string | undefined {
+  const moduleName = target.moduleName;
+  const exportName = target.exportName;
+  const namespace = target.importNamespace;
+  if (moduleName === undefined || exportName === undefined || namespace === undefined) {
+    return undefined;
+  }
+
+  const moduleAnalysis = context.analysesByModuleName?.get(moduleName)?.analysis;
+  const declaration =
+    moduleAnalysis === undefined
+      ? undefined
+      : findExportedDeclaration(moduleAnalysis.program, exportName, namespace);
+  if (moduleAnalysis !== undefined && declaration !== undefined) {
+    return renderNodeHover(moduleAnalysis, declaration.nodeId);
+  }
+
+  return renderCodeHover(namespace === "type" ? `type ${exportName}` : exportName, undefined);
+}
+
+function findExportedDeclaration(
+  program: Program,
+  exportName: string,
+  namespace: "type" | "value",
+): TypeDeclaration | FunctionDeclaration | VariableDeclaration | undefined {
+  for (const declaration of program.declarations) {
+    if (!("exported" in declaration) || !declaration.exported || declaration.name !== exportName) {
+      continue;
+    }
+
+    if (namespace === "type" && declaration.kind === "TypeDeclaration") {
+      return declaration;
+    }
+    if (
+      namespace === "value" &&
+      (declaration.kind === "FunctionDeclaration" || declaration.kind === "VariableDeclaration")
+    ) {
+      return declaration;
+    }
+  }
+
+  return undefined;
 }
 
 function renderExpressionHover(
@@ -159,7 +224,7 @@ function renderReference(
     case "Imported":
       return renderNodeHover(definitionAnalysis, reference.definitionNodeId);
     case "Module":
-      return renderCodeHover(reference.moduleName, undefined);
+      return renderModuleHover(reference.moduleName, context);
   }
 }
 

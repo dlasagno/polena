@@ -3,6 +3,7 @@ import type {
   Block,
   Expression,
   FunctionDeclaration,
+  ImportDeclaration,
   MatchArm,
   MatchPattern,
   NodeId,
@@ -17,6 +18,8 @@ import type { Span } from "./span";
 
 export type HoverTargetKind =
   | "ModuleDoc"
+  | "ModuleReference"
+  | "ImportMember"
   | "Expression"
   | "MemberName"
   | "TypeReference"
@@ -30,6 +33,9 @@ export type HoverTarget = {
   readonly kind: HoverTargetKind;
   readonly nodeId: NodeId;
   readonly span: Span;
+  readonly moduleName?: string;
+  readonly exportName?: string;
+  readonly importNamespace?: "type" | "value";
 };
 
 export function findNodeAt(program: Program, offset: number): NodeId | undefined {
@@ -39,6 +45,13 @@ export function findNodeAt(program: Program, offset: number): NodeId | undefined
 export function findHoverTarget(program: Program, offset: number): HoverTarget | undefined {
   if (program.docSpan !== undefined && contains(program.docSpan, offset)) {
     return target("ModuleDoc", program.nodeId, program.docSpan);
+  }
+
+  for (const importDeclaration of program.imports) {
+    const found = findInImportDeclaration(importDeclaration, offset);
+    if (found !== undefined) {
+      return found;
+    }
   }
 
   for (const declaration of program.declarations) {
@@ -55,8 +68,58 @@ function contains(span: Span, offset: number): boolean {
   return span.start.offset <= offset && offset < span.end.offset;
 }
 
-function target(kind: HoverTargetKind, nodeId: NodeId, span: Span): HoverTarget {
-  return { kind, nodeId, span };
+function target(
+  kind: HoverTargetKind,
+  nodeId: NodeId,
+  span: Span,
+  options: {
+    readonly moduleName?: string;
+    readonly exportName?: string;
+    readonly importNamespace?: "type" | "value";
+  } = {},
+): HoverTarget {
+  return { kind, nodeId, span, ...options };
+}
+
+function findInImportDeclaration(
+  declaration: ImportDeclaration,
+  offset: number,
+): HoverTarget | undefined {
+  if (!contains(declaration.span, offset)) {
+    return undefined;
+  }
+
+  if (contains(declaration.path.span, offset)) {
+    return target("ModuleReference", declaration.path.nodeId, declaration.path.span, {
+      moduleName: declaration.path.text,
+    });
+  }
+
+  for (const item of declaration.items) {
+    if (contains(item.nameSpan, offset)) {
+      return target("ImportMember", item.nodeId, item.nameSpan, {
+        moduleName: declaration.path.text,
+        exportName: item.name,
+        importNamespace: item.namespace,
+      });
+    }
+
+    if (item.alias !== undefined && contains(item.alias.nameSpan, offset)) {
+      return target("ImportMember", item.nodeId, item.alias.nameSpan, {
+        moduleName: declaration.path.text,
+        exportName: item.name,
+        importNamespace: item.namespace,
+      });
+    }
+  }
+
+  if (declaration.alias !== undefined && contains(declaration.alias.nameSpan, offset)) {
+    return target("ModuleReference", declaration.nodeId, declaration.alias.nameSpan, {
+      moduleName: declaration.path.text,
+    });
+  }
+
+  return undefined;
 }
 
 function findInTopLevelDeclaration(

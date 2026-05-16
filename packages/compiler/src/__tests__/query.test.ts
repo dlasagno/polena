@@ -79,6 +79,39 @@ describe("query", () => {
     });
   });
 
+  test("classifies import paths as module references", () => {
+    const source = "import @/users.{type User, greeting as greet} as users;";
+    const result = parse(lex(source).tokens, { moduleMode: true });
+    expect(result.diagnostics).toHaveLength(0);
+
+    expect(findHoverTarget(result.program, source.indexOf("@/users"))).toMatchObject({
+      kind: "ModuleReference",
+      moduleName: "@/users",
+    });
+    expect(findHoverTarget(result.program, source.indexOf("User"))).toMatchObject({
+      kind: "ImportMember",
+      moduleName: "@/users",
+      exportName: "User",
+      importNamespace: "type",
+    });
+    expect(findHoverTarget(result.program, source.indexOf("greeting"))).toMatchObject({
+      kind: "ImportMember",
+      moduleName: "@/users",
+      exportName: "greeting",
+      importNamespace: "value",
+    });
+    expect(findHoverTarget(result.program, source.indexOf("greet"))).toMatchObject({
+      kind: "ImportMember",
+      moduleName: "@/users",
+      exportName: "greeting",
+      importNamespace: "value",
+    });
+    expect(findHoverTarget(result.program, source.lastIndexOf("users"))).toMatchObject({
+      kind: "ModuleReference",
+      moduleName: "@/users",
+    });
+  });
+
   test("finds enum payload types and pattern bindings", () => {
     const source = `
 type Message = enum { Move(number, number), Quit };

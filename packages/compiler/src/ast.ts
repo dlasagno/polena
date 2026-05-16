@@ -93,6 +93,7 @@ export type ImportDeclaration = {
 
 export type ImportPath = {
   readonly kind: "ImportPath";
+  readonly nodeId: NodeId;
   readonly text: string;
   readonly segments: readonly string[];
   readonly prefix: "current-package" | "std" | "package";

@@ -1,6 +1,8 @@
 //! Type declarations are exported by default.
 
 export type User = {
+  /// User name.
+  /// @type {string}
   name: string,
 };
 

@@ -374,6 +374,7 @@ class Checker {
               start: { offset: 0, line: 1, column: 1 },
               end: { offset: 0, line: 1, column: 1 },
             },
+          importedModuleName: moduleImport.moduleName,
           assignability: "immutable-binding",
         },
         "Local",
@@ -3232,6 +3233,14 @@ class Checker {
   }
 
   private referenceTargetFromSymbol(symbol: SymbolInfo): ReferenceTarget {
+    if (symbol.importedModuleName !== undefined && symbol.definitionNodeId === undefined) {
+      return {
+        kind: "Module",
+        moduleName: symbol.importedModuleName,
+        fullSpan: symbol.fullSpan ?? symbol.span,
+      };
+    }
+
     if (symbol.definitionNodeId === undefined) {
       return { kind: "Prelude", name: symbol.name };
     }

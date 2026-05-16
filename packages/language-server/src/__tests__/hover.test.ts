@@ -161,6 +161,9 @@ describe("LSP hover", () => {
       "}",
     ].join("\n");
     const usersSource = [
+      "//! User helpers.",
+      "//!",
+      "//! Shared domain declarations.",
       "export type User = {",
       "  /// Display name.",
       "  name: string,",
@@ -196,6 +199,23 @@ describe("LSP hover", () => {
     }
 
     const context = { analysesByModuleName };
+    expect(hoverText(document, current.analysis, indexSource.indexOf("@/users"), context)).toBe(
+      "```polena\nimport @/users;\n```\n\nUser helpers.\n\nShared domain declarations.",
+    );
+    expect(
+      hoverText(
+        document,
+        current.analysis,
+        indexSource.indexOf("users", indexSource.indexOf("as users")),
+        context,
+      ),
+    ).toBe("```polena\nimport @/users;\n```\n\nUser helpers.\n\nShared domain declarations.");
+    expect(hoverText(document, current.analysis, indexSource.indexOf("User"), context)).toBe(
+      "```polena\ntype User = { name: string }\n```",
+    );
+    expect(hoverText(document, current.analysis, indexSource.indexOf("greeting}"), context)).toBe(
+      "```polena\nfn greeting(user: User): string\n```\n\nBuilds a greeting.",
+    );
     expect(
       hoverText(
         document,
@@ -212,6 +232,9 @@ describe("LSP hover", () => {
     );
     expect(hoverText(document, current.analysis, indexSource.lastIndexOf("Red"), context)).toBe(
       "```polena\nColor.Red: Color\n```\n\nPrimary color.",
+    );
+    expect(hoverText(document, current.analysis, indexSource.lastIndexOf("users."), context)).toBe(
+      "```polena\nimport @/users;\n```\n\nUser helpers.\n\nShared domain declarations.",
     );
     expect(
       hoverText(
