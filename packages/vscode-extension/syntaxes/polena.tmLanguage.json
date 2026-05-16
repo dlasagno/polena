@@ -4,6 +4,9 @@
   "scopeName": "source.polena",
   "patterns": [
     {
+      "include": "#doc-comments"
+    },
+    {
       "include": "#comments"
     },
     {
@@ -11,6 +14,12 @@
     },
     {
       "include": "#double-quoted-string"
+    },
+    {
+      "include": "#directives"
+    },
+    {
+      "include": "#import-declaration"
     },
     {
       "include": "#function-declaration"
@@ -50,11 +59,23 @@
     }
   ],
   "repository": {
+    "doc-comments": {
+      "patterns": [
+        {
+          "name": "comment.line.documentation.module.polena",
+          "match": "//!.*$"
+        },
+        {
+          "name": "comment.line.documentation.polena",
+          "match": "///.*$"
+        }
+      ]
+    },
     "comments": {
       "patterns": [
         {
           "name": "comment.line.double-slash.polena",
-          "match": "//.*$"
+          "match": "//(?![/!]).*$"
         }
       ]
     },
@@ -139,6 +160,9 @@
           "include": "#double-quoted-string"
         },
         {
+          "include": "#directives"
+        },
+        {
           "include": "#reserved-keywords"
         },
         {
@@ -173,6 +197,22 @@
         }
       ]
     },
+    "directives": {
+      "patterns": [
+        {
+          "name": "meta.directive.polena",
+          "match": "(@)([A-Za-z_$][A-Za-z0-9_$]*)\\b",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.directive.polena"
+            },
+            "2": {
+              "name": "entity.name.function.directive.polena"
+            }
+          }
+        }
+      ]
+    },
     "identifiers": {
       "patterns": [
         {
@@ -181,11 +221,51 @@
         }
       ]
     },
+    "import-declaration": {
+      "patterns": [
+        {
+          "name": "meta.import.polena",
+          "begin": "\\b(import)\\b",
+          "beginCaptures": {
+            "1": {
+              "name": "keyword.declaration.import.polena"
+            }
+          },
+          "end": ";",
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.terminator.statement.polena"
+            }
+          },
+          "patterns": [
+            {
+              "name": "string.unquoted.module-path.polena",
+              "match": "(?:@std|@)(?:/[A-Za-z_$][A-Za-z0-9_$]*)*|[A-Za-z_$][A-Za-z0-9_$]*(?:/[A-Za-z_$][A-Za-z0-9_$]*)+"
+            },
+            {
+              "name": "keyword.declaration.type.polena",
+              "match": "\\btype\\b"
+            },
+            {
+              "name": "keyword.declaration.alias.polena",
+              "match": "\\bas\\b"
+            },
+            {
+              "name": "variable.other.import.polena",
+              "match": "\\b[A-Za-z_$][A-Za-z0-9_$]*\\b"
+            },
+            {
+              "include": "#punctuation"
+            }
+          ]
+        }
+      ]
+    },
     "function-declaration": {
       "patterns": [
         {
           "name": "meta.function.declaration.polena",
-          "begin": "\\b(fn)\\b\\s+([A-Za-z_$][A-Za-z0-9_$]*)\\s*(\\()",
+          "begin": "\\b(fn)\\b\\s+([A-Za-z_$][A-Za-z0-9_$]*)\\s*(?:<[^>]*>\\s*)?(\\()",
           "beginCaptures": {
             "1": {
               "name": "keyword.declaration.function.polena"
@@ -310,12 +390,36 @@
     "numbers": {
       "patterns": [
         {
-          "name": "constant.numeric.integer.bigint.polena",
-          "match": "\\b\\d[\\d_]*n\\b"
+          "name": "constant.numeric.integer.hexadecimal.bigint.polena",
+          "match": "\\b0[xX][0-9A-Fa-f](?:_?[0-9A-Fa-f])*n\\b"
+        },
+        {
+          "name": "constant.numeric.integer.octal.bigint.polena",
+          "match": "\\b0[oO][0-7](?:_?[0-7])*n\\b"
+        },
+        {
+          "name": "constant.numeric.integer.binary.bigint.polena",
+          "match": "\\b0[bB][01](?:_?[01])*n\\b"
+        },
+        {
+          "name": "constant.numeric.integer.decimal.bigint.polena",
+          "match": "\\b\\d(?:_?\\d)*(?:[eE][+-]?\\d(?:_?\\d)*)?n\\b"
+        },
+        {
+          "name": "constant.numeric.integer.hexadecimal.polena",
+          "match": "\\b0[xX][0-9A-Fa-f](?:_?[0-9A-Fa-f])*\\b"
+        },
+        {
+          "name": "constant.numeric.integer.octal.polena",
+          "match": "\\b0[oO][0-7](?:_?[0-7])*\\b"
+        },
+        {
+          "name": "constant.numeric.integer.binary.polena",
+          "match": "\\b0[bB][01](?:_?[01])*\\b"
         },
         {
           "name": "constant.numeric.number.polena",
-          "match": "\\b\\d[\\d_]*(?:\\.\\d[\\d_]*)?\\b"
+          "match": "\\b\\d(?:_?\\d)*(?:\\.\\d(?:_?\\d)*)?(?:[eE][+-]?\\d(?:_?\\d)*)?\\b"
         }
       ]
     },
@@ -323,7 +427,7 @@
       "patterns": [
         {
           "name": "keyword.operator.polena",
-          "match": "=>|==|!=|<=|>=|\\+=|-=|\\*=|/=|%=|=|<|>|\\+|-|\\*|/|%|!"
+          "match": "=>|==|!=|<=|>=|\\+\\+|\\+=|-=|\\*=|/=|%=|=|<|>|\\+|-|\\*|/|%|!"
         }
       ]
     },
@@ -348,6 +452,10 @@
         {
           "name": "punctuation.accessor.dot.polena",
           "match": "\\."
+        },
+        {
+          "name": "punctuation.definition.directive.polena",
+          "match": "@"
         },
         {
           "name": "constant.language.wildcard.polena",

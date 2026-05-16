@@ -5,6 +5,11 @@
   "version": "0.0.1",
   "publisher": "polena",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dlasagno/polena.git",
+    "directory": "packages/vscode-extension"
+  },
   "type": "module",
   "engines": {
     "vscode": "^1.85.0"
@@ -29,6 +34,7 @@
   "files": [
     "dist",
     "language-configuration.json",
+    "LICENSE",
     "syntaxes",
     "README.md"
   ],
