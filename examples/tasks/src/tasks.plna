@@ -1,0 +1,41 @@
+//! Shared task domain declarations.
+
+export type Priority = enum {
+  Low,
+  Normal,
+  High,
+};
+
+export type Task = {
+  title: string,
+  done: boolean,
+  priority: Priority,
+};
+
+export fn priorityLabel(priority: Priority): string {
+  match priority {
+    .Low => "low",
+    .Normal => "normal",
+    .High => "high",
+  }
+}
+
+export fn taskLabel(task: Task): string {
+  const state = if task.done { "done" } else { "todo" };
+  "${state} [${priorityLabel(task.priority)}] ${task.title}"
+}
+
+export fn firstOpen(items: []Task): Option<Task> {
+  let index = 0;
+  let result: Option<Task> = .None;
+
+  while index < items.length : (index += 1) {
+    const item = items[index];
+    if !item.done {
+      result = .Some(item);
+      break;
+    }
+  }
+
+  result
+}

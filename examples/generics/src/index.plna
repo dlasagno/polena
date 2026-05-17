@@ -1,74 +1,60 @@
-// Generic type declarations can parameterize object aliases and enums.
+//! Generic aliases and functions keep reusable code strongly typed.
 
-type Pair<A, B> = {
-  first: A,
-  second: B,
+type Box<T> = {
+  value: T,
 };
 
 type Page<T> = {
   items: []T,
   page: number,
+  pageSize: number,
 };
 
-type StringPair<V> = Pair<string, V>;
+type ApiResponse<T> = Result<T, ApiError>;
 
-fn describeScore(score: Option<number>): string {
-  match score {
-    .Some(value) => "score ${value}",
-    .None => "no score",
-  }
-}
-
-fn describeNested(score: Option<Option<number>>): string {
-  match score {
-    .Some(inner) => describeScore(inner),
-    .None => "outer missing",
-  }
-}
-
-type ParseError = enum {
-  Empty,
+type ApiError = enum {
+  NotFound,
   Invalid,
 };
 
-fn describeResult(result: Result<number, ParseError>): string {
+fn box<T>(value: T): Box<T> {
+  { value: value }
+}
+
+fn unwrapOr<T>(value: Option<T>, fallback: T): T {
+  match value {
+    .Some(inner) => inner,
+    .None => fallback,
+  }
+}
+
+fn describePage(page: Page<Box<number>>): string {
+  const firstItem = unwrapOr(page.items.get(0), box(0));
+  "page ${page.page}/${page.pageSize}: first=${firstItem.value}"
+}
+
+fn describeResponse(result: ApiResponse<Page<Box<number>>>): string {
   match result {
-    .Ok(value) => "parsed ${value}",
+    .Ok(page) => describePage(page),
     .Err(error) => match error {
-      .Empty => "empty input",
-      .Invalid => "invalid input",
+      .NotFound => "not found",
+      .Invalid => "invalid response",
     },
   }
 }
 
 export fn main(): void {
-  const scorePair: StringPair<number> = {
-    first: "Ada",
-    second: 98,
-  };
-
-  const names: Page<string> = {
-    items: ["Ada", "Grace"],
+  const scores: Page<Box<number>> = {
+    items: [box(98), box(87), box(91)],
     page: 1,
+    pageSize: 3,
   };
 
-  const present = Option.Some(scorePair.second);
-  const missing: Option<number> = .None;
-  const nested: Option<Option<number>> = .Some(present);
-  const parsed: Result<number, ParseError> = .Ok(42);
-  const failed: Result<number, ParseError> = .Err(ParseError.Empty);
+  const loaded: ApiResponse<Page<Box<number>>> = .Ok(scores);
+  const missing: ApiResponse<Page<Box<number>>> = .Err(ApiError.NotFound);
+  const firstScore = unwrapOr(scores.items.get(0), box(0));
 
-  println("pair ${scorePair.first}: ${scorePair.second}");
-  println("page ${names.page}: ${names.items[0]}, ${names.items[1]}");
-  println(describeScore(present));
-  println(describeScore(missing));
-  println(describeNested(nested));
-  println(describeResult(parsed));
-  println(describeResult(failed));
+  println("first score: ${firstScore.value}");
+  println(describeResponse(loaded));
+  println(describeResponse(missing));
 }
-
-// Invalid generic behavior, shown here as comments so this example still compiles:
-// const missingTypeArgument: Option = .None;
-// const tooManyTypeArguments: Option<number, string> = .None;
-// const nonGenericTypeArgument: ParseError<number> = .Empty;
-// const cannotInferFieldless = Option.None;

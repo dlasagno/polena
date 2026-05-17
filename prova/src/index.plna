@@ -1,0 +1,3 @@
+export fn main(args: []string): void {
+  println("Hello, ${args[0]}");
+}

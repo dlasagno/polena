@@ -1,12 +1,44 @@
-//! Type declarations are exported by default.
+//! User declarations shared by the package entry point.
 
-export type User = {
-  /// User name.
-  /// @type {string}
-  name: string,
+export type Role = enum {
+  Admin,
+  Member,
+  Guest,
 };
 
-/// Function declarations are exported by default.
-export fn greeting(user: User): string {
-  "Hello ${user.name}"
+export type Profile = {
+  /// Optional public display name.
+  nickname: Option<string>,
+  /// Short biography shown in summaries.
+  bio: string,
+};
+
+export type User = {
+  /// Stable user identifier.
+  id: string,
+  /// Legal or account name.
+  name: string,
+  /// Account role.
+  role: Role,
+  /// Public profile data.
+  profile: Profile,
+};
+
+export fn roleLabel(role: Role): string {
+  match role {
+    .Admin => "admin",
+    .Member => "member",
+    .Guest => "guest",
+  }
+}
+
+export fn displayName(user: User): string {
+  match user.profile.nickname {
+    .Some(name) => name,
+    .None => user.name,
+  }
+}
+
+export fn summary(user: User): string {
+  "${displayName(user)} (#${user.id}) is a ${roleLabel(user.role)}: ${user.profile.bio}"
 }

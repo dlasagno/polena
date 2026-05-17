@@ -1,6 +1,26 @@
-import @/users.{type User, greeting} as users;
+import @/users.{type User, summary} as users;
 
 export fn main(): void {
-  const user: User = { name: "Ada" };
-  println(users.greeting(user));
+  const ada: User = {
+    id: "u-001",
+    name: "Ada Lovelace",
+    role: .Admin,
+    profile: {
+      nickname: .Some("Ada"),
+      bio: "writes careful programs",
+    },
+  };
+
+  const grace: User = {
+    id: "u-002",
+    name: "Grace Hopper",
+    role: .Member,
+    profile: {
+      nickname: .None,
+      bio: "keeps compiler messages clear",
+    },
+  };
+
+  println(users.summary(ada));
+  println(users.summary(grace));
 }

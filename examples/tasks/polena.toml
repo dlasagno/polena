@@ -1,4 +1,4 @@
-name = "basic"
+name = "tasks"
 version = "0.1.0"
 target = "executable"
 runtime = "bun"
