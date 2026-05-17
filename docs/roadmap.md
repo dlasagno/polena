@@ -123,8 +123,10 @@ Exit criteria:
 
 ## Track 3: Standard Library and Runtime Model
 
-Goal: move from a tiny compiler-provided prelude toward deliberate core library
-support.
+Goal: move from a tiny compiler-provided prelude toward the comprehensive
+standard library described in the language goals. The near-term work is
+deliberate and small; the long-term target is a stdlib broad enough that most
+programs do not need third-party packages for common tasks.
 
 Candidate work:
 

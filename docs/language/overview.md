@@ -8,11 +8,13 @@ Design goals and global safety rules for Polena.
 
 This language is designed for modern web development and aims to provide a safer, simpler, and more predictable developer experience than JavaScript and TypeScript.
 
+Polena is its own language, not a JavaScript or TypeScript superset. It shares syntax familiarity with both, but enforces its own semantics; interop with the JavaScript and TypeScript ecosystem exists only at explicit boundaries.
+
 The primary goals are:
 
 - Compile directly to JavaScript.
 - Generate type declaration files for consumption by TypeScript and JavaScript tooling.
-- Work with existing JavaScript and TypeScript code in the future.
+- Interoperate with existing JavaScript and TypeScript code through explicit boundaries.
 - Be compatible with the npm ecosystem where practical.
 - Offer familiar syntax to TypeScript/JavaScript developers.
 - Remove ambiguous JavaScript behavior.
@@ -20,8 +22,9 @@ The primary goals are:
 - Prevent common runtime errors such as accessing properties of `undefined`.
 - Avoid truthiness-based control flow.
 - Provide explicit error handling using result types instead of exceptions.
+- Provide one clear way to express each common pattern.
 - Support fast compilation with type checking.
-- Provide a consistent standard library.
+- Provide a comprehensive standard library.
 - Be easy for humans, tooling, and LLMs to read and generate.
 - Eventually support compile-time metaprogramming inspired by Zig.
 
