@@ -1,0 +1,54 @@
+// JavaScript interop stdlib experiment.
+// Status: imagined sketch, not accepted language syntax.
+// Classification: trusted extern declaration, generated exception wrapper,
+// unknown boundary data, explicit decoders, and ordinary wrappers.
+
+type JsonValue = unknown;
+
+extern module "global:JSON" {
+	type JsError = opaque;
+
+	fn parse_raw(input: string): JsonValue
+		js_name "parse"
+		js_throws JsError;
+
+	fn stringify_raw(value: JsonValue): string
+		js_name "stringify"
+		js_throws JsError;
+}
+
+export fn parse(input: string): Result<JsonValue, JsError> {
+	generated_try parse_raw(input)
+}
+
+export fn stringify(value: JsonValue): Result<string, JsError> {
+	generated_try stringify_raw(value)
+}
+
+export fn as_string(value: JsonValue): Option<string> {
+	intrinsic unknown_as_string(value)
+}
+
+export fn as_number(value: JsonValue): Option<number> {
+	intrinsic unknown_as_number(value)
+}
+
+export fn as_boolean(value: JsonValue): Option<boolean> {
+	intrinsic unknown_as_boolean(value)
+}
+
+export fn field(value: JsonValue, name: string): Option<JsonValue> {
+	intrinsic unknown_object_field(value, name)
+}
+
+export fn index(value: JsonValue, position: number): Option<JsonValue> {
+	intrinsic unknown_array_index(value, position)
+}
+
+// Friction:
+// - JSON is not useful without `unknown` or an equivalent boundary type.
+// - Exception wrapping wants generated code; encoding it only in the return
+//   type hides too much JavaScript boundary behavior.
+// - Null from parsed JSON is a value-level concern, while JavaScript nullish
+//   returns at extern boundaries are an interop concern. They should not be
+//   conflated.

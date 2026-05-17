@@ -1,0 +1,39 @@
+// JavaScript interop stdlib experiment.
+// Status: imagined sketch, not accepted language syntax.
+// Classification: opaque foreign type plus constructor and method declarations.
+
+extern module "global:Map" {
+	type JsMap<K, V> = opaque;
+
+	constructor fn new_raw<K, V>(): JsMap<K, V> js_name "Map";
+	method fn get_raw<K, V>(self: JsMap<K, V>, key: K): Option<V>
+		js_name "get"
+		js_return undefined_as_option;
+	method fn set_raw<K, V>(self: JsMap<K, V>, key: K, value: V): JsMap<K, V>
+		js_name "set";
+	method fn has_raw<K, V>(self: JsMap<K, V>, key: K): boolean js_name "has";
+	method fn delete_raw<K, V>(self: JsMap<K, V>, key: K): boolean js_name "delete";
+}
+
+export fn new<K, V>(): JsMap<K, V> {
+	new_raw()
+}
+
+export fn get<K, V>(map: JsMap<K, V>, key: K): Option<V> {
+	get_raw(map, key)
+}
+
+export fn insert<K, V>(map: JsMap<K, V>, key: K, value: V): void {
+	set_raw(map, key, value);
+}
+
+export fn contains_key<K, V>(map: JsMap<K, V>, key: K): boolean {
+	has_raw(map, key)
+}
+
+// Friction:
+// - JavaScript Map keys use object identity and SameValueZero semantics, which
+//   may not match future Polena equality rules.
+// - `Map.prototype.set` returns the map for chaining, but the wrapper wants
+//   `void`; this suggests wrappers should absorb JavaScript idioms.
+// - Generic opaque extern types are useful, but can overstate runtime safety.

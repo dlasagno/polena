@@ -1,0 +1,35 @@
+// JavaScript interop stdlib experiment.
+// Status: imagined sketch, not accepted language syntax.
+// Classification: opaque foreign type plus constructor, static function, and
+// method declarations.
+
+extern module "global:Date" {
+	type Date = opaque;
+
+	static fn now_raw(): number js_name "now";
+	constructor fn from_millis_raw(milliseconds: number): Date js_name "Date";
+	method fn to_iso_string_raw(self: Date): string js_name "toISOString";
+	method fn time_millis_raw(self: Date): number js_name "getTime";
+}
+
+export fn now_millis(): number {
+	now_raw()
+}
+
+export fn from_millis(milliseconds: number): Date {
+	from_millis_raw(milliseconds)
+}
+
+export fn to_iso_string(date: Date): string {
+	to_iso_string_raw(date)
+}
+
+export fn time_millis(date: Date): number {
+	time_millis_raw(date)
+}
+
+// Friction:
+// - Constructors, static functions, and methods are distinct enough that a
+//   single `fn` extern form becomes ambiguous.
+// - Opaque values are passable, but their identity and mutation semantics need
+//   to be documented by the wrapper, not inferred by Polena.

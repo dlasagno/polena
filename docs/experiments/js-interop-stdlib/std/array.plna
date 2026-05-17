@@ -1,0 +1,30 @@
+// JavaScript interop stdlib experiment.
+// Status: imagined sketch, not accepted language syntax.
+// Classification: compiler intrinsics plus ordinary Polena wrappers.
+
+export fn len<T>(items: []T): number {
+	intrinsic array_len(items)
+}
+
+export fn is_empty<T>(items: []T): boolean {
+	len(items) == 0
+}
+
+export fn get<T>(items: []T, index: number): Option<T> {
+	intrinsic array_get(items, index)
+}
+
+export fn push<T>(items: []T, value: T): void {
+	intrinsic array_push(items, value)
+}
+
+export fn pop<T>(items: []T): Option<T> {
+	intrinsic array_pop(items)
+}
+
+// Friction:
+// - The sketch assumes mutable arrays, but the ownership and aliasing model is
+//   not designed yet.
+// - `get` returning Option<T> is coherent, but direct indexing syntax still
+//   needs a separate design decision.
+// - Higher-order helpers remain deferred until function types are settled.

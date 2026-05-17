@@ -1,0 +1,21 @@
+// JavaScript interop stdlib experiment.
+// Status: imagined sketch, not accepted language syntax.
+// Classification: trusted extern declaration plus ordinary Polena wrapper.
+
+extern module "global:console" {
+	fn log_raw(message: string): void js_name "log";
+	fn error_raw(message: string): void js_name "error";
+}
+
+export fn println(message: string): void {
+	log_raw(message);
+}
+
+export fn eprintln(message: string): void {
+	error_raw(message);
+}
+
+// Friction:
+// - Globals probably need a first-class host declaration form or a stable
+//   synthetic module convention.
+// - Variadic console methods are deferred; v1 wrappers only accept one string.

@@ -1,0 +1,33 @@
+// JavaScript interop stdlib experiment.
+// Status: imagined sketch, not accepted language syntax.
+// Classification: compiler intrinsics plus ordinary Polena wrappers.
+
+export fn len(input: string): number {
+	intrinsic string_len(input)
+}
+
+export fn is_empty(input: string): boolean {
+	len(input) == 0
+}
+
+export fn slice(input: string, start: number, end: Option<number>): string {
+	intrinsic string_slice(input, start, end)
+}
+
+export fn contains(input: string, needle: string): boolean {
+	intrinsic string_contains(input, needle)
+}
+
+export fn starts_with(input: string, prefix: string): boolean {
+	intrinsic string_starts_with(input, prefix)
+}
+
+export fn trim(input: string): string {
+	intrinsic string_trim(input)
+}
+
+// Friction:
+// - Core string helpers are awkward as extern declarations because JavaScript
+//   exposes them as receiver methods.
+// - Using intrinsics avoids general prototype interop, but makes the compiler
+//   own Unicode and JavaScript string behavior choices.
