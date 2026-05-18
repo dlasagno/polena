@@ -1,0 +1,28 @@
+// Target escape stdlib experiment.
+// Status: imagined sketch, not accepted language syntax.
+// Classification: opaque target value plus target-specific expression escapes.
+
+type Date = opaque;
+
+export fn now_millis(): number {
+	@target.js("Date.now()")
+}
+
+export fn from_millis(milliseconds: number): Date {
+	@target.js("new Date($0)", milliseconds)
+}
+
+export fn to_iso_string(date: Date): string {
+	@target.js("$0.toISOString()", date)
+}
+
+export fn time_millis(date: Date): number {
+	@target.js("$0.getTime()", date)
+}
+
+// Friction:
+// - Constructors, static functions, and methods need no separate syntax here.
+// - Opaque type identity is still under-specified. `type Date = opaque` says
+//   Polena cannot inspect the value, but not what equality or mutation mean.
+// - If opaque types become ordinary language syntax, they need rules separate
+//   from target escapes.

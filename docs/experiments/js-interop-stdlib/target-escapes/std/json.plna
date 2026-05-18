@@ -1,0 +1,50 @@
+// Target escape stdlib experiment.
+// Status: imagined sketch, not accepted language syntax.
+// Classification: target-specific expression escapes, unknown boundary data,
+// explicit decoders, and ordinary wrappers.
+
+type JsonValue = unknown;
+type JsError = opaque;
+
+export fn parse(input: string): Result<JsonValue, JsError> {
+	@target.js.try("JSON.parse($0)", input)
+}
+
+export fn stringify(value: JsonValue): Result<string, JsError> {
+	@target.js.try("JSON.stringify($0)", value)
+}
+
+export fn as_string(value: JsonValue): Option<string> {
+	@target.js.option("typeof $0 === 'string' ? $0 : undefined", value)
+}
+
+export fn as_number(value: JsonValue): Option<number> {
+	@target.js.option("typeof $0 === 'number' ? $0 : undefined", value)
+}
+
+export fn as_boolean(value: JsonValue): Option<boolean> {
+	@target.js.option("typeof $0 === 'boolean' ? $0 : undefined", value)
+}
+
+export fn field(value: JsonValue, name: string): Option<JsonValue> {
+	@target.js.option(
+		"$0 !== null && typeof $0 === 'object' && !Array.isArray($0) ? $0[$1] : undefined",
+		value,
+		name,
+	)
+}
+
+export fn index(value: JsonValue, position: number): Option<JsonValue> {
+	@target.js.option(
+		"Array.isArray($0) && Number.isInteger($1) && $1 >= 0 && $1 < $0.length ? $0[$1] : undefined",
+		value,
+		position,
+	)
+}
+
+// Friction:
+// - The target escape version handles JSON without extern-specific syntax.
+// - `unknown` remains a real type-system feature, not just target syntax.
+// - Writing decoders as raw JavaScript is powerful but easy to get subtly
+//   wrong; common unknown decoders may deserve named compiler primitives or
+//   audited stdlib helpers.

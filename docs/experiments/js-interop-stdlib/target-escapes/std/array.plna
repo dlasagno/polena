@@ -1,0 +1,34 @@
+// Target escape stdlib experiment.
+// Status: imagined sketch, not accepted language syntax.
+// Classification: target-specific expression escapes plus ordinary wrappers.
+
+export fn len<T>(items: []T): number {
+	@target.js("$0.length", items)
+}
+
+export fn is_empty<T>(items: []T): boolean {
+	len(items) == 0
+}
+
+export fn get<T>(items: []T, index: number): Option<T> {
+	@target.js.option(
+		"Number.isInteger($1) && $1 >= 0 && $1 < $0.length ? $0[$1] : undefined",
+		items,
+		index,
+	)
+}
+
+export fn push<T>(items: []T, value: T): void {
+	@target.js("$0.push($1)", items, value)
+}
+
+export fn pop<T>(items: []T): Option<T> {
+	@target.js.option("$0.pop()", items)
+}
+
+// Friction:
+// - Bounds behavior is explicit in the target template, but this is brittle and
+//   duplicates logic the compiler may already need for indexing.
+// - The sketch still assumes mutable arrays.
+// - Generic target escapes require the compiler to trust that the template
+//   preserves T without runtime validation.

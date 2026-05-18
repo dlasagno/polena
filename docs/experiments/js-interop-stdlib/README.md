@@ -31,6 +31,10 @@ The working hypothesis is:
 This experiment tests that hypothesis by sketching small pieces of the
 standard library as if the interop syntax already existed.
 
+A second pass in `target-escapes/` repeats the same standard-library pressure
+test with imagined target escape directives instead of foreign declaration
+syntax.
+
 ## Instructions
 
 When adding to this experiment:

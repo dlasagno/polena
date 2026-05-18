@@ -1,0 +1,33 @@
+// Target escape stdlib experiment.
+// Status: imagined sketch, not accepted language syntax.
+// Classification: opaque target value plus target-specific expression escapes.
+
+type JsMap<K, V> = opaque;
+
+export fn new<K, V>(): JsMap<K, V> {
+	@target.js("new Map()")
+}
+
+export fn get<K, V>(map: JsMap<K, V>, key: K): Option<V> {
+	@target.js.option("$0.get($1)", map, key)
+}
+
+export fn insert<K, V>(map: JsMap<K, V>, key: K, value: V): void {
+	@target.js("$0.set($1, $2)", map, key, value)
+}
+
+export fn contains_key<K, V>(map: JsMap<K, V>, key: K): boolean {
+	@target.js("$0.has($1)", map, key)
+}
+
+export fn delete<K, V>(map: JsMap<K, V>, key: K): boolean {
+	@target.js("$0.delete($1)", map, key)
+}
+
+// Friction:
+// - The target escape hides JavaScript's chaining return from `set`.
+// - `get` conflates a missing key with a stored `undefined`; this is acceptable
+//   only if Polena values cannot be `undefined`, but foreign values could still
+//   violate that trust.
+// - Generic opaque target values can exaggerate safety because JavaScript does
+//   not enforce K or V at runtime.

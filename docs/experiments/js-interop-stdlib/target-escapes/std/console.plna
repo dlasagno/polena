@@ -1,0 +1,17 @@
+// Target escape stdlib experiment.
+// Status: imagined sketch, not accepted language syntax.
+// Classification: target-specific expression escapes plus ordinary wrappers.
+
+export fn println(message: string): void {
+	@target.js("console.log($0)", message)
+}
+
+export fn eprintln(message: string): void {
+	@target.js("console.error($0)", message)
+}
+
+// Friction:
+// - This is much smaller than an extern module for console.
+// - Variadic console methods remain intentionally hidden by one-string wrappers.
+// - The escape needs a clear effect model: this emits a side-effecting statement
+//   even though the directive is written in expression position.

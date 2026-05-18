@@ -1,0 +1,36 @@
+// Target escape stdlib experiment.
+// Status: imagined sketch, not accepted language syntax.
+// Classification: target-specific expression escapes plus ordinary wrappers.
+
+export fn len(input: string): number {
+	@target.js("$0.length", input)
+}
+
+export fn is_empty(input: string): boolean {
+	len(input) == 0
+}
+
+export fn slice(input: string, start: number, end: Option<number>): string {
+	match end {
+		.Some(value) => @target.js("$0.slice($1, $2)", input, start, value),
+		.None => @target.js("$0.slice($1)", input, start),
+	}
+}
+
+export fn contains(input: string, needle: string): boolean {
+	@target.js("$0.includes($1)", input, needle)
+}
+
+export fn starts_with(input: string, prefix: string): boolean {
+	@target.js("$0.startsWith($1)", input, prefix)
+}
+
+export fn trim(input: string): string {
+	@target.js("$0.trim()", input)
+}
+
+// Friction:
+// - Receiver calls are naturally represented by the JavaScript template.
+// - Optional arguments can be handled in ordinary Polena control flow.
+// - The compiler still owns the declared result type and must reject target
+//   output that cannot appear in expression position.
