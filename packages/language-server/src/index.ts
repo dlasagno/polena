@@ -11,6 +11,7 @@ import {
   type InitializeResult,
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
+import { getDefinition } from "./definition";
 import { toLspDiagnostics } from "./diagnostics";
 import { getDocumentSymbols } from "./document-symbols";
 import { getHover } from "./hover";
@@ -35,6 +36,7 @@ connection.onInitialize(
   (_params: InitializeParams): InitializeResult => ({
     capabilities: {
       textDocumentSync: TextDocumentSyncKind.Incremental,
+      definitionProvider: true,
       hoverProvider: true,
       documentSymbolProvider: true,
       completionProvider: {
@@ -83,6 +85,27 @@ connection.onHover(async (params) => {
   }
 
   return getHover(document, getAnalysis(document), params.position);
+});
+
+connection.onDefinition(async (params) => {
+  if (isManifestUri(params.textDocument.uri)) {
+    return null;
+  }
+
+  const document = documents.get(params.textDocument.uri);
+  if (document === undefined) {
+    return null;
+  }
+
+  const packageDiagnostics = await getPackageDiagnostics(document);
+  const packageAnalysis = packageDiagnostics?.analysesByUri.get(document.uri);
+  if (packageAnalysis !== undefined) {
+    return getDefinition(document, packageAnalysis.analysis, params.position, {
+      analysesByModuleName: packageDiagnostics?.analysesByModuleName,
+    });
+  }
+
+  return getDefinition(document, getAnalysis(document), params.position);
 });
 
 connection.onDocumentSymbol((params) => {
