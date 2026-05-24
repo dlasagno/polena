@@ -22,6 +22,7 @@ import {
   type LanguageServerIo,
   type OpenDocumentSnapshot,
 } from "./package-analysis";
+import { getDocumentHighlights, getReferences } from "./references";
 
 const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
@@ -37,6 +38,8 @@ connection.onInitialize(
     capabilities: {
       textDocumentSync: TextDocumentSyncKind.Incremental,
       definitionProvider: true,
+      referencesProvider: true,
+      documentHighlightProvider: true,
       hoverProvider: true,
       documentSymbolProvider: true,
       completionProvider: {
@@ -106,6 +109,58 @@ connection.onDefinition(async (params) => {
   }
 
   return getDefinition(document, getAnalysis(document), params.position);
+});
+
+connection.onReferences(async (params) => {
+  if (isManifestUri(params.textDocument.uri)) {
+    return [];
+  }
+
+  const document = documents.get(params.textDocument.uri);
+  if (document === undefined) {
+    return [];
+  }
+
+  const packageDiagnostics = await getPackageDiagnostics(document);
+  const packageAnalysis = packageDiagnostics?.analysesByUri.get(document.uri);
+  if (packageAnalysis !== undefined) {
+    return getReferences(
+      document,
+      packageAnalysis.analysis,
+      params.position,
+      { includeDeclaration: params.context.includeDeclaration },
+      {
+        currentModuleName: packageAnalysis.moduleName,
+        analysesByModuleName: packageDiagnostics?.analysesByModuleName,
+      },
+    );
+  }
+
+  return getReferences(document, getAnalysis(document), params.position, {
+    includeDeclaration: params.context.includeDeclaration,
+  });
+});
+
+connection.onDocumentHighlight(async (params) => {
+  if (isManifestUri(params.textDocument.uri)) {
+    return [];
+  }
+
+  const document = documents.get(params.textDocument.uri);
+  if (document === undefined) {
+    return [];
+  }
+
+  const packageDiagnostics = await getPackageDiagnostics(document);
+  const packageAnalysis = packageDiagnostics?.analysesByUri.get(document.uri);
+  if (packageAnalysis !== undefined) {
+    return getDocumentHighlights(document, packageAnalysis.analysis, params.position, {
+      currentModuleName: packageAnalysis.moduleName,
+      analysesByModuleName: packageDiagnostics?.analysesByModuleName,
+    });
+  }
+
+  return getDocumentHighlights(document, getAnalysis(document), params.position);
 });
 
 connection.onDocumentSymbol((params) => {
