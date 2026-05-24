@@ -24,6 +24,7 @@ import {
 } from "./package-analysis";
 import { getDocumentHighlights, getReferences } from "./references";
 import { getRenameEdit, prepareRename } from "./rename";
+import { getSourceCompletions } from "./source-completion";
 
 const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
@@ -47,7 +48,7 @@ connection.onInitialize(
       hoverProvider: true,
       documentSymbolProvider: true,
       completionProvider: {
-        triggerCharacters: ['"', "="],
+        triggerCharacters: ['"', "=", "."],
       },
     },
   }),
@@ -224,17 +225,23 @@ connection.onDocumentSymbol((params) => {
   return getDocumentSymbols(document, getAnalysis(document));
 });
 
-connection.onCompletion((params) => {
-  if (!isManifestUri(params.textDocument.uri)) {
-    return [];
-  }
-
+connection.onCompletion(async (params) => {
   const document = documents.get(params.textDocument.uri);
   if (document === undefined) {
     return [];
   }
 
-  return getManifestCompletions(document, params.position);
+  if (isManifestUri(params.textDocument.uri)) {
+    return getManifestCompletions(document, params.position);
+  }
+
+  const packageDiagnostics = await getPackageDiagnostics(document);
+  const packageAnalysis = packageDiagnostics?.analysesByUri.get(document.uri);
+  if (packageAnalysis !== undefined) {
+    return getSourceCompletions(document, packageAnalysis.analysis, params.position);
+  }
+
+  return getSourceCompletions(document, getAnalysis(document), params.position);
 });
 
 async function publishDiagnostics(
