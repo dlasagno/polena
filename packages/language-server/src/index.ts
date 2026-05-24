@@ -23,6 +23,7 @@ import {
   type OpenDocumentSnapshot,
 } from "./package-analysis";
 import { getDocumentHighlights, getReferences } from "./references";
+import { getRenameEdit, prepareRename } from "./rename";
 
 const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
@@ -40,6 +41,9 @@ connection.onInitialize(
       definitionProvider: true,
       referencesProvider: true,
       documentHighlightProvider: true,
+      renameProvider: {
+        prepareProvider: true,
+      },
       hoverProvider: true,
       documentSymbolProvider: true,
       completionProvider: {
@@ -161,6 +165,50 @@ connection.onDocumentHighlight(async (params) => {
   }
 
   return getDocumentHighlights(document, getAnalysis(document), params.position);
+});
+
+connection.onPrepareRename(async (params) => {
+  if (isManifestUri(params.textDocument.uri)) {
+    return null;
+  }
+
+  const document = documents.get(params.textDocument.uri);
+  if (document === undefined) {
+    return null;
+  }
+
+  const packageDiagnostics = await getPackageDiagnostics(document);
+  const packageAnalysis = packageDiagnostics?.analysesByUri.get(document.uri);
+  if (packageAnalysis !== undefined) {
+    return prepareRename(document, packageAnalysis.analysis, params.position, {
+      currentModuleName: packageAnalysis.moduleName,
+      analysesByModuleName: packageDiagnostics?.analysesByModuleName,
+    });
+  }
+
+  return prepareRename(document, getAnalysis(document), params.position);
+});
+
+connection.onRenameRequest(async (params) => {
+  if (isManifestUri(params.textDocument.uri)) {
+    return null;
+  }
+
+  const document = documents.get(params.textDocument.uri);
+  if (document === undefined) {
+    return null;
+  }
+
+  const packageDiagnostics = await getPackageDiagnostics(document);
+  const packageAnalysis = packageDiagnostics?.analysesByUri.get(document.uri);
+  if (packageAnalysis !== undefined) {
+    return getRenameEdit(document, packageAnalysis.analysis, params.position, params.newName, {
+      currentModuleName: packageAnalysis.moduleName,
+      analysesByModuleName: packageDiagnostics?.analysesByModuleName,
+    });
+  }
+
+  return getRenameEdit(document, getAnalysis(document), params.position, params.newName);
 });
 
 connection.onDocumentSymbol((params) => {
