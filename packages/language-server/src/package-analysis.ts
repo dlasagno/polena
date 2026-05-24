@@ -19,6 +19,7 @@ export type LanguageServerIo = Pick<BuildIo, "readTextFile" | "readDir" | "stat"
 export type OpenDocumentSnapshot = {
   readonly uri: string;
   readonly path: string;
+  readonly version?: number;
   readonly text: string;
 };
 

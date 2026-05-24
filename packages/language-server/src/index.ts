@@ -1,5 +1,7 @@
 import { analyze, type AnalyzeResult } from "@polena/compiler";
+import { findPackageRoot } from "@polena/build";
 import { promises as fs } from "node:fs";
+import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   createConnection,
@@ -17,6 +19,7 @@ import { getDocumentSymbols } from "./document-symbols";
 import { getHover } from "./hover";
 import { getManifestCompletions } from "./manifest-completion";
 import { isManifestUri } from "./manifest";
+import { PackageAnalysisCache } from "./package-analysis-cache";
 import {
   analyzePackageForDocument,
   type LanguageServerIo,
@@ -33,6 +36,7 @@ const analysisCache = new Map<
   string,
   { readonly version: number; readonly analysis: AnalyzeResult }
 >();
+const packageAnalysisCache = new PackageAnalysisCache();
 const packageDiagnosticUris = new Map<string, Set<string>>();
 const packageRootByUri = new Map<string, string>();
 
@@ -65,16 +69,21 @@ connection.onInitialized(() => {
 });
 
 documents.onDidOpen((event) => {
+  invalidatePackageAnalysisForUri(event.document.uri);
   void publishDiagnostics(event.document);
 });
 documents.onDidChangeContent((event) => {
+  invalidatePackageAnalysisForUri(event.document.uri);
+  analysisCache.delete(event.document.uri);
   void publishDiagnostics(event.document);
 });
 documents.onDidSave((event) => {
+  invalidatePackageAnalysisForUri(event.document.uri);
   void publishDiagnostics(event.document);
 });
 documents.onDidClose((event) => {
   analysisCache.delete(event.document.uri);
+  invalidatePackageAnalysisForUri(event.document.uri);
   void publishDiagnostics(event.document, { clearFallback: true });
 });
 
@@ -336,15 +345,37 @@ async function getPackageDiagnostics(document: TextDocument) {
   }
 
   try {
-    return await analyzePackageForDocument({
+    const packageRoot = await findPackageRoot(dirname(documentPath), nodeIo);
+    if (packageRoot === undefined) {
+      return undefined;
+    }
+
+    const snapshots = openDocumentSnapshots();
+    const cached = packageAnalysisCache.get(packageRoot, snapshots);
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    const analysis = await analyzePackageForDocument({
       documentPath,
-      openDocuments: openDocumentSnapshots(),
+      openDocuments: snapshots,
       io: nodeIo,
     });
+    packageAnalysisCache.set(packageRoot, snapshots, analysis);
+    return analysis;
   } catch (reason) {
     connection.console.error(`Package analysis failed: ${formatUnknownError(reason)}`);
     return undefined;
   }
+}
+
+function invalidatePackageAnalysisForUri(uri: string): void {
+  const path = pathFromUri(uri);
+  if (path === undefined) {
+    return;
+  }
+
+  packageAnalysisCache.invalidatePath(path);
 }
 
 function getAnalysis(document: TextDocument): AnalyzeResult {
@@ -366,6 +397,7 @@ function openDocumentSnapshots(): readonly OpenDocumentSnapshot[] {
       snapshots.push({
         uri: document.uri,
         path,
+        version: document.version,
         text: document.getText(),
       });
     }
