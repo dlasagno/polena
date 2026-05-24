@@ -24,6 +24,7 @@ import {
 } from "./package-analysis";
 import { getDocumentHighlights, getReferences } from "./references";
 import { getRenameEdit, prepareRename } from "./rename";
+import { getSignatureHelp } from "./signature-help";
 import { getSourceCompletions } from "./source-completion";
 
 const connection = createConnection(ProposedFeatures.all);
@@ -49,6 +50,9 @@ connection.onInitialize(
       documentSymbolProvider: true,
       completionProvider: {
         triggerCharacters: ['"', "=", "."],
+      },
+      signatureHelpProvider: {
+        triggerCharacters: ["(", ","],
       },
     },
   }),
@@ -242,6 +246,27 @@ connection.onCompletion(async (params) => {
   }
 
   return getSourceCompletions(document, getAnalysis(document), params.position);
+});
+
+connection.onSignatureHelp(async (params) => {
+  if (isManifestUri(params.textDocument.uri)) {
+    return null;
+  }
+
+  const document = documents.get(params.textDocument.uri);
+  if (document === undefined) {
+    return null;
+  }
+
+  const packageDiagnostics = await getPackageDiagnostics(document);
+  const packageAnalysis = packageDiagnostics?.analysesByUri.get(document.uri);
+  if (packageAnalysis !== undefined) {
+    return getSignatureHelp(document, packageAnalysis.analysis, params.position, {
+      analysesByModuleName: packageDiagnostics?.analysesByModuleName,
+    });
+  }
+
+  return getSignatureHelp(document, getAnalysis(document), params.position);
 });
 
 async function publishDiagnostics(
