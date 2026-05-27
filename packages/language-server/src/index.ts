@@ -29,6 +29,11 @@ import { getDocumentHighlights, getReferences } from "./references";
 import { getRenameEdit, prepareRename } from "./rename";
 import { getSignatureHelp } from "./signature-help";
 import { getSourceCompletions } from "./source-completion";
+import {
+  getWorkspaceSymbols,
+  workspaceSymbolSourcesFromModules,
+  type WorkspaceSymbolSource,
+} from "./workspace-symbols";
 
 const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
@@ -52,6 +57,7 @@ connection.onInitialize(
       },
       hoverProvider: true,
       documentSymbolProvider: true,
+      workspaceSymbolProvider: true,
       completionProvider: {
         triggerCharacters: ['"', "=", "."],
       },
@@ -238,6 +244,44 @@ connection.onDocumentSymbol((params) => {
   return getDocumentSymbols(document, getAnalysis(document));
 });
 
+connection.onWorkspaceSymbol(async (params) => {
+  const sources: WorkspaceSymbolSource[] = [];
+  const packageRoots = new Set<string>();
+  const packageUris = new Set<string>();
+
+  for (const document of documents.all()) {
+    const packageDiagnostics = await getPackageDiagnostics(document);
+    if (packageDiagnostics === undefined || packageRoots.has(packageDiagnostics.packageRoot)) {
+      continue;
+    }
+
+    packageRoots.add(packageDiagnostics.packageRoot);
+    for (const uri of packageDiagnostics.analysesByUri.keys()) {
+      packageUris.add(uri);
+    }
+    sources.push(
+      ...workspaceSymbolSourcesFromModules(packageDiagnostics.analysesByModuleName.values()),
+    );
+  }
+
+  for (const document of documents.all()) {
+    if (
+      isManifestUri(document.uri) ||
+      packageUris.has(document.uri) ||
+      !isSourceUri(document.uri)
+    ) {
+      continue;
+    }
+
+    sources.push({
+      uri: document.uri,
+      analysis: getAnalysis(document),
+    });
+  }
+
+  return getWorkspaceSymbols(params.query, sources);
+});
+
 connection.onCompletion(async (params) => {
   const document = documents.get(params.textDocument.uri);
   if (document === undefined) {
@@ -411,6 +455,11 @@ function pathFromUri(uri: string): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+function isSourceUri(uri: string): boolean {
+  const path = pathFromUri(uri);
+  return path !== undefined && (path.endsWith(".plna") || path.endsWith(".polena"));
 }
 
 const nodeIo: LanguageServerIo = {
