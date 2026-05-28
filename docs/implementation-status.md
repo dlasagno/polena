@@ -145,7 +145,8 @@ Status values:
 | Type aliases | Implemented | Transparent aliases; recursive aliases are rejected. |
 | Separate type/value namespaces | Implemented | Type aliases and value bindings may use the same name. |
 | Generics | Partially implemented | Generic type declarations and instantiations are supported, including substitution in object fields, enum payloads, aliases over generic instantiations, and inferred generic function calls. Explicit function call type arguments and constraints are not implemented. |
-| `unknown` source type | Not implemented | Internal unknown type exists for error recovery only. |
+| `unknown` source type | Not implemented | Drafted for dynamic boundary data; internal unknown type exists for error recovery only. |
+| Opaque type declarations | Not implemented | Drafted for target escapes and future foreign boundary values. |
 
 ---
 
@@ -173,6 +174,7 @@ Status values:
 | Compiler directive syntax `@directive(...)` | Not implemented | Dedicated directive definitions exist in docs only. |
 | Enum introspection directives | Not implemented | Depends on directives and enums. |
 | Object introspection directives | Not implemented | Depends on directives and object types. |
+| Target escape directives | Not implemented | Drafted in `docs/target-escapes.md`; depends on directives, explicit result type operands, `unknown`, and opaque types. |
 | User-defined directives/macros | Not implemented | Deferred in the spec. |
 
 ---

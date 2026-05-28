@@ -42,6 +42,8 @@ design. For current implementation support, see
   compiler behavior.
 - Use [`compiler-directives.md`](compiler-directives.md) for directive-specific
   design notes.
+- Use [`target-escapes.md`](target-escapes.md) for target-specific lowering
+  escape design notes.
 
 When a design area is marked **TBD**, do not infer behavior from TypeScript,
 JavaScript, Rust, Zig, or another language. Settle the Polena design first, then

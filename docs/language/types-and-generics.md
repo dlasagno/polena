@@ -339,20 +339,68 @@ later.
 
 ---
 
-## 28. Unknown
+## 26. Unknown
 
-The `unknown` type represents a value whose type is not statically known.
+`unknown` represents a value whose runtime shape is not known to Polena.
 
-It is mainly intended for future JavaScript interop and dynamic data parsing.
-
-Values of type `unknown` cannot be used directly.
+It is intended for dynamic boundary data, especially values produced by target
+escapes or future external code declarations.
 
 ```tsx
-fn parseJson(input: string): Result<unknown, JsonError> {
-	// ...
+const value: unknown = @target.js("JSON.parse($0)", unknown, input);
+```
+
+Values of type `unknown` may be stored, passed as `unknown`, and returned as
+`unknown`. They cannot be inspected, called, used as booleans, accessed through
+fields, indexed, or implicitly converted to another type.
+
+Useful operations on `unknown` require explicit decoding or refinement
+functions that return `Option` or `Result`.
+
+```tsx
+fn as_string(value: unknown): Option<string> {
+	// Exact implementation is TBD.
+	...
 }
 ```
 
-To use an `unknown` value, it must be validated, matched, or converted.
+The exact decoding API is **TBD**.
 
-Exact rules are **TBD**.
+---
+
+## 27. Opaque Types
+
+An opaque type is a named type whose representation is hidden from ordinary
+Polena code.
+
+```tsx
+type Date = opaque;
+```
+
+Opaque types are intended for values created by target escapes or future
+foreign boundary declarations, such as JavaScript `Date`, `Map`, `RegExp`, host
+handles, and error objects.
+
+Values of an opaque type may be stored, passed to functions, and returned.
+Ordinary Polena code cannot inspect their fields, match on their
+representation, or construct them directly.
+
+```tsx
+type Date = opaque;
+
+fn from_millis(milliseconds: number): Date {
+	@target.js("new Date($0)", Date, milliseconds)
+}
+
+fn to_iso_string(date: Date): string {
+	@target.js("$0.toISOString()", string, date)
+}
+```
+
+The following opaque-type rules are **TBD**:
+
+- equality,
+- generic opaque types,
+- whether opaque aliases are distinct or transparent,
+- visibility rules for public and private opaque types,
+- whether opaque values can be serialized or cloned.
