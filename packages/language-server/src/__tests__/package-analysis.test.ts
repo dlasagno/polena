@@ -80,6 +80,55 @@ describe("LSP package analysis", () => {
       "Invalid package runtime 'invalid'.",
     );
   });
+
+  test("includes source files created on disk after earlier analysis", async () => {
+    const io = createIo(
+      new Map([
+        ["/app/polena.toml", 'name = "app"\nversion = "0.1.0"\ntarget = "executable"\n'],
+        [
+          "/app/src/index.plna",
+          "import @/users.{greeting};\nexport fn main(): void { println(greeting()); }",
+        ],
+        ["/app/src/users.plna", 'export fn greeting(): string { "Hello" }'],
+      ]),
+    );
+
+    const result = await analyzePackageForDocument({
+      documentPath: "/app/src/index.plna",
+      openDocuments: [],
+      io,
+    });
+
+    expect(result?.diagnosticsByUri.get(pathToFileURL("/app/src/index.plna").href)).toEqual([]);
+    expect(result?.diagnosticsByUri.has(pathToFileURL("/app/src/users.plna").href)).toBe(true);
+    expect(result?.analysesByUri.has(pathToFileURL("/app/src/users.plna").href)).toBe(true);
+  });
+
+  test("drops diagnostics and analyses for source files deleted from disk", async () => {
+    const io = createIo(
+      new Map([
+        ["/app/polena.toml", 'name = "app"\nversion = "0.1.0"\ntarget = "executable"\n'],
+        [
+          "/app/src/index.plna",
+          "import @/users.{greeting};\nexport fn main(): void { println(greeting()); }",
+        ],
+      ]),
+    );
+
+    const result = await analyzePackageForDocument({
+      documentPath: "/app/src/index.plna",
+      openDocuments: [],
+      io,
+    });
+
+    expect(result?.diagnosticsByUri.has(pathToFileURL("/app/src/users.plna").href)).toBe(false);
+    expect(result?.analysesByUri.has(pathToFileURL("/app/src/users.plna").href)).toBe(false);
+    expect(
+      result?.diagnosticsByUri
+        .get(pathToFileURL("/app/src/index.plna").href)
+        ?.map((diagnostic) => diagnostic.message),
+    ).toContain("Missing module '@/users'.");
+  });
 });
 
 function createIo(files: ReadonlyMap<string, string>): LanguageServerIo {

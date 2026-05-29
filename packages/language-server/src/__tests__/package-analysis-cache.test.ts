@@ -10,16 +10,21 @@ describe("package analysis cache", () => {
       { uri: "file:///other/src/index.plna", path: "/other/src/index.plna", version: 9, text: "" },
     ];
 
-    expect(packageAnalysisCacheKey("/app", snapshots)).toBe(
-      "/app/src/index.plna@1|/app/src/users.plna@3",
+    expect(packageAnalysisCacheKey("/app", snapshots)).toMatch(
+      /^\/app\/src\/index\.plna@1:[0-9a-f]+\|\/app\/src\/users\.plna@3:[0-9a-f]+$/,
     );
   });
 
-  test("returns cached analysis until an in-package version changes", () => {
+  test("returns cached analysis until an in-package version or text changes", () => {
     const cache = new PackageAnalysisCache();
     const analysis = packageAnalysis("/app");
     const snapshots: OpenDocumentSnapshot[] = [
-      { uri: "file:///app/src/index.plna", path: "/app/src/index.plna", version: 1, text: "" },
+      {
+        uri: "file:///app/src/index.plna",
+        path: "/app/src/index.plna",
+        version: 1,
+        text: "one",
+      },
     ];
 
     cache.set("/app", snapshots, analysis);
@@ -27,7 +32,22 @@ describe("package analysis cache", () => {
     expect(cache.get("/app", snapshots)).toBe(analysis);
     expect(
       cache.get("/app", [
-        { uri: "file:///app/src/index.plna", path: "/app/src/index.plna", version: 2, text: "" },
+        {
+          uri: "file:///app/src/index.plna",
+          path: "/app/src/index.plna",
+          version: 2,
+          text: "one",
+        },
+      ]),
+    ).toBeUndefined();
+    expect(
+      cache.get("/app", [
+        {
+          uri: "file:///app/src/index.plna",
+          path: "/app/src/index.plna",
+          version: 1,
+          text: "two",
+        },
       ]),
     ).toBeUndefined();
   });

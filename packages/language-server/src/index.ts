@@ -1,7 +1,7 @@
 import { analyze, type AnalyzeResult } from "@polena/compiler";
 import { findPackageRoot } from "@polena/build";
 import { promises as fs } from "node:fs";
-import { dirname } from "node:path";
+import { dirname, isAbsolute, normalize, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   createConnection,
@@ -9,6 +9,7 @@ import {
   ProposedFeatures,
   TextDocuments,
   TextDocumentSyncKind,
+  type DidChangeWatchedFilesParams,
   type InitializeParams,
   type InitializeResult,
 } from "vscode-languageserver/node";
@@ -96,6 +97,10 @@ documents.onDidClose((event) => {
   analysisCache.delete(event.document.uri);
   invalidatePackageAnalysisForUri(event.document.uri);
   void publishDiagnostics(event.document, { clearFallback: true });
+});
+
+connection.onDidChangeWatchedFiles((event) => {
+  void handleWatchedFilesChanged(event);
 });
 
 connection.onHover(async (params) => {
@@ -401,11 +406,62 @@ function clearPreviousPackageDiagnostics(uri: string): void {
     return;
   }
 
-  for (const packageUri of packageDiagnosticUris.get(previousRoot) ?? []) {
+  clearPackageDiagnostics(previousRoot);
+}
+
+function clearPackageDiagnostics(packageRoot: string): void {
+  for (const packageUri of packageDiagnosticUris.get(packageRoot) ?? []) {
     packageRootByUri.delete(packageUri);
     connection.sendDiagnostics({ uri: packageUri, diagnostics: [] });
   }
-  packageDiagnosticUris.delete(previousRoot);
+  packageDiagnosticUris.delete(packageRoot);
+}
+
+async function handleWatchedFilesChanged(event: DidChangeWatchedFilesParams): Promise<void> {
+  const packageRoots = new Set<string>();
+
+  for (const change of event.changes) {
+    const path = pathFromUri(change.uri);
+    if (path === undefined) {
+      continue;
+    }
+
+    packageAnalysisCache.invalidatePath(path);
+
+    const previousRoot = packageRootByUri.get(change.uri);
+    if (previousRoot !== undefined) {
+      packageRoots.add(previousRoot);
+    }
+    if (path.endsWith("/polena.toml") && packageDiagnosticUris.has(dirname(path))) {
+      packageRoots.add(dirname(path));
+    }
+
+    try {
+      const packageRoot = await findPackageRoot(dirname(path), nodeIo);
+      if (packageRoot !== undefined) {
+        packageRoots.add(packageRoot);
+      }
+    } catch (reason) {
+      connection.console.error(`Package root lookup failed: ${formatUnknownError(reason)}`);
+    }
+  }
+
+  for (const packageRoot of packageRoots) {
+    const document = openDocumentInPackage(packageRoot);
+    if (document === undefined) {
+      clearPackageDiagnostics(packageRoot);
+      continue;
+    }
+
+    await publishDiagnostics(document);
+  }
+}
+
+function openDocumentInPackage(packageRoot: string): TextDocument | undefined {
+  return documents.all().find((document) => {
+    const path = pathFromUri(document.uri);
+    return path !== undefined && isPathWithin(path, packageRoot);
+  });
 }
 
 async function getPackageDiagnostics(document: TextDocument) {
@@ -486,6 +542,11 @@ function pathFromUri(uri: string): string | undefined {
 function isSourceUri(uri: string): boolean {
   const path = pathFromUri(uri);
   return path !== undefined && (path.endsWith(".plna") || path.endsWith(".polena"));
+}
+
+function isPathWithin(path: string, root: string): boolean {
+  const relativePath = relative(normalize(root), normalize(path));
+  return relativePath === "" || (!relativePath.startsWith("..") && !isAbsolute(relativePath));
 }
 
 const nodeIo: LanguageServerIo = {
