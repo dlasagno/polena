@@ -27,6 +27,7 @@ import {
 } from "./package-analysis";
 import { getDocumentHighlights, getReferences } from "./references";
 import { getRenameEdit, prepareRename } from "./rename";
+import { getSemanticTokens, semanticTokensLegend } from "./semantic-tokens";
 import { getSignatureHelp } from "./signature-help";
 import { getSourceCompletions } from "./source-completion";
 import {
@@ -58,6 +59,10 @@ connection.onInitialize(
       hoverProvider: true,
       documentSymbolProvider: true,
       workspaceSymbolProvider: true,
+      semanticTokensProvider: {
+        legend: semanticTokensLegend,
+        full: true,
+      },
       completionProvider: {
         triggerCharacters: ['"', "=", ".", ":"],
       },
@@ -280,6 +285,27 @@ connection.onWorkspaceSymbol(async (params) => {
   }
 
   return getWorkspaceSymbols(params.query, sources);
+});
+
+connection.onRequest("textDocument/semanticTokens/full", async (params) => {
+  const textDocument = (params as { readonly textDocument?: { readonly uri?: string } })
+    .textDocument;
+  if (textDocument?.uri === undefined || isManifestUri(textDocument.uri)) {
+    return { data: [] };
+  }
+
+  const document = documents.get(textDocument.uri);
+  if (document === undefined) {
+    return { data: [] };
+  }
+
+  const packageDiagnostics = await getPackageDiagnostics(document);
+  const packageAnalysis = packageDiagnostics?.analysesByUri.get(document.uri);
+  if (packageAnalysis !== undefined) {
+    return getSemanticTokens(packageAnalysis.analysis);
+  }
+
+  return getSemanticTokens(getAnalysis(document));
 });
 
 connection.onCompletion(async (params) => {

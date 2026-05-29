@@ -201,5 +201,5 @@ Status values:
 | CLI build/init/run commands | Implemented | `polena build [path] [--out-dir <dir>]`, interactive `polena init [path] [--name <name>] [--yes]`, and `polena run [path] [-- args...]` are implemented. |
 | Diagnostics with spans | Implemented | Compiler and CLI render source locations. |
 | Diagnostic codes | Implemented | Current diagnostics use stable codes. |
-| Language server diagnostics and completions | Implemented | LSP support includes package-aware diagnostics for current-package `@/` imports, manifest completions for `polena.toml`, hover, and document symbols. |
+| Language server tooling | Implemented | LSP support includes package-aware diagnostics for current-package `@/` imports, manifest completions for `polena.toml`, source completions, hover, definition, references, rename, signature help, document/workspace symbols, and semantic tokens. |
 | VS Code extension | Partially implemented | Syntax highlighting, language configuration, and LSP client exist for the MVP surface. |
