@@ -145,8 +145,8 @@ Status values:
 | Type aliases | Implemented | Transparent aliases; recursive aliases are rejected. |
 | Separate type/value namespaces | Implemented | Type aliases and value bindings may use the same name. |
 | Generics | Partially implemented | Generic type declarations and instantiations are supported, including substitution in object fields, enum payloads, aliases over generic instantiations, and inferred generic function calls. Explicit function call type arguments and constraints are not implemented. |
-| `unknown` source type | Not implemented | Drafted for dynamic boundary data; internal unknown type exists for error recovery only. |
-| Opaque type declarations | Not implemented | Drafted for target escapes and future foreign boundary values. |
+| `unknown` source type | Implemented | Values may flow into `unknown`; values of type `unknown` cannot be inspected or implicitly converted to concrete types. |
+| Opaque type declarations | Partially implemented | Supports non-generic nominal declarations with `type Name = opaque;`; generic opaque types and equality rules are not implemented. |
 
 ---
 

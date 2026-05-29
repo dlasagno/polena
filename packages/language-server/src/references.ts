@@ -502,6 +502,7 @@ function spanForTypeNode(typeNode: TypeNode, nodeId: NodeId): Span | undefined {
     case "PrimitiveType":
     case "NamedType":
     case "UnknownType":
+    case "OpaqueType":
       return undefined;
   }
 }

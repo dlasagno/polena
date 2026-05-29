@@ -777,6 +777,16 @@ class Parser {
     }
 
     const token = this.current();
+    if (token.kind === "UnknownType") {
+      this.advance();
+      return this.node({ kind: "UnknownType", recovery: false, span: token.span });
+    }
+
+    if (token.kind === "OpaqueType") {
+      this.advance();
+      return this.node({ kind: "OpaqueType", span: token.span });
+    }
+
     const type = primitiveTypeFromToken(token.kind);
 
     if (type === undefined) {
@@ -809,7 +819,7 @@ class Parser {
       if (!this.isTypeRecoveryBoundary()) {
         this.advance();
       }
-      return this.node({ kind: "UnknownType", span: token.span });
+      return this.node({ kind: "UnknownType", recovery: true, span: token.span });
     }
 
     this.advance();

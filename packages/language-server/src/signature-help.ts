@@ -350,6 +350,8 @@ function formatTypeNode(typeNode: TypeDeclaration["value"]): string {
         .join(", ")} }`;
     case "UnknownType":
       return "unknown";
+    case "OpaqueType":
+      return "opaque";
   }
 }
 

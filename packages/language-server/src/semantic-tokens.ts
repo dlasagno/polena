@@ -268,6 +268,8 @@ function collectTypeNodeTokens(
       }
       return;
     case "UnknownType":
+    case "OpaqueType":
+      tokens.push({ span: typeNode.span, type: "keyword" });
       return;
   }
 }

@@ -19,7 +19,7 @@ type EnumVariantTypeNode = Extract<TypeNode, { readonly kind: "EnumType" }>["var
 type MatchArm = Extract<Expression, { readonly kind: "MatchExpression" }>["arms"][number];
 type MatchPattern = MatchArm["pattern"];
 
-const primitiveTypes = ["number", "bigint", "string", "boolean", "void"] as const;
+const primitiveTypes = ["number", "bigint", "string", "boolean", "void", "unknown"] as const;
 const preludeValues = ["println"] as const;
 const preludeTypes = ["Option", "Result"] as const;
 const topLevelKeywords = ["import", "export", "type", "fn", "const", "let"] as const;
@@ -194,6 +194,11 @@ function typeCompletions(program: Program, offset: number): CompletionItem[] {
       detail: "enum type",
       insertText: "enum { $1 }",
       insertTextFormat: InsertTextFormat.Snippet,
+    },
+    {
+      label: "opaque",
+      kind: CompletionItemKind.Keyword,
+      detail: "opaque type",
     },
   ];
 }
@@ -798,6 +803,8 @@ function formatTypeNode(typeNode: TypeNode): string {
       return `enum { ${typeNode.variants.map(formatEnumVariantTypeNode).join(", ")} }`;
     case "UnknownType":
       return "unknown";
+    case "OpaqueType":
+      return "opaque";
   }
 }
 

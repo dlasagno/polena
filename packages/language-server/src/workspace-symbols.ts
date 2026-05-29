@@ -174,6 +174,8 @@ function formatTypeNode(typeNode: TypeNode): string {
         .join(", ")} }`;
     case "UnknownType":
       return "unknown";
+    case "OpaqueType":
+      return "opaque";
   }
 }
 

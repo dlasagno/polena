@@ -291,6 +291,7 @@ function renderNodeHover(analysis: AnalyzeResult, nodeId: NodeId): string | unde
     case "ObjectType":
     case "EnumType":
     case "UnknownType":
+    case "OpaqueType":
       return renderCodeHover(formatTypeNode(node), undefined);
     default:
       return undefined;
@@ -374,6 +375,8 @@ function formatTypeNode(typeNode: TypeNode): string {
       return `enum { ${typeNode.variants.map(formatEnumVariantTypeNode).join(", ")} }`;
     case "UnknownType":
       return "unknown";
+    case "OpaqueType":
+      return "opaque";
   }
 }
 
@@ -543,6 +546,7 @@ function findAstNodeInTypeNode(typeNode: TypeNode, nodeId: NodeId): AstNode | un
     case "PrimitiveType":
     case "NamedType":
     case "UnknownType":
+    case "OpaqueType":
       return undefined;
   }
 }
