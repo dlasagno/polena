@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { analyze, analyzePackage } from "@polena/compiler";
-import { CompletionItemKind } from "vscode-languageserver/node";
+import { CompletionItemKind, InsertTextFormat } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { getSourceCompletions } from "../source-completion";
 
@@ -115,6 +115,123 @@ describe("source completions", () => {
     ]);
   });
 
+  test("returns type-focused completions in type positions", () => {
+    const source = [
+      "type Status = enum { Ready };",
+      "type Box<T> = { value: T };",
+      "fn test(input: ",
+    ].join("\n");
+    const document = TextDocument.create("file:///example.plna", "polena", 1, source);
+    const analysis = analyze(source);
+    const completions = getSourceCompletions(
+      document,
+      analysis,
+      document.positionAt(source.length),
+    );
+
+    expect(completion(completions, "Status")).toMatchObject({
+      kind: CompletionItemKind.Enum,
+    });
+    expect(completion(completions, "Box")).toMatchObject({
+      kind: CompletionItemKind.Struct,
+    });
+    expect(completion(completions, "number")).toMatchObject({
+      kind: CompletionItemKind.Keyword,
+    });
+    expect(completion(completions, "Option")).toMatchObject({
+      kind: CompletionItemKind.Enum,
+      detail: "prelude",
+    });
+    expect(completion(completions, "[]")).toMatchObject({
+      detail: "array type",
+      insertText: "[]$1",
+      insertTextFormat: InsertTextFormat.Snippet,
+    });
+    expect(completion(completions, "enum")).toMatchObject({
+      detail: "enum type",
+      insertText: "enum { $1 }",
+      insertTextFormat: InsertTextFormat.Snippet,
+    });
+    expect(completion(completions, "println")).toBeUndefined();
+    expect(completion(completions, "input")).toBeUndefined();
+  });
+
+  test("returns expression-focused completions without type names", () => {
+    const source = [
+      "type Status = enum { Ready };",
+      "fn test(input: number): number {",
+      "  const value = ",
+      "}",
+    ].join("\n");
+    const document = TextDocument.create("file:///example.plna", "polena", 1, source);
+    const analysis = analyze(source);
+    const completions = getSourceCompletions(
+      document,
+      analysis,
+      document.positionAt(source.indexOf("  const value = ") + "  const value = ".length),
+    );
+
+    expect(completion(completions, "input")).toMatchObject({
+      kind: CompletionItemKind.Variable,
+    });
+    expect(completion(completions, "println")).toMatchObject({
+      kind: CompletionItemKind.Function,
+      detail: "prelude",
+    });
+    expect(completion(completions, "true")).toMatchObject({
+      kind: CompletionItemKind.Keyword,
+    });
+    expect(completion(completions, "Status")).toBeUndefined();
+    expect(completion(completions, "number")).toBeUndefined();
+  });
+
+  test("returns snippets for statement and top-level keywords", () => {
+    const source = ["fn test(): void {", "  ", "}"].join("\n");
+    const document = TextDocument.create("file:///example.plna", "polena", 1, source);
+    const analysis = analyze(source);
+    const statementCompletions = getSourceCompletions(
+      document,
+      analysis,
+      document.positionAt(source.indexOf("  \n")),
+    );
+
+    expect(completion(statementCompletions, "const")).toMatchObject({
+      kind: CompletionItemKind.Keyword,
+      insertText: `const ${snippetPlaceholder("1:name")} = $0;`,
+      insertTextFormat: InsertTextFormat.Snippet,
+    });
+    expect(completion(statementCompletions, "if")).toMatchObject({
+      kind: CompletionItemKind.Keyword,
+      insertText: "if $1 {\n  $0\n}",
+      insertTextFormat: InsertTextFormat.Snippet,
+    });
+
+    const topLevelSource = "";
+    const topLevelDocument = TextDocument.create(
+      "file:///example.plna",
+      "polena",
+      1,
+      topLevelSource,
+    );
+    const topLevelCompletions = getSourceCompletions(topLevelDocument, analyze(topLevelSource), {
+      line: 0,
+      character: 0,
+    });
+
+    expect(completion(topLevelCompletions, "fn")).toMatchObject({
+      kind: CompletionItemKind.Keyword,
+      insertText: `fn ${snippetPlaceholder("1:name")}(${snippetPlaceholder(
+        "2",
+      )}): ${snippetPlaceholder("3:void")} {\n  $0\n}`,
+      insertTextFormat: InsertTextFormat.Snippet,
+    });
+    expect(completion(topLevelCompletions, "import")).toMatchObject({
+      kind: CompletionItemKind.Keyword,
+      insertText: `import @/${snippetPlaceholder("1:module")};`,
+      insertTextFormat: InsertTextFormat.Snippet,
+    });
+  });
+
   test("uses package analysis for qualified imported member completions", () => {
     const indexSource = ["import @/users as users;", "fn test(): string {", "  users.", "}"].join(
       "\n",
@@ -157,4 +274,8 @@ describe("source completions", () => {
 
 function completion(completions: readonly { readonly label: string }[], label: string) {
   return completions.find((item) => item.label === label);
+}
+
+function snippetPlaceholder(value: string): string {
+  return `\${${value}}`;
 }

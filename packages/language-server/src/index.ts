@@ -59,7 +59,7 @@ connection.onInitialize(
       documentSymbolProvider: true,
       workspaceSymbolProvider: true,
       completionProvider: {
-        triggerCharacters: ['"', "=", "."],
+        triggerCharacters: ['"', "=", ".", ":"],
       },
       signatureHelpProvider: {
         triggerCharacters: ["(", ","],

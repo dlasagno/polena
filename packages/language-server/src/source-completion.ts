@@ -1,5 +1,9 @@
 import { formatType, type AnalyzeResult, type NodeId, type Program } from "@polena/compiler";
-import { CompletionItemKind, type CompletionItem } from "vscode-languageserver/node";
+import {
+  CompletionItemKind,
+  InsertTextFormat,
+  type CompletionItem,
+} from "vscode-languageserver/node";
 import type { Position } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
 
@@ -18,6 +22,20 @@ type MatchPattern = MatchArm["pattern"];
 const primitiveTypes = ["number", "bigint", "string", "boolean", "void"] as const;
 const preludeValues = ["println"] as const;
 const preludeTypes = ["Option", "Result"] as const;
+const topLevelKeywords = ["import", "export", "type", "fn", "const", "let"] as const;
+const statementKeywords = [
+  "const",
+  "let",
+  "return",
+  "if",
+  "while",
+  "match",
+  "break",
+  "continue",
+] as const;
+const expressionKeywords = ["true", "false", "if", "while", "match"] as const;
+
+type SourceCompletionContext = "type" | "top-level" | "statement" | "expression";
 
 export function getSourceCompletions(
   document: TextDocument,
@@ -39,24 +57,30 @@ export function getSourceCompletions(
     return [];
   }
 
-  return uniqueCompletions([
-    ...visibleValueCompletions(analysis.program, offset),
-    ...visibleTypeCompletions(analysis.program, offset),
-    ...preludeValues.map((name) => ({
-      label: name,
-      kind: CompletionItemKind.Function,
-      detail: "prelude",
-    })),
-    ...preludeTypes.map((name) => ({
-      label: name,
-      kind: CompletionItemKind.Enum,
-      detail: "prelude",
-    })),
-    ...primitiveTypes.map((name) => ({
-      label: name,
-      kind: CompletionItemKind.Keyword,
-    })),
-  ]);
+  const context = sourceCompletionContext(document.getText(), analysis.program, offset);
+  switch (context) {
+    case "type":
+      return uniqueCompletions(typeCompletions(analysis.program, offset));
+    case "top-level":
+      return uniqueCompletions([
+        ...keywordCompletions(topLevelKeywords),
+        ...visibleValueCompletions(analysis.program, offset),
+        ...visibleTypeCompletions(analysis.program, offset),
+      ]);
+    case "statement":
+      return uniqueCompletions([
+        ...keywordCompletions(statementKeywords),
+        ...visibleValueCompletions(analysis.program, offset),
+        ...visibleTypeCompletions(analysis.program, offset),
+        ...preludeValueCompletions(),
+      ]);
+    case "expression":
+      return uniqueCompletions([
+        ...visibleValueCompletions(analysis.program, offset),
+        ...preludeValueCompletions(),
+        ...keywordCompletions(expressionKeywords),
+      ]);
+  }
 }
 
 function memberCompletions(
@@ -143,6 +167,110 @@ function visibleValueCompletions(program: Program, offset: number): CompletionIt
 
   completions.push(...localValueCompletions(program, offset));
   return completions;
+}
+
+function typeCompletions(program: Program, offset: number): CompletionItem[] {
+  return [
+    ...visibleTypeCompletions(program, offset),
+    ...preludeTypes.map((name) => ({
+      label: name,
+      kind: CompletionItemKind.Enum,
+      detail: "prelude",
+    })),
+    ...primitiveTypes.map((name) => ({
+      label: name,
+      kind: CompletionItemKind.Keyword,
+    })),
+    {
+      label: "[]",
+      kind: CompletionItemKind.Keyword,
+      detail: "array type",
+      insertText: "[]$1",
+      insertTextFormat: InsertTextFormat.Snippet,
+    },
+    {
+      label: "enum",
+      kind: CompletionItemKind.Keyword,
+      detail: "enum type",
+      insertText: "enum { $1 }",
+      insertTextFormat: InsertTextFormat.Snippet,
+    },
+  ];
+}
+
+function preludeValueCompletions(): CompletionItem[] {
+  return preludeValues.map((name) => ({
+    label: name,
+    kind: CompletionItemKind.Function,
+    detail: "prelude",
+  }));
+}
+
+function keywordCompletions(keywords: readonly string[]): CompletionItem[] {
+  return keywords.map(keywordCompletion);
+}
+
+function keywordCompletion(keyword: string): CompletionItem {
+  switch (keyword) {
+    case "fn":
+      return {
+        label: keyword,
+        kind: CompletionItemKind.Keyword,
+        insertText: `fn ${snippetPlaceholder("1:name")}(${snippetPlaceholder(
+          "2",
+        )}): ${snippetPlaceholder("3:void")} {\n  $0\n}`,
+        insertTextFormat: InsertTextFormat.Snippet,
+      };
+    case "type":
+      return {
+        label: keyword,
+        kind: CompletionItemKind.Keyword,
+        insertText: `type ${snippetPlaceholder("1:Name")} = $0;`,
+        insertTextFormat: InsertTextFormat.Snippet,
+      };
+    case "import":
+      return {
+        label: keyword,
+        kind: CompletionItemKind.Keyword,
+        insertText: `import @/${snippetPlaceholder("1:module")};`,
+        insertTextFormat: InsertTextFormat.Snippet,
+      };
+    case "const":
+    case "let":
+      return {
+        label: keyword,
+        kind: CompletionItemKind.Keyword,
+        insertText: `${keyword} ${snippetPlaceholder("1:name")} = $0;`,
+        insertTextFormat: InsertTextFormat.Snippet,
+      };
+    case "if":
+      return {
+        label: keyword,
+        kind: CompletionItemKind.Keyword,
+        insertText: "if $1 {\n  $0\n}",
+        insertTextFormat: InsertTextFormat.Snippet,
+      };
+    case "while":
+      return {
+        label: keyword,
+        kind: CompletionItemKind.Keyword,
+        insertText: "while $1 {\n  $0\n}",
+        insertTextFormat: InsertTextFormat.Snippet,
+      };
+    case "match":
+      return {
+        label: keyword,
+        kind: CompletionItemKind.Keyword,
+        insertText: "match $1 {\n  $0\n}",
+        insertTextFormat: InsertTextFormat.Snippet,
+      };
+    default:
+      return { label: keyword, kind: CompletionItemKind.Keyword };
+  }
+}
+
+function snippetPlaceholder(value: string): string {
+  return `\${${value}}`;
 }
 
 function visibleTypeCompletions(program: Program, offset: number): CompletionItem[] {
@@ -542,8 +670,97 @@ function uniqueCompletions(completions: readonly CompletionItem[]): CompletionIt
   return unique;
 }
 
+function sourceCompletionContext(
+  source: string,
+  program: Program,
+  offset: number,
+): SourceCompletionContext {
+  if (isTypeCompletionContext(source, offset)) {
+    return "type";
+  }
+
+  if (isInsideFunctionBlock(program, offset)) {
+    return isStatementBoundary(source, offset) ? "statement" : "expression";
+  }
+
+  return isTopLevelBoundary(source, offset) ? "top-level" : "expression";
+}
+
+function isTypeCompletionContext(source: string, offset: number): boolean {
+  const line = currentLinePrefix(source, offset);
+
+  if (/^\s*(?:export\s+)?type\s+[A-Za-z_$][\w$]*(?:<[^>]*>)?\s*=\s*[\w$.[\]\s]*$/.test(line)) {
+    return true;
+  }
+
+  if (/^\s*(?:export\s+)?(?:const|let)\s+[A-Za-z_$][\w$]*\s*:\s*[\w$.[\]\s]*$/.test(line)) {
+    return true;
+  }
+
+  if (/\)\s*:\s*[\w$.[\]\s]*$/.test(line)) {
+    return true;
+  }
+
+  if (/[,(]\s*[A-Za-z_$][\w$]*\s*:\s*[\w$.[\]\s]*$/.test(line)) {
+    return true;
+  }
+
+  if (
+    /^\s*[A-Za-z_$][\w$]*\s*:\s*[\w$.[\]\s]*$/.test(line) &&
+    isInsideTypeDeclaration(source, offset)
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+function isInsideTypeDeclaration(source: string, offset: number): boolean {
+  const before = source.slice(0, offset);
+  const lastType = before.lastIndexOf("type ");
+  if (lastType < 0) {
+    return false;
+  }
+
+  const afterType = before.slice(lastType);
+  return afterType.includes("=") && !afterType.includes(";");
+}
+
+function isInsideFunctionBlock(program: Program, offset: number): boolean {
+  return program.declarations.some(
+    (declaration) =>
+      declaration.kind === "FunctionDeclaration" && containsOffset(declaration.body, offset),
+  );
+}
+
+function isStatementBoundary(source: string, offset: number): boolean {
+  const line = currentLinePrefix(source, offset);
+  if (line.trim().length === 0) {
+    return true;
+  }
+
+  const boundary = Math.max(line.lastIndexOf("{"), line.lastIndexOf(";"), line.lastIndexOf("}"));
+  return boundary >= 0 && line.slice(boundary + 1).trim().length === 0;
+}
+
+function isTopLevelBoundary(source: string, offset: number): boolean {
+  const before = source.slice(0, offset);
+  const boundary = Math.max(
+    before.lastIndexOf(";"),
+    before.lastIndexOf("}"),
+    before.lastIndexOf("\n"),
+  );
+  return before.slice(boundary + 1).trim().length === 0;
+}
+
 function isAfterDot(source: string, offset: number): boolean {
   return source.slice(0, offset).endsWith(".");
+}
+
+function currentLinePrefix(source: string, offset: number): string {
+  const before = source.slice(0, offset);
+  const lineStart = before.lastIndexOf("\n") + 1;
+  return before.slice(lineStart);
 }
 
 function containsOffset(
