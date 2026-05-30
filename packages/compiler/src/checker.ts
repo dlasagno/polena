@@ -5,7 +5,6 @@ import type {
   Block,
   BreakStatement,
   ContinueStatement,
-  DirectiveExpression,
   EnumVariantExpression,
   Expression,
   FunctionDeclaration,
@@ -23,6 +22,7 @@ import type {
   VariableDeclaration,
   WhileExpression,
 } from "./ast";
+import { inferCompilerDirectiveExpression } from "./checker-directives";
 import { error, type Diagnostic } from "./diagnostic";
 import { DiagnosticCode } from "./diagnostic-codes";
 import {
@@ -1651,371 +1651,21 @@ class Checker {
   }
 
   private inferDirectiveExpression(
-    expression: DirectiveExpression,
+    expression: Extract<Expression, { readonly kind: "DirectiveExpression" }>,
     scope: Scope,
     options: InferOptions,
   ): Type {
-    switch (expression.name) {
-      case "enumVariantNames":
-        return this.inferEnumVariantNamesDirective(expression);
-      case "enumValues":
-        return this.inferEnumValuesDirective(expression);
-      case "objectFieldNames":
-        return this.inferObjectFieldNamesDirective(expression);
-      case "target.js":
-        return this.inferTargetJsDirective(expression, scope, "plain");
-      case "target.js.option":
-        return this.inferTargetJsDirective(expression, scope, "option");
-      case "target.js.result":
-        return this.inferTargetJsDirective(expression, scope, "result");
-      default:
-        void scope;
-        void options;
-        this.diagnostics.push(
-          error(`Unknown compiler directive '@${expression.name}'.`, expression.nameSpan, {
-            code: DiagnosticCode.UnknownDirective,
-            label: "no compiler directive with this name is available",
-          }),
-        );
-        return unknownType();
-    }
-  }
-
-  private inferEnumVariantNamesDirective(expression: DirectiveExpression): Type {
-    const type = this.directiveSingleTypeOperand(expression);
-    if (type === undefined || isRecoveryUnknownType(type)) {
-      return arrayType(primitiveType("string"));
-    }
-
-    if (type.kind !== "enum") {
-      this.diagnostics.push(
-        error(`Directive '@enumVariantNames' requires an enum type operand.`, expression.span, {
-          code: DiagnosticCode.InvalidDirectiveOperand,
-          label: `got '${formatType(type)}' instead`,
-        }),
-      );
-      return arrayType(primitiveType("string"));
-    }
-
-    this.setDirectiveExpansion(expression, {
-      kind: "StringArray",
-      values: type.variants.map((variant) => variant.name),
+    void options;
+    return inferCompilerDirectiveExpression(expression, scope, {
+      diagnostics: this.diagnostics,
+      allowTargetEscapes: this.options.allowTargetEscapes,
+      typeFromNode: (typeNode) => this.typeFromNode(typeNode),
+      typeFromNodeInActiveEnvironment: (typeNode) =>
+        this.typeFromNode(typeNode, undefined, this.activeTypeEnvironment),
+      inferExpression: (operand, operandScope) => this.inferExpression(operand, operandScope),
+      resolveNamedType: (name, span, typeArguments) =>
+        this.resolveNamedType(name, span, typeArguments),
     });
-    return arrayType(primitiveType("string"));
-  }
-
-  private inferEnumValuesDirective(expression: DirectiveExpression): Type {
-    const type = this.directiveSingleTypeOperand(expression);
-    if (type === undefined || isRecoveryUnknownType(type)) {
-      return arrayType(unknownType());
-    }
-
-    if (type.kind !== "enum") {
-      this.diagnostics.push(
-        error(`Directive '@enumValues' requires an enum type operand.`, expression.span, {
-          code: DiagnosticCode.InvalidDirectiveOperand,
-          label: `got '${formatType(type)}' instead`,
-        }),
-      );
-      return arrayType(unknownType());
-    }
-
-    const payloadVariant = type.variants.find((variant) => variant.payload.length > 0);
-    if (payloadVariant !== undefined) {
-      this.diagnostics.push(
-        error(
-          `Directive '@enumValues' requires a fieldless enum type; '${type.name}.${payloadVariant.name}' has associated data.`,
-          payloadVariant.nameSpan ?? expression.span,
-          {
-            code: DiagnosticCode.InvalidDirectiveOperand,
-            label: "this variant cannot be enumerated as a single value",
-          },
-        ),
-      );
-      return arrayType(type);
-    }
-
-    this.setDirectiveExpansion(expression, {
-      kind: "EnumValueArray",
-      enumName: type.name,
-      variantNames: type.variants.map((variant) => variant.name),
-    });
-    return arrayType(type);
-  }
-
-  private inferObjectFieldNamesDirective(expression: DirectiveExpression): Type {
-    const type = this.directiveSingleTypeOperand(expression);
-    if (type === undefined || isRecoveryUnknownType(type)) {
-      return arrayType(primitiveType("string"));
-    }
-
-    if (type.kind !== "object") {
-      this.diagnostics.push(
-        error(`Directive '@objectFieldNames' requires an object type operand.`, expression.span, {
-          code: DiagnosticCode.InvalidDirectiveOperand,
-          label: `got '${formatType(type)}' instead`,
-        }),
-      );
-      return arrayType(primitiveType("string"));
-    }
-
-    this.setDirectiveExpansion(expression, {
-      kind: "StringArray",
-      values: type.fields.map((field) => field.name),
-    });
-    return arrayType(primitiveType("string"));
-  }
-
-  private inferTargetJsDirective(
-    expression: DirectiveExpression,
-    scope: Scope,
-    mode: "plain" | "option" | "result",
-  ): Type {
-    if (this.options.allowTargetEscapes === false) {
-      this.diagnostics.push(
-        error(
-          `Target escape directive '@${expression.name}' requires an unsafe opt-in.`,
-          expression.nameSpan,
-          {
-            code: DiagnosticCode.TargetEscapeRequiresOptIn,
-            label: "add [unsafe] target_escapes = true to polena.toml",
-          },
-        ),
-      );
-      return unknownType();
-    }
-
-    const minimumOperands = mode === "result" ? 3 : 2;
-    if (expression.operands.length < minimumOperands) {
-      this.diagnostics.push(
-        error(
-          `Directive '@${expression.name}' expects at least ${minimumOperands} operands, got ${expression.operands.length}.`,
-          expression.span,
-          {
-            code: DiagnosticCode.WrongArgumentCount,
-            label: "wrong number of directive operands",
-          },
-        ),
-      );
-      return unknownType();
-    }
-
-    const template = this.targetJsTemplateOperand(expression, 0);
-    const runtimeOperandStart = mode === "result" ? 3 : 2;
-
-    for (const operand of expression.operands.slice(runtimeOperandStart)) {
-      if (operand.kind === "ExpressionOperand") {
-        this.inferExpression(operand.expression, scope);
-        continue;
-      }
-
-      this.diagnostics.push(
-        error(
-          `Directive '@${expression.name}' expects runtime expression operands.`,
-          operand.span,
-          {
-            code: DiagnosticCode.InvalidDirectiveOperand,
-            label: "supply an expression here",
-          },
-        ),
-      );
-    }
-
-    const valueType = this.targetJsTypeOperand(expression, 1);
-    const resultType =
-      mode === "plain"
-        ? valueType
-        : mode === "option"
-          ? this.resolveNamedType("Option", expression.nameSpan, [valueType ?? unknownType()])
-          : this.resolveNamedType("Result", expression.nameSpan, [
-              valueType ?? unknownType(),
-              this.targetJsTypeOperand(expression, 2) ?? unknownType(),
-            ]);
-
-    if (template !== undefined) {
-      this.validateTargetJsTemplate(expression, template, runtimeOperandStart);
-      this.setDirectiveExpansion(expression, {
-        kind: "TargetJs",
-        mode,
-        template,
-        runtimeOperandStart,
-      });
-    }
-
-    return resultType ?? unknownType();
-  }
-
-  private targetJsTemplateOperand(
-    expression: DirectiveExpression,
-    index: number,
-  ): string | undefined {
-    const operand = expression.operands[index];
-    if (operand?.kind !== "ExpressionOperand") {
-      this.diagnostics.push(
-        error(
-          `Directive '@${expression.name}' expects a string literal template.`,
-          operand?.span ?? expression.span,
-          {
-            code: DiagnosticCode.InvalidDirectiveOperand,
-            label: "supply a string literal here",
-          },
-        ),
-      );
-      return undefined;
-    }
-
-    const templateExpression = operand.expression;
-    if (
-      templateExpression.kind !== "StringLiteral" ||
-      templateExpression.parts.some((part) => part.kind !== "StringText")
-    ) {
-      this.diagnostics.push(
-        error(`Directive '@${expression.name}' expects a string literal template.`, operand.span, {
-          code: DiagnosticCode.InvalidDirectiveOperand,
-          label: "the template must be a non-interpolated string literal",
-        }),
-      );
-      return undefined;
-    }
-
-    let value = "";
-    for (const part of templateExpression.parts) {
-      if (part.kind === "StringText") {
-        value += part.value;
-      }
-    }
-    return value;
-  }
-
-  private targetJsTypeOperand(expression: DirectiveExpression, index: number): Type | undefined {
-    const operand = expression.operands[index];
-    if (operand?.kind !== "TypeOperand") {
-      this.diagnostics.push(
-        error(
-          `Directive '@${expression.name}' expects a type operand.`,
-          operand?.span ?? expression.span,
-          {
-            code: DiagnosticCode.InvalidDirectiveOperand,
-            label: "supply a type here",
-          },
-        ),
-      );
-      return undefined;
-    }
-
-    return this.typeFromNode(operand.type, undefined, this.activeTypeEnvironment);
-  }
-
-  private validateTargetJsTemplate(
-    expression: DirectiveExpression,
-    template: string,
-    runtimeOperandStart: number,
-  ): void {
-    const runtimeOperandCount = expression.operands.length - runtimeOperandStart;
-    const usedIndexes = new Set<number>();
-
-    for (let index = 0; index < template.length; index += 1) {
-      if (template[index] !== "$") {
-        continue;
-      }
-
-      const placeholderStart = index;
-      index += 1;
-      if (!isAsciiDigit(template[index])) {
-        this.diagnostics.push(
-          error(`Malformed target placeholder in '@${expression.name}'.`, expression.span, {
-            code: DiagnosticCode.InvalidDirectiveOperand,
-            label: "placeholders must use '$' followed by a runtime operand index",
-          }),
-        );
-        continue;
-      }
-
-      let digits = "";
-      while (isAsciiDigit(template[index])) {
-        digits += template[index];
-        index += 1;
-      }
-      index -= 1;
-
-      const operandIndex = Number(digits);
-      if (operandIndex >= runtimeOperandCount) {
-        this.diagnostics.push(
-          error(
-            `Target placeholder '$${digits}' has no matching runtime operand.`,
-            expression.span,
-            {
-              code: DiagnosticCode.InvalidDirectiveOperand,
-              label: "add a runtime operand or lower the placeholder index",
-            },
-          ),
-        );
-        continue;
-      }
-
-      if (placeholderStart >= 0) {
-        usedIndexes.add(operandIndex);
-      }
-    }
-
-    for (let index = 0; index < runtimeOperandCount; index += 1) {
-      if (usedIndexes.has(index)) {
-        continue;
-      }
-
-      const operand = expression.operands[runtimeOperandStart + index];
-      this.diagnostics.push(
-        error(
-          `Runtime operand ${index} is not used by target template.`,
-          operand?.span ?? expression.span,
-          {
-            code: DiagnosticCode.InvalidDirectiveOperand,
-            label: `reference this operand as '$${index}' or remove it`,
-          },
-        ),
-      );
-    }
-  }
-
-  private directiveSingleTypeOperand(expression: DirectiveExpression): Type | undefined {
-    if (expression.operands.length !== 1) {
-      this.diagnostics.push(
-        error(
-          `Directive '@${expression.name}' expects 1 type operand, got ${expression.operands.length}.`,
-          expression.span,
-          {
-            code: DiagnosticCode.WrongArgumentCount,
-            label: "wrong number of directive operands",
-          },
-        ),
-      );
-      return undefined;
-    }
-
-    const operand = expression.operands[0];
-    if (operand?.kind !== "TypeOperand") {
-      this.diagnostics.push(
-        error(
-          `Directive '@${expression.name}' expects a type operand.`,
-          operand?.span ?? expression.span,
-          {
-            code: DiagnosticCode.InvalidDirectiveOperand,
-            label: "supply a type name or type expression here",
-          },
-        ),
-      );
-      return undefined;
-    }
-
-    return this.typeFromNode(operand.type);
-  }
-
-  private setDirectiveExpansion(
-    expression: DirectiveExpression,
-    expansion: NonNullable<DirectiveExpression["expansion"]>,
-  ): void {
-    (expression as { expansion?: NonNullable<DirectiveExpression["expansion"]> }).expansion =
-      expansion;
   }
 
   private inferBinaryExpression(
@@ -3974,10 +3624,6 @@ function substituteType(type: Type, substitution: ReadonlyMap<string, Type>): Ty
     case "unknown":
       return type;
   }
-}
-
-function isAsciiDigit(value: string | undefined): boolean {
-  return value !== undefined && value >= "0" && value <= "9";
 }
 
 function isArithmeticOperator(operator: BinaryOperator): boolean {
