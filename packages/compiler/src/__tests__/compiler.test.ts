@@ -389,6 +389,24 @@ describe("parser", () => {
     });
   });
 
+  test("parses pipe call placeholders as name expressions", () => {
+    const parseResult = parse(lex("const value = 1 |> add(_, 2);").tokens);
+
+    expect(parseResult.diagnostics).toHaveLength(0);
+    expect(parseResult.program.declarations[0]).toMatchObject({
+      kind: "VariableDeclaration",
+      initializer: {
+        kind: "BinaryExpression",
+        operator: "|>",
+        right: {
+          kind: "CallExpression",
+          callee: { kind: "NameExpression", name: "add" },
+          args: [{ kind: "NameExpression", name: "_" }, { kind: "NumberLiteral" }],
+        },
+      },
+    });
+  });
+
   test("assigns deterministic node IDs to parsed AST nodes", () => {
     const source = "type Score = []number; fn value(input: Score): number { input.length }";
     const first = parse(lex(source).tokens);
@@ -838,6 +856,37 @@ const label = 21 |> double |> stringify;
       return;
     }
     expect(result.js).toContain("const label = stringify(double(21));");
+  });
+
+  test("compiles pipe call placeholders as explicit argument positions", () => {
+    const result = compile(`
+fn between(min: number, value: number, max: number): boolean {
+  value >= min and value <= max
+}
+
+const ok = 5 |> between(1, _, 10);
+`);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    expect(result.js).toContain("const ok = between(1, 5, 10);");
+  });
+
+  test("rejects pipe calls with multiple placeholders", () => {
+    const result = compile(`
+fn pair(left: number, right: number): number {
+  left + right
+}
+
+const value = 1 |> pair(_, _);
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Pipe calls can use at most one '_' placeholder.",
+    );
   });
 
   test("compiles current-package modules to ESM files", () => {

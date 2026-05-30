@@ -1943,6 +1943,32 @@ class Checker {
     scope: Scope,
     options: InferOptions,
   ): Type {
+    if (right.kind === "CallExpression") {
+      const placeholderCount = countPipePlaceholders(right.args);
+      if (placeholderCount > 0) {
+        if (placeholderCount > 1) {
+          this.diagnostics.push(
+            error("Pipe calls can use at most one '_' placeholder.", right.span, {
+              code: DiagnosticCode.IncompatibleOperands,
+              label: "this pipe call has multiple placeholders",
+            }),
+          );
+        }
+
+        return this.inferCallExpression(
+          {
+            kind: "CallExpression",
+            nodeId: right.nodeId,
+            callee: right.callee,
+            args: right.args.map((arg) => (isPipePlaceholder(arg) ? left : arg)),
+            span,
+          },
+          scope,
+          options,
+        );
+      }
+    }
+
     return this.inferCallExpression(
       {
         kind: "CallExpression",
@@ -3676,4 +3702,12 @@ function isOrderingOperator(operator: BinaryOperator): boolean {
 
 function isCompoundAssignmentOperator(operator: AssignmentOperator): boolean {
   return operator !== "=";
+}
+
+function countPipePlaceholders(args: readonly Expression[]): number {
+  return args.filter(isPipePlaceholder).length;
+}
+
+function isPipePlaceholder(expression: Expression): boolean {
+  return expression.kind === "NameExpression" && expression.name === "_";
 }

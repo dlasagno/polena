@@ -533,6 +533,22 @@ class JavaScriptEmitter {
     indent: string,
     loopContext?: LoopEmitContext,
   ): string {
+    if (expression.right.kind === "CallExpression" && hasPipePlaceholder(expression.right.args)) {
+      const args = expression.right.args.map((arg) =>
+        isPipePlaceholder(arg) ? expression.left : arg,
+      );
+      const enumConstructor = this.resolveEnumConstructor(expression.right.callee);
+      if (enumConstructor !== undefined && enumConstructor.payloadArity > 0) {
+        return `({ tag: ${JSON.stringify(`${enumConstructor.enumName}.${enumConstructor.variantName}`)}, values: [${args
+          .map((arg) => this.emitExpression(arg, indent, loopContext))
+          .join(", ")}] })`;
+      }
+
+      return `${this.emitCallCallee(expression.right.callee, indent, loopContext)}(${args
+        .map((arg) => this.emitExpression(arg, indent, loopContext))
+        .join(", ")})`;
+    }
+
     const enumConstructor = this.resolveEnumConstructor(expression.right);
     if (enumConstructor !== undefined && enumConstructor.payloadArity > 0) {
       return `({ tag: ${JSON.stringify(`${enumConstructor.enumName}.${enumConstructor.variantName}`)}, values: [${this.emitExpression(expression.left, indent, loopContext)}] })`;
@@ -891,6 +907,14 @@ function emitBinaryOperator(operator: BinaryOperator): string {
     default:
       return operator;
   }
+}
+
+function hasPipePlaceholder(args: readonly Expression[]): boolean {
+  return args.some(isPipePlaceholder);
+}
+
+function isPipePlaceholder(expression: Expression): boolean {
+  return expression.kind === "NameExpression" && expression.name === "_";
 }
 
 function emitIndexHelper(): string[] {

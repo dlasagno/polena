@@ -322,6 +322,21 @@ const ok = 21 |> double;
 const invalid = "21" |> double; // Invalid.
 ```
 
+For function calls, `_` may be used as a placeholder to choose the argument
+position that receives the piped value.
+
+```tsx
+const ok = 5 |> between(1, _, 10);
+```
+
+This is equivalent to:
+
+```tsx
+const ok = between(1, 5, 10);
+```
+
+A pipe call may contain at most one `_` placeholder.
+
 The pipe operator is left-associative and has lower precedence than logical
 `or`.
 
