@@ -593,7 +593,12 @@ class Checker {
         if (symbol.value.kind === "OpaqueType") {
           return opaqueType(name, symbol.importedModuleName, typeArguments);
         }
-        return genericEnumType(name, typeArguments, []);
+        return {
+          ...genericEnumType(name, typeArguments, []),
+          ...(symbol.importedModuleName === undefined
+            ? {}
+            : { moduleName: symbol.importedModuleName }),
+        };
       }
 
       const environment = new Map<string, Type>();
@@ -609,6 +614,9 @@ class Checker {
       this.resolvingGenericTypeSymbols.delete(key);
       if (type.kind === "opaque") {
         return opaqueType(type.name, symbol.importedModuleName, type.typeArguments);
+      }
+      if (type.kind === "enum" && symbol.importedModuleName !== undefined) {
+        return typeWithImportedModule(type, symbol.importedModuleName);
       }
       return type;
     }
@@ -3902,14 +3910,14 @@ function substituteType(type: Type, substitution: ReadonlyMap<string, Type>): Ty
         })),
       );
     case "enum":
-      return genericEnumType(
-        type.name,
-        type.typeArguments.map((arg) => substituteType(arg, substitution)),
-        type.variants.map((variant) => ({
+      return {
+        ...type,
+        typeArguments: type.typeArguments.map((arg) => substituteType(arg, substitution)),
+        variants: type.variants.map((variant) => ({
           ...variant,
           payload: variant.payload.map((payload) => substituteType(payload, substitution)),
         })),
-      );
+      };
     case "function":
       return functionType(
         type.params.map((param) => substituteType(param, substitution)),

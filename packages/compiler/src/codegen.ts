@@ -17,6 +17,7 @@ import type {
 } from "./ast";
 import type { ModuleFile, ModuleGraph, PackageProgram } from "./modules";
 import { relativeJsImportPath } from "./modules";
+import type { ReferenceTarget, Semantics } from "./semantics";
 
 export function generateJavaScript(program: Program): string {
   return new JavaScriptEmitter().emitProgram(program);
@@ -27,6 +28,7 @@ export function generateJavaScriptModule(input: {
   readonly packageProgram: PackageProgram;
   readonly moduleGraph: ModuleGraph;
   readonly isEntry: boolean;
+  readonly semantics?: Semantics;
 }): string {
   return new JavaScriptEmitter().emitModule(input);
 }
@@ -56,6 +58,9 @@ class JavaScriptEmitter {
   private usesArrayGetHelper = false;
   private usesPanicHelper = false;
   private readonly enumTypes = new Map<string, Map<string, EnumRuntimeInfo>>();
+  private readonly enumVariantsByDefinition = new Map<string, EnumRuntimeInfo>();
+  private currentModuleName?: string;
+  private currentSemantics?: Semantics;
 
   public emitProgram(program: Program): string {
     const lines: string[] = [];
@@ -74,10 +79,16 @@ class JavaScriptEmitter {
     readonly packageProgram: PackageProgram;
     readonly moduleGraph: ModuleGraph;
     readonly isEntry: boolean;
+    readonly semantics?: Semantics;
   }): string {
     const lines: string[] = [];
-    this.registerPackageEnumTypes(input.packageProgram);
-    this.registerImportedEnumAliases(input.module, input.moduleGraph, input.packageProgram);
+    this.currentModuleName = input.module.name;
+    this.currentSemantics = input.semantics;
+    this.registerPackageEnumRuntimeInfo(input.packageProgram);
+    if (input.semantics === undefined) {
+      this.registerPackageEnumTypes(input.packageProgram);
+      this.registerImportedEnumAliases(input.module, input.moduleGraph, input.packageProgram);
+    }
 
     lines.push(
       ...this.emitImportDeclarations(input.module, input.moduleGraph, input.packageProgram),
@@ -128,6 +139,22 @@ class JavaScriptEmitter {
   private registerPackageEnumTypes(packageProgram: PackageProgram): void {
     for (const moduleFile of packageProgram.modules) {
       this.registerEnumTypes(moduleFile.program);
+    }
+  }
+
+  private registerPackageEnumRuntimeInfo(packageProgram: PackageProgram): void {
+    for (const moduleFile of packageProgram.modules) {
+      for (const declaration of moduleFile.program.declarations) {
+        if (declaration.kind !== "TypeDeclaration" || declaration.value.kind !== "EnumType") {
+          continue;
+        }
+        for (const variant of declaration.value.variants) {
+          this.enumVariantsByDefinition.set(enumVariantKey(moduleFile.name, variant.nodeId), {
+            emittedEnumName: declaration.name,
+            payloadArity: variant.payload.length,
+          });
+        }
+      }
     }
   }
 
@@ -509,8 +536,10 @@ class JavaScriptEmitter {
       case "DirectiveExpression":
         return this.emitDirectiveExpression(expression, indent, loopContext);
       case "EnumVariantExpression":
-        return JSON.stringify(
-          `${expression.enumName ?? expression.resolvedEnumName ?? ""}.${expression.variantName}`,
+        return this.emitEnumVariantValue(
+          expression.nodeId,
+          expression.enumName ?? expression.resolvedEnumName,
+          expression.variantName,
         );
       case "NameExpression":
         return emitIdentifier(expression.name);
@@ -557,14 +586,17 @@ class JavaScriptEmitter {
           loopContext,
         )}, ${this.emitExpression(expression.index, indent, loopContext)})`;
       case "MemberExpression":
-        if (
-          expression.target.kind === "NameExpression" &&
-          this.enumTypes.get(expression.target.name)?.get(expression.name)?.payloadArity === 0
-        ) {
+        {
+          const variant = this.enumVariantRuntimeInfoForNode(expression.nodeId);
+          if (variant?.payloadArity === 0) {
+            return JSON.stringify(`${variant.emittedEnumName}.${expression.name}`);
+          }
+        }
+        if (expression.target.kind === "NameExpression") {
           const variant = this.enumTypes.get(expression.target.name)?.get(expression.name);
-          return JSON.stringify(
-            `${variant?.emittedEnumName ?? expression.target.name}.${expression.name}`,
-          );
+          if (variant?.payloadArity === 0) {
+            return JSON.stringify(`${variant.emittedEnumName}.${expression.name}`);
+          }
         }
         return `${this.emitExpression(expression.target, indent, loopContext)}.${expression.name}`;
     }
@@ -712,6 +744,19 @@ class JavaScriptEmitter {
   ):
     | { readonly enumName: string; readonly variantName: string; readonly payloadArity: number }
     | undefined {
+    const resolvedVariant = this.enumVariantRuntimeInfoForNode(callee.nodeId);
+    if (resolvedVariant !== undefined) {
+      const variantName = enumVariantName(callee);
+      if (variantName === undefined) {
+        return undefined;
+      }
+      return {
+        enumName: resolvedVariant.emittedEnumName,
+        variantName,
+        payloadArity: resolvedVariant.payloadArity,
+      };
+    }
+
     if (callee.kind === "MemberExpression" && callee.target.kind === "NameExpression") {
       const variant = this.enumTypes.get(callee.target.name)?.get(callee.name);
       if (variant === undefined) {
@@ -960,6 +1005,11 @@ class JavaScriptEmitter {
   private matchPatternPayloadArity(
     pattern: Extract<MatchPattern, { readonly kind: "EnumVariantPattern" }>,
   ): number {
+    const variant = this.enumVariantRuntimeInfoForNode(pattern.nodeId);
+    if (variant !== undefined) {
+      return variant.payloadArity;
+    }
+
     const enumName = pattern.enumName ?? pattern.resolvedEnumName;
     if (enumName === undefined) {
       return 0;
@@ -971,8 +1021,33 @@ class JavaScriptEmitter {
   private emitMatchPatternValue(
     pattern: Extract<MatchPattern, { readonly kind: "EnumVariantPattern" }>,
   ): string {
-    return JSON.stringify(
-      `${pattern.enumName ?? pattern.resolvedEnumName ?? ""}.${pattern.variantName}`,
+    return this.emitEnumVariantValue(
+      pattern.nodeId,
+      pattern.enumName ?? pattern.resolvedEnumName,
+      pattern.variantName,
+    );
+  }
+
+  private emitEnumVariantValue(
+    nodeId: number,
+    fallbackEnumName: string | undefined,
+    variantName: string,
+  ): string {
+    const variant = this.enumVariantRuntimeInfoForNode(nodeId);
+    return JSON.stringify(`${variant?.emittedEnumName ?? fallbackEnumName ?? ""}.${variantName}`);
+  }
+
+  private enumVariantRuntimeInfoForNode(nodeId: number): EnumRuntimeInfo | undefined {
+    const reference = this.currentSemantics?.references.get(nodeId);
+    if (reference?.kind !== "EnumVariant") {
+      return undefined;
+    }
+    const moduleName = enumVariantReferenceModuleName(reference, this.currentModuleName);
+    if (moduleName === undefined) {
+      return undefined;
+    }
+    return this.enumVariantsByDefinition.get(
+      enumVariantKey(moduleName, reference.definitionNodeId),
     );
   }
 
@@ -1024,6 +1099,28 @@ function hasPipePlaceholder(args: readonly Expression[]): boolean {
 
 function isPipePlaceholder(expression: Expression): boolean {
   return expression.kind === "NameExpression" && expression.name === "_";
+}
+
+function enumVariantName(expression: Expression): string | undefined {
+  switch (expression.kind) {
+    case "MemberExpression":
+      return expression.name;
+    case "EnumVariantExpression":
+      return expression.variantName;
+    default:
+      return undefined;
+  }
+}
+
+function enumVariantReferenceModuleName(
+  reference: Extract<ReferenceTarget, { readonly kind: "EnumVariant" }>,
+  currentModuleName: string | undefined,
+): string | undefined {
+  return reference.moduleName ?? currentModuleName;
+}
+
+function enumVariantKey(moduleName: string, definitionNodeId: number): string {
+  return `${moduleName}#${definitionNodeId}`;
 }
 
 function substituteTargetPlaceholders(

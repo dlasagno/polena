@@ -161,6 +161,7 @@ export function compilePackage(input: {
   }
 
   const modules = modulesToEmit(analysis.packageProgram, analysis.graph);
+  const analysesByPath = new Map(analysis.analyses.map((item) => [item.path, item.analysis]));
   return {
     ok: true,
     packageProgram: analysis.packageProgram,
@@ -174,6 +175,7 @@ export function compilePackage(input: {
           packageProgram: analysis.packageProgram,
           moduleGraph: analysis.graph,
           isEntry: moduleFile.id === analysis.packageProgram.entryModuleId,
+          semantics: analysesByPath.get(moduleFile.path)?.semantics,
         }),
       })),
   };

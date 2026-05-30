@@ -1488,6 +1488,49 @@ const value = match result {
     );
   });
 
+  test("emits shorthand enum constructors using resolved imported enum definitions", () => {
+    const result = compilePackage({
+      manifest: { name: "app", version: "0.1.0", target: "executable" },
+      rootDir: "app",
+      sourceDir: "app/src",
+      files: [
+        {
+          path: "app/src/box_payload.plna",
+          source: ["export type Box = enum {", "  Wrap(number),", "};"].join("\n"),
+        },
+        {
+          path: "app/src/box_fieldless.plna",
+          source: ["export type Box = enum {", "  Wrap,", "};"].join("\n"),
+        },
+        {
+          path: "app/src/index.plna",
+          source: [
+            "import @/box_payload.{type Box as PayloadBox};",
+            "import @/box_fieldless.{type Box as FieldlessBox};",
+            "",
+            "export fn main(): void {",
+            "  const payload: PayloadBox = .Wrap(1);",
+            "  const fieldless: FieldlessBox = .Wrap;",
+            "  const value = match payload {",
+            "    .Wrap(inner) => inner,",
+            "  };",
+            "}",
+          ].join("\n"),
+        },
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    const output = result.files.find((file) => file.path === "index.js")?.contents ?? "";
+    expect(output).toContain('{ tag: "Box.Wrap", values: [1] }');
+    expect(output).toContain(".tag ??");
+    expect(output).toContain(".values[0]");
+    expect(output).not.toContain('"Box.Wrap"(1)');
+  });
+
   test("requires a runtime for main command-line arguments", () => {
     const result = compilePackage({
       manifest: { name: "app", version: "0.1.0", target: "executable" },
