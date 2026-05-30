@@ -10,10 +10,10 @@ the source of truth for intended syntax and semantics, and
 compiler currently supports.
 
 The current MVP already has a useful vertical slice: parsing, checking,
-diagnostics, JavaScript emission, package builds, current-package imports,
-language-server diagnostics, hovers, document symbols, and a VS Code extension.
-The priority now is to harden that surface before expanding into larger
-language areas.
+diagnostics, JavaScript emission, package builds, current-package imports, a
+bundled `@std` slice, language-server navigation features, and a VS Code
+extension. The priority now is to harden that surface before expanding into
+larger language areas.
 
 ---
 
@@ -38,7 +38,8 @@ language areas.
 
 Implemented foundations include:
 
-- Source spans, structured diagnostics, and diagnostic rendering.
+- Source spans, structured diagnostics, diagnostic codes, and diagnostic
+  rendering.
 - Lexer and parser coverage for the MVP language surface, including doc
   comments.
 - Variables, functions, arrays, objects, enums, exhaustive `match`, generics,
@@ -46,17 +47,22 @@ Implemented foundations include:
 - JavaScript code generation for single-file and package compilation.
 - Package manifests, recursive source discovery, `build`, `init`, and `run`.
 - Current-package imports with `@/module`, explicit exports, and ESM output.
-- Language-server diagnostics, package analysis, manifest completions, hover,
-  and document symbols.
+- A bundled explicit `@std` slice with core `Option`/`Result`, I/O helpers,
+  option/result helpers, parsing, math, string, array, map, and set modules.
+- Expression-position compiler directives for JavaScript target escapes and
+  initial enum/object introspection.
+- Language-server diagnostics, package analysis, manifest completions, source
+  completions, hover, definition, references, rename, signature help,
+  document/workspace symbols, and semantic tokens.
 - VS Code syntax highlighting and an LSP client.
 
 Important open areas include:
 
 - JavaScript and TypeScript interop declarations.
 - TypeScript declaration generation.
-- Standard-library packaging and runtime profile design.
-- `try`, panic semantics, unsafe operations, async, traits, and compile-time
-  evaluation.
+- Standard-library API design, runtime profile design, and bootstrap strategy.
+- `try`, finalized panic semantics, unsafe operations, async, traits, and
+  compile-time evaluation.
 - External dependencies, workspaces, and package management.
 
 ---
@@ -124,9 +130,9 @@ Exit criteria:
 ## Track 3: Standard Library and Runtime Model
 
 Goal: grow the explicit `@std` package toward the comprehensive standard
-library described in the language goals. The near-term work is deliberate and
-small; the long-term target is a stdlib broad enough that most programs do not
-need third-party packages for common tasks.
+library described in the language goals. The current bundled slice is useful
+but still provisional; the long-term target is a stdlib broad enough that most
+programs do not need third-party packages for common tasks.
 
 Candidate work:
 
@@ -134,17 +140,17 @@ Candidate work:
   ordinary `@std/core` modules rather than compiler-injected scope.
 - Define runtime profiles for Node, Bun, Deno, browser, and shared JavaScript
   environments only when they affect source checking or emitted code.
-- Add basic string, array, numeric, and formatting helpers when their signatures
-  are representable without special cases.
-- Define parsing helpers that return `Result` or `Option`.
+- Round out string, array, numeric, formatting, parsing, and collection helpers
+  when their signatures are representable without special cases.
+- Keep parsing helpers returning `Result` or `Option`.
 - Replace ad hoc runtime failures with the chosen panic model where appropriate.
 - Keep runtime helpers small, explicit, and tested.
 
 Design questions to settle first:
 
 - Standard-library packaging and import model.
-- Panic representation and whether checked indexing should throw
-  `PolenaPanic`, `RangeError`, or another runtime value.
+- Whether the current `PolenaPanic` representation is final, and what
+  structured metadata it should carry.
 - Runtime profile selection and whether it belongs in `polena.toml`.
 - Whether standard library code is written in Polena, TypeScript, or a mix
   during the bootstrap period.
@@ -255,13 +261,15 @@ These areas are important but should wait until the core language and compiler
 architecture are stronger:
 
 - Compile-time evaluation and `comptime`.
-- Compiler directives such as enum and object introspection.
+- Richer compiler directives beyond the current expression-position target
+  escapes and basic introspection.
 - External package management and npm ecosystem integration.
 - Workspaces and multi-package project commands.
 - Optimization passes.
 - Incremental compilation.
 - Rich formatter support.
-- Additional editor features such as refactors and semantic tokens.
+- Additional editor features such as code actions, formatting, and richer
+  refactors.
 - Advanced generic programming.
 - Traits or `impl`-style extension mechanisms.
 
@@ -274,8 +282,10 @@ The next useful steps are:
 1. Stabilize diagnostics, recovery, and golden tests for the current MVP.
 2. Tighten module/package semantics and update the spec around implemented
    imports.
-3. Decide the panic model for checked indexing and other runtime failures.
-4. Define the first standard-library boundary beyond the provisional prelude.
+3. Finalize structured panic metadata for checked indexing and other runtime
+   failures.
+4. Define the next standard-library boundary beyond the current bundled
+   `@std` slice.
 5. Specify JavaScript/TypeScript interop and declaration generation.
 
 This order keeps each milestone useful on its own while reducing the risk of

@@ -53,4 +53,5 @@ export const DiagnosticCode = {
   UnsupportedMatchPayload: "PLN222",
   UnknownDirective: "PLN230",
   InvalidDirectiveOperand: "PLN231",
+  TargetEscapeRequiresOptIn: "PLN232",
 } as const;

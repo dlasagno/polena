@@ -3685,6 +3685,10 @@ const value = @target.js(template, number);
     expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
       "Target escape directive '@target.js' requires an unsafe opt-in.",
     );
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain("PLN232");
+    expect(result.diagnostics.find((diagnostic) => diagnostic.code === "PLN232")?.label).toBe(
+      "add [unsafe] target_escapes = true to polena.toml",
+    );
   });
 
   test("allows JavaScript target escape directives with package opt-in", () => {

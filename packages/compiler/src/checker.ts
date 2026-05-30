@@ -1775,7 +1775,7 @@ class Checker {
           `Target escape directive '@${expression.name}' requires an unsafe opt-in.`,
           expression.nameSpan,
           {
-            code: DiagnosticCode.InvalidDirectiveOperand,
+            code: DiagnosticCode.TargetEscapeRequiresOptIn,
             label: "add [unsafe] target_escapes = true to polena.toml",
           },
         ),

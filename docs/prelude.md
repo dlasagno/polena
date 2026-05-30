@@ -53,7 +53,7 @@ Checked indexing with `items[index]` still panics on invalid indexes.
 
 ## Standard Library Modules
 
-- `@std/core` exports `Option`, `Result`, `println`, `assert`, `todo`, and
+- `@std/core` exports `Option`, `Result`, `println`, `assert`, and
   `unreachable`.
 - `@std/io` exports `println` and `eprintln`.
 - `@std/option` exports `is_some`, `is_none`, `unwrap`, `expect`, `unwrap_or`, `flatten`,

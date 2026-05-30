@@ -167,7 +167,7 @@ Status values:
 | Panic model | Partially implemented | The `panic` expression and checked indexing both throw a `PolenaPanic` (a `Error` subclass emitted into the program) carrying a message. Structured panic payloads (kind tag, source span) are TBD. |
 | `panic` expression | Implemented | `panic <string>` raises a `PolenaPanic`. Its type is `never`. |
 | `assert` / `unreachable` | Implemented | Provided by `@std/core`; both build on `panic`. `unreachable` returns `never`; `assert` returns `void`. Build-mode stripping of assertions is not implemented. |
-| `todo` | Not implemented | Specified in `@std/core` as `todo(message: string): never`, building on `panic`. Intended to emit a compile-time warning at each call site; warning diagnostics are not implemented. |
+| `todo` | Not implemented | Intended as a future `@std/core` helper that builds on `panic`. Warning diagnostics at call sites are not implemented, and the current `@std/core` module does not export `todo`. |
 | `never` type | Implemented | The bottom type, assignable to every type. Produced by `panic` and usable as an explicit return type for diverging functions. |
 
 ---
@@ -189,7 +189,7 @@ Status values:
 
 | Feature | Status | Notes |
 |---|---|---|
-| Modules/imports/exports | Partially implemented | Package compilation supports current-package `@/` imports, a bundled first slice of `@std` modules sourced from `packages/stdlib`, declaration exports, cycle/missing-module diagnostics, and ESM output. External packages, workspaces, and re-exports are not implemented. |
+| Modules/imports/exports | Partially implemented | Package compilation supports current-package `@/` imports, a bundled `@std` slice sourced from `packages/stdlib`, declaration exports, cycle/missing-module diagnostics, and ESM output. Current stdlib modules include `@std/core`, `@std/io`, `@std/option`, `@std/result`, `@std/parse`, `@std/math`, `@std/string`, `@std/array`, `@std/collections/map`, and `@std/collections/set`. External packages, workspaces, and re-exports are not implemented. |
 | JavaScript/TypeScript interop declarations | Not implemented | Still TBD in the spec. |
 | TypeScript declaration generation | Not implemented | Goal, not MVP behavior. |
 | Async functions | Not implemented | Still TBD in the spec. |

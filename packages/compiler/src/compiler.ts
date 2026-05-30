@@ -113,6 +113,24 @@ type PackageAnalysisPipelineResult =
       readonly analyses: readonly ModuleAnalysis[];
     };
 
+type ParsedStdlibFile = {
+  readonly program: Program;
+  readonly diagnostics: readonly Diagnostic[];
+};
+
+type CheckedStdlibModule = {
+  readonly exports: ModuleExports;
+  readonly analysis: ModuleAnalysis;
+};
+
+type StandardLibraryCache = {
+  readonly parsedByPath: ReadonlyMap<string, ParsedStdlibFile>;
+  readonly canReuseCheckedModules: boolean;
+  readonly checkedByPath: Map<string, CheckedStdlibModule>;
+};
+
+const standardLibraryCaches = new WeakMap<StandardLibrary, StandardLibraryCache>();
+
 export function analyze(source: string): AnalyzeResult {
   const lexResult = lex(source);
   const parseResult = parse(lexResult.tokens);
@@ -210,11 +228,50 @@ function withStandardLibrary(input: PackageCompileInput): NormalizedPackageCompi
   };
 }
 
+function cacheForStandardLibrary(standardLibrary: StandardLibrary): StandardLibraryCache {
+  const existing = standardLibraryCaches.get(standardLibrary);
+  if (existing !== undefined) {
+    return existing;
+  }
+
+  const parsedByPath = new Map<string, ParsedStdlibFile>();
+  for (const file of standardLibrary.files) {
+    const lexResult = lex(file.source);
+    const parseResult = parse(lexResult.tokens, { moduleMode: true });
+    parsedByPath.set(file.path, {
+      program: parseResult.program,
+      diagnostics: [...lexResult.diagnostics, ...parseResult.diagnostics],
+    });
+  }
+
+  const canReuseCheckedModules = [...parsedByPath.values()].every((parsed) =>
+    parsed.program.imports.every((declaration) => declaration.path.prefix === "std"),
+  );
+  const cache: StandardLibraryCache = {
+    parsedByPath,
+    canReuseCheckedModules,
+    checkedByPath: new Map(),
+  };
+  standardLibraryCaches.set(standardLibrary, cache);
+  return cache;
+}
+
+function cachedCheckedStdlibModule(
+  cache: StandardLibraryCache,
+  moduleFile: ModuleFile,
+): CheckedStdlibModule | undefined {
+  if (!cache.canReuseCheckedModules || moduleFile.origin !== "std") {
+    return undefined;
+  }
+  return cache.checkedByPath.get(moduleFile.path);
+}
+
 function analyzePackagePipeline(
   input: NormalizedPackageCompileInput,
 ): PackageAnalysisPipelineResult {
   const diagnostics: PackageDiagnostic[] = [];
   const programs = new Map<string, Program>();
+  const standardLibraryCache = cacheForStandardLibrary(input.standardLibrary);
 
   for (const file of input.files) {
     const lexResult = lex(file.source);
@@ -225,12 +282,12 @@ function analyzePackagePipeline(
     programs.set(file.path, parseResult.program);
   }
   for (const file of input.standardLibrary.files) {
-    const lexResult = lex(file.source);
-    const parseResult = parse(lexResult.tokens, { moduleMode: true });
-    diagnostics.push(
-      ...diagnosticsForPath(file.path, [...lexResult.diagnostics, ...parseResult.diagnostics]),
-    );
-    programs.set(file.path, parseResult.program);
+    const cached = standardLibraryCache.parsedByPath.get(file.path);
+    if (cached === undefined) {
+      continue;
+    }
+    diagnostics.push(...diagnosticsForPath(file.path, cached.diagnostics));
+    programs.set(file.path, cached.program);
   }
 
   const packageResult = buildPackageProgram({
@@ -254,6 +311,16 @@ function analyzePackagePipeline(
     if (moduleFile === undefined) {
       continue;
     }
+    const cachedStdModule = cachedCheckedStdlibModule(standardLibraryCache, moduleFile);
+    if (cachedStdModule !== undefined) {
+      diagnostics.push(
+        ...diagnosticsForPath(moduleFile.path, cachedStdModule.analysis.analysis.diagnostics),
+      );
+      analyses.push(cachedStdModule.analysis);
+      exportsByModule.set(moduleFile.id, cachedStdModule.exports);
+      continue;
+    }
+
     const moduleDiagnostics: Diagnostic[] = [];
     moduleDiagnostics.push(...validateModuleConstInitializers(moduleFile));
     const imports = buildCheckImports(
@@ -281,6 +348,15 @@ function analyzePackagePipeline(
       },
     });
     exportsByModule.set(moduleFile.id, checkResult.exports);
+    if (standardLibraryCache.canReuseCheckedModules && moduleFile.origin === "std") {
+      const analysis = analyses[analyses.length - 1];
+      if (analysis !== undefined) {
+        standardLibraryCache.checkedByPath.set(moduleFile.path, {
+          exports: checkResult.exports,
+          analysis,
+        });
+      }
+    }
   }
 
   diagnostics.push(
