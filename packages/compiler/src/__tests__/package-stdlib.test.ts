@@ -96,6 +96,44 @@ const value = 1 |> pair(_, _);
     expect(result.files.find((file) => file.path === "index.js")?.contents).toContain("main();");
   });
 
+  test("erases type-only imports from emitted JavaScript", () => {
+    const result = compilePackage({
+      manifest: { name: "app", version: "0.1.0", target: "library" },
+      rootDir: "app",
+      sourceDir: "app/src",
+      standardLibrary: { files: [] },
+      files: [
+        {
+          path: "app/src/index.plna",
+          source: [
+            "import @/users.{type User};",
+            "export fn id(user: User): User {",
+            "  user",
+            "}",
+          ].join("\n"),
+        },
+        {
+          path: "app/src/users.plna",
+          source: [
+            "export type User = { name: string };",
+            "export fn parseUser(name: string): User {",
+            "  { name: name }",
+            "}",
+          ].join("\n"),
+        },
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    expect(result.files.map((file) => file.path).sort()).toEqual(["index.js", "users.js"]);
+    expect(result.files.find((file) => file.path === "index.js")?.contents).not.toContain(
+      "users.js",
+    );
+  });
+
   test("passes runtime command-line arguments to main", () => {
     const result = compilePackage({
       manifest: { name: "app", version: "0.1.0", target: "executable", runtime: "node" },

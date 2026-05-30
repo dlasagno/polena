@@ -273,7 +273,9 @@ class JavaScriptEmitter {
       }
       const path = relativeJsImportPath(moduleFile.name, importedModule.name);
       const alias = importDeclaration.alias?.name ?? defaultImportAlias(importDeclaration);
-      lines.push(`import * as ${emitIdentifier(alias)} from ${JSON.stringify(path)};`);
+      if (this.importNeedsNamespaceBinding(importDeclaration, importedModule.name)) {
+        lines.push(`import * as ${emitIdentifier(alias)} from ${JSON.stringify(path)};`);
+      }
 
       const valueItems = importDeclaration.items.filter((item) => item.namespace === "value");
       if (valueItems.length > 0) {
@@ -288,6 +290,27 @@ class JavaScriptEmitter {
       }
     }
     return lines;
+  }
+
+  private importNeedsNamespaceBinding(
+    importDeclaration: ImportDeclaration,
+    importedModuleName: string,
+  ): boolean {
+    if (importDeclaration.items.length === 0) {
+      return true;
+    }
+
+    if (this.currentSemantics === undefined) {
+      return true;
+    }
+
+    for (const reference of this.currentSemantics.references.values()) {
+      if (reference.kind === "Module" && reference.moduleName === importedModuleName) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   private emitTopLevelDeclaration(declaration: TopLevelDeclaration): string[] {
