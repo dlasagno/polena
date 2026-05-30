@@ -292,6 +292,7 @@ function findInTypeNode(typeNode: TypeNode, offset: number): HoverTarget | undef
         ? target("TypeReference", typeNode.nodeId, typeNode.nameSpan)
         : undefined;
     case "PrimitiveType":
+    case "NeverType":
     case "UnknownType":
     case "OpaqueType":
       return target("TypeReference", typeNode.nodeId, typeNode.span);
@@ -396,6 +397,11 @@ function findInExpression(expression: Expression, offset: number): HoverTarget |
         return target("MemberName", expression.nodeId, expression.nameSpan);
       }
       return findInExpression(expression.target, offset);
+    case "PanicExpression":
+      return (
+        findInExpression(expression.message, offset) ??
+        target("Expression", expression.nodeId, expression.keywordSpan)
+      );
     case "NumberLiteral":
     case "BigIntLiteral":
     case "BooleanLiteral":

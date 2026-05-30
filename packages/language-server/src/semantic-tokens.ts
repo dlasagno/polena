@@ -386,6 +386,9 @@ function collectExpressionTokens(
         }
       }
       return;
+    case "PanicExpression":
+      collectExpressionTokens(expression.message, analysis, tokens);
+      return;
     case "NumberLiteral":
     case "BigIntLiteral":
     case "BooleanLiteral":

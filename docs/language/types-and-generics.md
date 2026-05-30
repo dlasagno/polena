@@ -409,3 +409,36 @@ The following opaque-type rules are **TBD**:
 - whether opaque values can be serialized or cloned.
 
 Generic opaque declarations are not supported yet.
+
+---
+
+## 28. Never
+
+`never` is the bottom type. It is the type of an expression that does not
+produce a value because it diverges, such as a `panic` expression or a call to
+`todo` or `unreachable` ([Panic](algebraic-data-and-errors.md#193-panic)).
+
+```tsx
+fn fail(message: string): never {
+	panic message
+}
+```
+
+`never` is assignable to every type. This lets a diverging expression appear in
+any position, so a branch that panics does not constrain the type of the
+surrounding expression:
+
+```tsx
+const value: number = if ready {
+	read()
+} else {
+	panic "not ready"
+};
+```
+
+No value can be assigned to `never`, because no value inhabits it. A function
+declared to return `never` must not be able to return normally.
+
+`never` is primarily produced by the language and standard library rather than
+written by hand, but it may be used as an explicit return type for a function
+that always diverges.

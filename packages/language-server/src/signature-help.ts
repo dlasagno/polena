@@ -307,6 +307,8 @@ function callInExpression(
       );
     case "MemberExpression":
       return callInExpression(expression.target, offset);
+    case "PanicExpression":
+      return callInExpression(expression.message, offset);
     case "NumberLiteral":
     case "BigIntLiteral":
     case "BooleanLiteral":
@@ -354,6 +356,8 @@ function formatTypeNode(typeNode: TypeDeclaration["value"]): string {
             : `${variant.name}(${variant.payload.map(formatTypeNode).join(", ")})`,
         )
         .join(", ")} }`;
+    case "NeverType":
+      return "never";
     case "UnknownType":
       return "unknown";
     case "OpaqueType":

@@ -54,6 +54,7 @@ class JavaScriptEmitter {
   private usesIndexSetHelper = false;
   private usesIndexUpdateHelper = false;
   private usesArrayGetHelper = false;
+  private usesPanicHelper = false;
   private readonly enumTypes = new Map<string, Map<string, EnumRuntimeInfo>>();
 
   public emitProgram(program: Program): string {
@@ -184,6 +185,19 @@ class JavaScriptEmitter {
     if (this.usesIndexUpdateHelper) {
       lines.unshift(...emitIndexUpdateHelper(), "");
     }
+
+    if (this.needsPanicRuntime()) {
+      lines.unshift(...emitPanicRuntime(), "");
+    }
+  }
+
+  private needsPanicRuntime(): boolean {
+    return (
+      this.usesPanicHelper ||
+      this.usesIndexHelper ||
+      this.usesIndexSetHelper ||
+      this.usesIndexUpdateHelper
+    );
   }
 
   private emitMainCall(module: ModuleFile, packageProgram: PackageProgram): string {
@@ -500,6 +514,9 @@ class JavaScriptEmitter {
         );
       case "NameExpression":
         return emitIdentifier(expression.name);
+      case "PanicExpression":
+        this.usesPanicHelper = true;
+        return `__polenaPanic(${this.emitExpression(expression.message, indent, loopContext)})`;
       case "UnaryExpression":
         return `(${expression.operator}${this.emitExpression(expression.operand, indent, loopContext)})`;
       case "BinaryExpression":
@@ -1018,11 +1035,26 @@ function substituteTargetPlaceholders(
   );
 }
 
+function emitPanicRuntime(): string[] {
+  return [
+    "class PolenaPanic extends Error {",
+    "  constructor(message) {",
+    "    super(message);",
+    '    this.name = "PolenaPanic";',
+    "  }",
+    "}",
+    "",
+    "function __polenaPanic(message) {",
+    "  throw new PolenaPanic(message);",
+    "}",
+  ];
+}
+
 function emitIndexHelper(): string[] {
   return [
     "function __polenaIndex(array, index) {",
     "  if (!Number.isInteger(index) || index < 0 || index >= array.length) {",
-    '    throw new RangeError("array index out of bounds");',
+    '    __polenaPanic("array index out of bounds");',
     "  }",
     "",
     "  return array[index];",
@@ -1034,7 +1066,7 @@ function emitIndexSetHelper(): string[] {
   return [
     "function __polenaIndexSet(array, index, value) {",
     "  if (!Number.isInteger(index) || index < 0 || index >= array.length) {",
-    '    throw new RangeError("array index out of bounds");',
+    '    __polenaPanic("array index out of bounds");',
     "  }",
     "",
     "  array[index] = value;",
@@ -1046,7 +1078,7 @@ function emitIndexUpdateHelper(): string[] {
   return [
     "function __polenaIndexUpdate(array, index, operator, value) {",
     "  if (!Number.isInteger(index) || index < 0 || index >= array.length) {",
-    '    throw new RangeError("array index out of bounds");',
+    '    __polenaPanic("array index out of bounds");',
     "  }",
     "",
     "  switch (operator) {",

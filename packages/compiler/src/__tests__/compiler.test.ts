@@ -1020,6 +1020,46 @@ const value = 1 |> pair(_, _);
     );
   });
 
+  test("compiles the standard-library assert and unreachable helpers", () => {
+    const result = compilePackage({
+      manifest: { name: "app", version: "0.1.0", target: "executable" },
+      rootDir: "app",
+      sourceDir: "app/src",
+      files: [
+        {
+          path: "app/src/index.plna",
+          source: [
+            "import @std/core.{assert, unreachable};",
+            "",
+            "fn classify(value: number): string {",
+            '  assert(value >= 0, "value must be non-negative");',
+            "  if value == 0 {",
+            '    "zero"',
+            "  } else {",
+            '    "positive"',
+            "  }",
+            "}",
+            "",
+            "export fn main(): void {",
+            "  const label = classify(1);",
+            '  if label == "unexpected" {',
+            '    unreachable("classify only returns zero or positive")',
+            "  }",
+            "}",
+          ].join("\n"),
+        },
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    const core = result.files.find((file) => file.path === "__polena_std/core.js")?.contents ?? "";
+    expect(core).toContain("class PolenaPanic extends Error");
+    expect(core).toContain("__polenaPanic(message)");
+  });
+
   test("compiles standard-library map and set modules", () => {
     const result = compilePackage({
       manifest: { name: "app", version: "0.1.0", target: "executable" },
@@ -2015,7 +2055,7 @@ const values = [1];
 const value = values[1];
 `);
 
-    expect(() => executeValue(result.js)).toThrow(RangeError);
+    expectPanic(result.js, "array index out of bounds");
   });
 
   test("throws on fractional array indexes", () => {
@@ -2024,7 +2064,7 @@ const values = [1];
 const value = values[0.5];
 `);
 
-    expect(() => executeValue(result.js)).toThrow(RangeError);
+    expectPanic(result.js, "array index out of bounds");
   });
 
   test("throws on out-of-bounds array assignment indexes", () => {
@@ -2034,7 +2074,7 @@ values[1] = 2;
 const value = values[0];
 `);
 
-    expect(() => executeValue(result.js)).toThrow(RangeError);
+    expectPanic(result.js, "array index out of bounds");
   });
 
   test("throws on out-of-bounds array compound assignment indexes", () => {
@@ -2044,7 +2084,94 @@ values[1] += 2;
 const value = values[0];
 `);
 
-    expect(() => executeValue(result.js)).toThrow(RangeError);
+    expectPanic(result.js, "array index out of bounds");
+  });
+
+  test("emits a PolenaPanic helper for the panic keyword and throws at runtime", () => {
+    const result = expectCompileOk(`
+fn boom(): number {
+  panic "boom"
+}
+
+const value = boom();
+`);
+
+    expect(result.js).toContain("class PolenaPanic extends Error");
+    expect(result.js).toContain('__polenaPanic("boom")');
+    expectPanic(result.js, "boom");
+  });
+
+  test("supports panic in expression position with a string interpolation message", () => {
+    const result = expectCompileOk(`
+fn pick(flag: boolean): number {
+  const value = if flag {
+    1
+  } else {
+    panic "no value for \${flag}"
+  };
+  value
+}
+
+const value = pick(false);
+`);
+
+    expectPanic(result.js, "no value for false");
+  });
+
+  test("treats panic as a diverging expression so the function needs no other return", () => {
+    const result = compile(`
+fn always(): number {
+  panic "unreachable"
+}
+`);
+
+    expect(result.ok).toBe(true);
+  });
+
+  test("requires panic messages to be strings", () => {
+    const result = compile(`
+fn boom(): number {
+  panic 42
+}
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Expected 'string', got 'number'.",
+    );
+  });
+
+  test("accepts never as a return type for a diverging function", () => {
+    const result = compile(`
+fn fail(message: string): never {
+  panic message
+}
+
+fn use(): number {
+  const value = fail("boom");
+  value
+}
+`);
+
+    expect(result.ok).toBe(true);
+  });
+
+  test("absorbs never branches when computing match result types", () => {
+    const result = compile(`
+type Choice = enum {
+  First,
+  Second,
+};
+
+fn pick(choice: Choice): number {
+  match choice {
+    .First => 1,
+    .Second => panic "no second",
+  }
+}
+`);
+
+    expect(result.ok).toBe(true);
   });
 
   test("rejects non-boolean if conditions", () => {
@@ -3858,4 +3985,17 @@ function expectCompileOk(source: string): Extract<CompileResult, { ok: true }> {
 function executeValue(js: string): unknown {
   const execute = new Function(`${js}\nreturn value;`) as () => unknown;
   return execute();
+}
+
+function expectPanic(js: string, message: string): void {
+  let thrown: unknown;
+  try {
+    executeValue(js);
+  } catch (error) {
+    thrown = error;
+  }
+
+  expect(thrown).toBeInstanceOf(Error);
+  expect((thrown as Error).name).toBe("PolenaPanic");
+  expect((thrown as Error).message).toBe(message);
 }

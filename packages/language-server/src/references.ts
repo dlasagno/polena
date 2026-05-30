@@ -584,6 +584,8 @@ function spanForExpression(expression: Expression, nodeId: NodeId): Span | undef
       return (
         spanForExpression(expression.target, nodeId) ?? spanForExpression(expression.index, nodeId)
       );
+    case "PanicExpression":
+      return spanForExpression(expression.message, nodeId);
     case "MemberExpression":
       return spanForExpression(expression.target, nodeId);
     case "EnumVariantExpression":
@@ -610,6 +612,7 @@ function spanForDirectExpression(expression: Expression): Span {
     case "ArrayLiteral":
     case "ObjectLiteral":
     case "DirectiveExpression":
+    case "PanicExpression":
     case "UnaryExpression":
     case "BinaryExpression":
     case "IfExpression":

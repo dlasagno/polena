@@ -792,6 +792,11 @@ class Parser {
     }
 
     const token = this.current();
+    if (token.kind === "NeverType") {
+      this.advance();
+      return this.node({ kind: "NeverType", span: token.span });
+    }
+
     if (token.kind === "UnknownType") {
       this.advance();
       return this.node({ kind: "UnknownType", recovery: false, span: token.span });
@@ -1064,6 +1069,10 @@ class Parser {
   }
 
   private parsePrimaryExpression(): Expression {
+    if (this.check("Panic")) {
+      return this.parsePanicExpression();
+    }
+
     if (this.check("If")) {
       return this.parseIfExpression();
     }
@@ -1188,6 +1197,17 @@ class Parser {
       value: 0,
       text: "0",
       span: token.span,
+    });
+  }
+
+  private parsePanicExpression(): Expression {
+    const panicToken = this.expect("Panic", "Expected 'panic'.");
+    const message = this.parseExpression();
+    return this.node({
+      kind: "PanicExpression",
+      keywordSpan: panicToken.span,
+      message,
+      span: mergeSpans(panicToken.span, message.span),
     });
   }
 

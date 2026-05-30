@@ -25,3 +25,21 @@ export type Result<T, E> = enum {
 export fn println(message: string): void {
   @target.js("console.log($0)", void, message)
 }
+
+/// Panics, signaling that a supposedly unreachable code path was reached.
+///
+/// Use this for branches the program logic guarantees cannot happen. Reaching
+/// one is a programmer error, so this never returns.
+export fn unreachable(message: string): never {
+  panic message
+}
+
+/// Panics with `message` when `condition` is `false`.
+///
+/// Use assertions to check invariants. A failed assertion is a programmer
+/// error, not a recoverable condition.
+export fn assert(condition: boolean, message: string): void {
+  if !condition {
+    panic message
+  }
+}

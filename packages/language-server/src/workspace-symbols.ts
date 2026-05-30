@@ -172,6 +172,8 @@ function formatTypeNode(typeNode: TypeNode): string {
             : `${variant.name}(${variant.payload.map(formatTypeNode).join(", ")})`,
         )
         .join(", ")} }`;
+    case "NeverType":
+      return "never";
     case "UnknownType":
       return "unknown";
     case "OpaqueType":

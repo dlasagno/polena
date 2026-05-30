@@ -434,6 +434,8 @@ function nestedLocalCompletionsInExpression(
       ];
     case "MemberExpression":
       return nestedLocalCompletionsInExpression(expression.target, offset);
+    case "PanicExpression":
+      return nestedLocalCompletionsInExpression(expression.message, offset);
     case "NumberLiteral":
     case "BigIntLiteral":
     case "BooleanLiteral":
@@ -796,6 +798,8 @@ function formatTypeNode(typeNode: TypeNode): string {
         .join(", ")} }`;
     case "EnumType":
       return `enum { ${typeNode.variants.map(formatEnumVariantTypeNode).join(", ")} }`;
+    case "NeverType":
+      return "never";
     case "UnknownType":
       return "unknown";
     case "OpaqueType":

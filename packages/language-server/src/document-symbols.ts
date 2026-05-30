@@ -80,6 +80,7 @@ function childrenForTypeDeclaration(declaration: TypeDeclaration): DocumentSymbo
     case "PrimitiveType":
     case "ArrayType":
     case "NamedType":
+    case "NeverType":
     case "UnknownType":
     case "OpaqueType":
       return [];
@@ -143,6 +144,8 @@ function formatTypeNode(typeNode: TypeNode): string {
         .join(", ")} }`;
     case "EnumType":
       return `enum { ${typeNode.variants.map(formatEnumVariantTypeNode).join(", ")} }`;
+    case "NeverType":
+      return "never";
     case "UnknownType":
       return "unknown";
     case "OpaqueType":

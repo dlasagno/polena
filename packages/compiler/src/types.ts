@@ -25,6 +25,7 @@ export type Type =
       readonly moduleName?: string;
       readonly typeArguments: readonly Type[];
     }
+  | { readonly kind: "never" }
   | { readonly kind: "unknown"; readonly recovery: boolean };
 
 export type ObjectTypeField = {
@@ -94,6 +95,10 @@ export function opaqueType(
   };
 }
 
+export function neverType(): Type {
+  return { kind: "never" };
+}
+
 export function unknownType(recovery = true): Type {
   return { kind: "unknown", recovery };
 }
@@ -149,6 +154,8 @@ export function sameType(left: Type, right: Type): boolean {
           return rightArg !== undefined && sameType(arg, rightArg);
         })
       );
+    case "never":
+      return right.kind === "never";
     case "unknown":
       return true;
   }
@@ -156,6 +163,10 @@ export function sameType(left: Type, right: Type): boolean {
 
 export function isAssignableTo(source: Type, target: Type): boolean {
   if (sameType(source, target) || target.kind === "unknown" || isRecoveryUnknownType(source)) {
+    return true;
+  }
+
+  if (source.kind === "never") {
     return true;
   }
 
@@ -190,6 +201,8 @@ export function formatType(type: Type): string {
         return type.name;
       }
       return `${type.name}<${type.typeArguments.map(formatType).join(", ")}>`;
+    case "never":
+      return "never";
     case "unknown":
       return "unknown";
   }

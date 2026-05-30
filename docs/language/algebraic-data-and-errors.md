@@ -171,18 +171,78 @@ Operations that panic include:
 - checked array indexing out of bounds
   ([Array Indexing](collections-and-objects.md#162-array-indexing)),
 - explicit failed assertions,
+- unfinished implementations marked with `todo`,
 - unreachable code paths (for example, exhaustiveness violations the checker
   could not prove at compile time and that occur at runtime through external
-  data).
+  data),
+- an explicit `panic` expression.
 
 A panic terminates the current execution path.
 
-For the JavaScript target, the intended runtime representation is an instance
-of `PolenaPanic`, a subclass of JavaScript `Error`. The instance carries:
+#### The `panic` expression
 
-- a human-readable message describing the panic,
-- a kind tag identifying the panic category,
-- the source span of the panicking operation when available.
+The `panic` keyword raises a panic with an explicit message. It is written as
+the keyword followed by a `string` expression:
+
+```tsx
+panic "invalid state";
+panic "expected a value but found none";
+```
+
+`panic` is an expression of type `never` ([Never](types-and-generics.md#28-never)),
+the bottom type that is assignable to every type. Because it never produces a
+value, it can appear wherever an expression is expected, including as a branch
+that does not return normally:
+
+```tsx
+const value = if hasValue {
+	compute()
+} else {
+	panic "no value available"
+};
+```
+
+The operand must have type `string`. The message is the only payload the
+`panic` expression carries; richer panic payloads are described below.
+
+#### Library helpers
+
+The standard library builds three helpers on top of `panic`, provided by
+`@std/core`:
+
+- `todo(message: string): never` marks code that is not implemented yet. It
+  panics with `message` if execution reaches it. The compiler emits a warning at
+  each call site so unfinished work is visible without blocking compilation.
+  Use `todo` for scaffolding; use `unreachable` only for paths the program logic
+  guarantees cannot be reached.
+- `unreachable(message: string): never` panics to mark a code path the program
+  logic guarantees cannot be reached.
+- `assert(condition: boolean, message: string): void` panics with `message`
+  when `condition` is `false`.
+
+```tsx
+import @std/core.{assert, todo, unreachable};
+
+assert(index >= 0, "index must be non-negative");
+
+fn parse_config(raw: string): Config {
+	todo "parse_config not implemented yet"
+}
+```
+
+`todo` is a function, not a keyword. String literals such as `"todo"` remain
+ordinary strings and are unrelated to this helper.
+
+#### Runtime representation
+
+For the JavaScript target, a panic is an instance of `PolenaPanic`, a subclass
+of JavaScript `Error`. The compiler emits the `PolenaPanic` definition into the
+generated program, so it is always available wherever a panic can occur,
+including checked array indexing.
+
+`PolenaPanic` currently carries a human-readable message. A kind tag
+identifying the panic category and the source span of the panicking operation
+are intended additions and are **TBD**.
 
 `PolenaPanic` is thrown by the runtime at the panic site. Polena has no
 `try`/`catch` syntax that can intercept a panic; the only way to observe one
@@ -195,8 +255,9 @@ A program that panics is considered to have failed. The exit behavior of a
 panicked program depends on the runtime environment and is not part of the
 language proper.
 
-Custom user-thrown panics, panic-from-`main` return-type conventions, and
-the relationship between panics and async unwinding are **TBD**.
+Structured panic payloads (a kind tag and source span), panic-from-`main`
+return-type conventions, and the relationship between panics and async
+unwinding are **TBD**.
 
 ---
 

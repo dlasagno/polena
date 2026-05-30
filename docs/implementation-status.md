@@ -163,7 +163,11 @@ Status values:
 | `Option<T>` | Implemented | Provided by `@std/core` as a generic enum with `.Some(T)` and `.None`; import it explicitly where used. |
 | `Result<T, E>` | Implemented | Provided by `@std/core` as a generic enum with `.Ok(T)` and `.Err(E)`; import it explicitly where used. |
 | `try` operator | Not implemented | Depends on `Result`. |
-| Panic model | Partially implemented | Checked indexing throws a JavaScript `RangeError`; the general panic model is TBD. |
+| Panic model | Partially implemented | The `panic` expression and checked indexing both throw a `PolenaPanic` (a `Error` subclass emitted into the program) carrying a message. Structured panic payloads (kind tag, source span) are TBD. |
+| `panic` expression | Implemented | `panic <string>` raises a `PolenaPanic`. Its type is `never`. |
+| `assert` / `unreachable` | Implemented | Provided by `@std/core`; both build on `panic`. `unreachable` returns `never`; `assert` returns `void`. Build-mode stripping of assertions is not implemented. |
+| `todo` | Not implemented | Specified in `@std/core` as `todo(message: string): never`, building on `panic`. Intended to emit a compile-time warning at each call site; warning diagnostics are not implemented. |
+| `never` type | Implemented | The bottom type, assignable to every type. Produced by `panic` and usable as an explicit return type for diverging functions. |
 
 ---
 

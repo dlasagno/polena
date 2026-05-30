@@ -38,6 +38,11 @@ export type TypeNode =
       readonly span: Span;
     }
   | {
+      readonly kind: "NeverType";
+      readonly nodeId: NodeId;
+      readonly span: Span;
+    }
+  | {
       readonly kind: "UnknownType";
       readonly nodeId: NodeId;
       readonly recovery: boolean;
@@ -240,6 +245,7 @@ export type Expression =
   | ObjectLiteralExpression
   | DirectiveExpression
   | NameExpression
+  | PanicExpression
   | UnaryExpression
   | BinaryExpression
   | IfExpression
@@ -291,6 +297,14 @@ export type NameExpression = {
   readonly kind: "NameExpression";
   readonly nodeId: NodeId;
   readonly name: string;
+  readonly span: Span;
+};
+
+export type PanicExpression = {
+  readonly kind: "PanicExpression";
+  readonly nodeId: NodeId;
+  readonly keywordSpan: Span;
+  readonly message: Expression;
   readonly span: Span;
 };
 

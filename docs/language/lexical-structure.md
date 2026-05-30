@@ -100,9 +100,11 @@ if
 impl
 let
 match
+never
 number
 opaque
 or
+panic
 return
 string
 trait

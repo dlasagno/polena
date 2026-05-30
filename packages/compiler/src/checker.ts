@@ -46,6 +46,7 @@ import {
   isNumericType,
   isOrderingComparableType,
   isRecoveryUnknownType,
+  neverType,
   objectType,
   opaqueType,
   preferredArithmeticType,
@@ -173,6 +174,15 @@ function continueOutcome(): ControlFlowOutcome {
     canReturn: false,
     canBreak: false,
     canContinue: true,
+  };
+}
+
+function divergeOutcome(): ControlFlowOutcome {
+  return {
+    canFallThrough: false,
+    canReturn: false,
+    canBreak: false,
+    canContinue: false,
   };
 }
 
@@ -668,6 +678,8 @@ class Checker {
           typeNode.typeArguments.map((arg) => this.typeFromNode(arg, undefined, environment)),
           typeNode.nodeId,
         );
+      case "NeverType":
+        return neverType();
       case "UnknownType":
         return unknownType(typeNode.recovery);
       case "OpaqueType":
@@ -1368,6 +1380,8 @@ class Checker {
         this.recordReference(expression.nodeId, this.referenceTargetFromSymbol(symbol));
         return symbol.type;
       }
+      case "PanicExpression":
+        return this.inferPanicExpression(expression, scope, options);
       case "UnaryExpression":
         return this.inferUnaryExpression(
           expression.operator,
@@ -1398,6 +1412,21 @@ class Checker {
       case "MatchExpression":
         return this.inferMatchExpression(expression, scope, options);
     }
+  }
+
+  private inferPanicExpression(
+    expression: Extract<Expression, { kind: "PanicExpression" }>,
+    scope: Scope,
+    options: InferOptions,
+  ): Type {
+    const messageType = this.inferExpression(expression.message, scope, {
+      ...options,
+      ifAsValue: true,
+      whileAsValue: true,
+      expectedType: primitiveType("string"),
+    });
+    this.expectType(messageType, primitiveType("string"), expression.message.span);
+    return neverType();
   }
 
   private inferEnumVariantExpression(
@@ -2234,8 +2263,7 @@ class Checker {
       return primitiveType("void");
     }
 
-    this.expectType(elseType, thenType, expression.elseBlock.span);
-    return isRecoveryUnknownType(thenType) ? elseType : thenType;
+    return this.unifyBranchTypes(thenType, elseType, expression.elseBlock.span);
   }
 
   private inferWhileExpression(
@@ -2295,8 +2323,7 @@ class Checker {
       return elseType;
     }
 
-    this.expectType(elseType, loopContext.breakType, expression.elseBlock.span);
-    return isRecoveryUnknownType(loopContext.breakType) ? elseType : loopContext.breakType;
+    return this.unifyBranchTypes(loopContext.breakType, elseType, expression.elseBlock.span);
   }
 
   private inferBlockType(block: Block, parentScope: Scope, options: InferOptions): Type {
@@ -2347,7 +2374,13 @@ class Checker {
   }
 
   private expressionControlFlow(expression: Expression): ControlFlowOutcome {
+    if (this.semantics.expressionTypes.get(expression.nodeId)?.kind === "never") {
+      return divergeOutcome();
+    }
+
     switch (expression.kind) {
+      case "PanicExpression":
+        return divergeOutcome();
       case "IfExpression":
         if (expression.elseBlock === undefined) {
           return unionControlFlow(
@@ -2385,6 +2418,19 @@ class Checker {
       case "MemberExpression":
         return fallThroughOutcome();
     }
+  }
+
+  private unifyBranchTypes(first: Type, second: Type, span: Span): Type {
+    if (first.kind === "never") {
+      return second;
+    }
+
+    if (second.kind === "never") {
+      return first;
+    }
+
+    this.expectType(second, first, span);
+    return isRecoveryUnknownType(first) ? second : first;
   }
 
   private inferCallExpression(
@@ -2925,12 +2971,12 @@ class Checker {
         expectedType: options.expectedType ?? resultType,
       });
 
-      if (resultType === undefined || isRecoveryUnknownType(resultType)) {
+      if (resultType === undefined) {
         resultType = armType;
         continue;
       }
 
-      this.expectType(armType, resultType, arm.body.span);
+      resultType = this.unifyBranchTypes(resultType, armType, arm.body.span);
     }
 
     return resultType ?? unknownType();
@@ -3176,10 +3222,7 @@ class Checker {
     }
 
     loopContext.sawValueBreak = true;
-    this.expectType(actualType, loopContext.breakType, span);
-    if (isRecoveryUnknownType(loopContext.breakType) && !isRecoveryUnknownType(actualType)) {
-      loopContext.breakType = actualType;
-    }
+    loopContext.breakType = this.unifyBranchTypes(loopContext.breakType, actualType, span);
   }
 
   private expectType(actual: Type, expected: Type, span: Span): void {
@@ -3760,6 +3803,7 @@ function typeWithImportedModule(type: Type, moduleName: string): Type {
       );
     case "primitive":
     case "typeParameter":
+    case "never":
     case "unknown":
       return type;
   }
@@ -3838,6 +3882,7 @@ function typeContainsTypeParameter(type: Type): boolean {
     case "opaque":
       return type.typeArguments.some(typeContainsTypeParameter);
     case "primitive":
+    case "never":
     case "unknown":
       return false;
   }
@@ -3878,6 +3923,7 @@ function substituteType(type: Type, substitution: ReadonlyMap<string, Type>): Ty
         type.typeArguments.map((argument) => substituteType(argument, substitution)),
       );
     case "primitive":
+    case "never":
     case "unknown":
       return type;
   }

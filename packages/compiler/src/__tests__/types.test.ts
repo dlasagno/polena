@@ -8,6 +8,7 @@ import {
   inferArithmeticType,
   isAssignableTo,
   isEqualityComparableType,
+  neverType,
   objectType,
   opaqueType,
   primitiveType,
@@ -141,6 +142,16 @@ describe("semantic types", () => {
     expect(formatType(opaqueType("Date"))).toBe("Date");
     expect(formatType(opaqueType("Box", undefined, [primitiveType("number")]))).toBe("Box<number>");
     expect(formatType(unknownType())).toBe("unknown");
+  });
+
+  test("treats never as a bottom type assignable to every type", () => {
+    expect(isAssignableTo(neverType(), primitiveType("number"))).toBe(true);
+    expect(isAssignableTo(neverType(), arrayType(primitiveType("string")))).toBe(true);
+    expect(isAssignableTo(neverType(), neverType())).toBe(true);
+    expect(isAssignableTo(primitiveType("number"), neverType())).toBe(false);
+    expect(sameType(neverType(), neverType())).toBe(true);
+    expect(sameType(neverType(), primitiveType("number"))).toBe(false);
+    expect(formatType(neverType())).toBe("never");
   });
 
   test("infers arithmetic types for matching numeric operands", () => {

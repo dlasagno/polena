@@ -19,6 +19,7 @@ const keywords = new Map<string, TokenKind>([
   ["while", "While"],
   ["break", "Break"],
   ["continue", "Continue"],
+  ["panic", "Panic"],
   ["true", "True"],
   ["false", "False"],
   ["and", "And"],
@@ -28,6 +29,7 @@ const keywords = new Map<string, TokenKind>([
   ["string", "StringType"],
   ["boolean", "BooleanType"],
   ["void", "VoidType"],
+  ["never", "NeverType"],
   ["unknown", "UnknownType"],
   ["opaque", "OpaqueType"],
 ]);
