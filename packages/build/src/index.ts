@@ -1,5 +1,4 @@
 import {
-  analyzePackage,
   compilePackage,
   type Diagnostic,
   type EmittedFile,
@@ -261,24 +260,6 @@ export async function buildPackage(input: {
 
   const files = await readSourceFiles(sourceDir, input.io);
   const compilerManifest = compilerManifestFromBuildManifest(manifestResult.manifest);
-  const analysis = analyzePackage({
-    manifest: compilerManifest,
-    rootDir: packageRoot,
-    sourceDir,
-    files,
-  });
-
-  if (!analysis.ok) {
-    return {
-      ok: false,
-      diagnostics: analysis.diagnostics.map((item) => ({
-        kind: "source",
-        path: item.path,
-        diagnostic: item.diagnostic,
-      })),
-    };
-  }
-
   const compileResult = compilePackage({
     manifest: compilerManifest,
     rootDir: packageRoot,

@@ -79,6 +79,20 @@ export type ModuleAnalysis = {
   readonly analysis: AnalyzeResult;
 };
 
+type PackageAnalysisPipelineResult =
+  | {
+      readonly ok: true;
+      readonly packageProgram: PackageProgram;
+      readonly graph: ModuleGraph;
+      readonly diagnostics: readonly PackageDiagnostic[];
+      readonly analyses: readonly ModuleAnalysis[];
+    }
+  | {
+      readonly ok: false;
+      readonly diagnostics: readonly PackageDiagnostic[];
+      readonly analyses: readonly ModuleAnalysis[];
+    };
+
 export function analyze(source: string): AnalyzeResult {
   const lexResult = lex(source);
   const parseResult = parse(lexResult.tokens);
@@ -116,6 +130,61 @@ export function analyzePackage(input: {
   readonly sourceDir: string;
   readonly files: readonly SourceFile[];
 }): AnalyzePackageResult {
+  const analysis = analyzePackagePipeline(input);
+  if (!analysis.ok) {
+    return {
+      ok: false,
+      diagnostics: analysis.diagnostics,
+      analyses: analysis.analyses,
+    };
+  }
+
+  return {
+    ok: true,
+    packageProgram: analysis.packageProgram,
+    diagnostics: analysis.diagnostics,
+    analyses: analysis.analyses,
+  };
+}
+
+export function compilePackage(input: {
+  readonly manifest: PackageManifest;
+  readonly rootDir: string;
+  readonly sourceDir: string;
+  readonly files: readonly SourceFile[];
+}): CompilePackageResult {
+  const analysis = analyzePackagePipeline(input);
+  const diagnostics = analysis.diagnostics.map(packageDiagnosticToDiagnostic);
+
+  if (!analysis.ok) {
+    return { ok: false, diagnostics };
+  }
+
+  const modules = modulesToEmit(analysis.packageProgram, analysis.graph);
+  return {
+    ok: true,
+    packageProgram: analysis.packageProgram,
+    diagnostics,
+    files: analysis.packageProgram.modules
+      .filter((moduleFile) => modules.has(moduleFile.id))
+      .map((moduleFile) => ({
+        path: jsPathForModule(moduleFile.name),
+        contents: generateJavaScriptModule({
+          module: moduleFile,
+          packageProgram: analysis.packageProgram,
+          moduleGraph: analysis.graph,
+          isEntry: moduleFile.id === analysis.packageProgram.entryModuleId,
+        }),
+      })),
+  };
+}
+
+function analyzePackagePipeline(input: {
+  readonly manifest: PackageManifest;
+  readonly rootDir: string;
+  readonly sourceDir: string;
+  readonly files: readonly SourceFile[];
+}): PackageAnalysisPipelineResult {
   const diagnostics: PackageDiagnostic[] = [];
   const programs = new Map<string, Program>();
 
@@ -190,87 +259,9 @@ export function analyzePackage(input: {
   return {
     ok: true,
     packageProgram: packageResult.packageProgram,
+    graph: packageResult.graph,
     diagnostics,
     analyses,
-  };
-}
-
-export function compilePackage(input: {
-  readonly manifest: PackageManifest;
-  readonly rootDir: string;
-  readonly sourceDir: string;
-  readonly files: readonly SourceFile[];
-}): CompilePackageResult {
-  const diagnostics: Diagnostic[] = [];
-  const programs = new Map<string, Program>();
-
-  for (const file of input.files) {
-    const lexResult = lex(file.source);
-    const parseResult = parse(lexResult.tokens, { moduleMode: true });
-    diagnostics.push(...lexResult.diagnostics, ...parseResult.diagnostics);
-    programs.set(file.path, parseResult.program);
-  }
-  for (const file of stdlibSources) {
-    const lexResult = lex(file.source);
-    const parseResult = parse(lexResult.tokens, { moduleMode: true });
-    diagnostics.push(...lexResult.diagnostics, ...parseResult.diagnostics);
-    programs.set(file.path, parseResult.program);
-  }
-
-  const packageResult = buildPackageProgram({ ...input, stdFiles: stdlibSources, programs });
-  diagnostics.push(...packageResult.diagnostics);
-  if (!packageResult.ok) {
-    return { ok: false, diagnostics };
-  }
-
-  const exportsByModule = new Map<ModuleId, ModuleExports>();
-  const moduleById = new Map(
-    packageResult.packageProgram.modules.map((moduleFile) => [moduleFile.id, moduleFile]),
-  );
-
-  for (const moduleId of packageResult.graph.modulesInDependencyOrder) {
-    const moduleFile = moduleById.get(moduleId);
-    if (moduleFile === undefined) {
-      continue;
-    }
-    diagnostics.push(...validateModuleConstInitializers(moduleFile));
-    const imports = buildCheckImports(
-      moduleFile,
-      packageResult.graph,
-      packageResult.packageProgram,
-      exportsByModule,
-      diagnostics,
-    );
-    const checkResult = check(moduleFile.program, {
-      ...imports,
-    });
-    diagnostics.push(...checkResult.diagnostics);
-    exportsByModule.set(moduleFile.id, checkResult.exports);
-  }
-
-  diagnostics.push(...validateMain(packageResult.packageProgram));
-
-  if (diagnostics.some((diagnostic) => diagnostic.severity === "error")) {
-    return { ok: false, diagnostics };
-  }
-
-  return {
-    ok: true,
-    packageProgram: packageResult.packageProgram,
-    diagnostics,
-    files: packageResult.packageProgram.modules
-      .filter((moduleFile) =>
-        modulesToEmit(packageResult.packageProgram, packageResult.graph).has(moduleFile.id),
-      )
-      .map((moduleFile) => ({
-        path: jsPathForModule(moduleFile.name),
-        contents: generateJavaScriptModule({
-          module: moduleFile,
-          packageProgram: packageResult.packageProgram,
-          moduleGraph: packageResult.graph,
-          isEntry: moduleFile.id === packageResult.packageProgram.entryModuleId,
-        }),
-      })),
   };
 }
 
@@ -510,6 +501,13 @@ function packageDiagnostics(
   sourceDir: string,
 ): readonly PackageDiagnostic[] {
   return diagnosticsForPath(`${sourceDir.replace(/\/$/, "")}/index.plna`, diagnostics);
+}
+
+function packageDiagnosticToDiagnostic(item: PackageDiagnostic): Diagnostic {
+  if (item.diagnostic.sourcePath !== undefined) {
+    return item.diagnostic;
+  }
+  return { ...item.diagnostic, sourcePath: item.path };
 }
 
 function isModuleConstExpression(expression: Expression): boolean {
