@@ -347,7 +347,7 @@
       "patterns": [
         {
           "name": "keyword.other.reserved.polena",
-          "match": "\\b(?:comptime|impl|trait|unknown)\\b"
+          "match": "\\b(?:comptime|impl|trait)\\b"
         }
       ]
     },
@@ -359,7 +359,7 @@
         },
         {
           "name": "keyword.declaration.enum.polena",
-          "match": "\\benum\\b"
+          "match": "\\b(?:enum|opaque)\\b"
         },
         {
           "name": "keyword.declaration.module.polena",
@@ -375,7 +375,7 @@
       "patterns": [
         {
           "name": "storage.type.polena",
-          "match": "\\b(?:bigint|boolean|number|string|void)\\b"
+          "match": "\\b(?:bigint|boolean|number|string|unknown|void)\\b"
         }
       ]
     },

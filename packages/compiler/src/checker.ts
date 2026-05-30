@@ -45,7 +45,9 @@ import {
   isEqualityComparableType,
   isNumericType,
   isOrderingComparableType,
+  isRecoveryUnknownType,
   objectType,
+  opaqueType,
   preferredArithmeticType,
   primitiveType,
   sameType,
@@ -320,6 +322,7 @@ class Checker {
         value: {
           kind: "UnknownType",
           nodeId: symbol.definitionNodeId,
+          recovery: true,
           span: symbol.span,
         },
         span: symbol.span,
@@ -342,6 +345,7 @@ class Checker {
           value: {
             kind: "UnknownType",
             nodeId: symbol.definitionNodeId,
+            recovery: true,
             span: symbol.span,
           },
           span: symbol.span,
@@ -518,6 +522,21 @@ class Checker {
   }
 
   private resolveTypeDeclaration(declaration: TypeDeclaration): Type {
+    if (declaration.value.kind === "OpaqueType") {
+      if (declaration.typeParameters.length > 0) {
+        this.diagnostics.push(
+          error(`Opaque type '${declaration.name}' cannot be generic yet.`, declaration.nameSpan, {
+            code: DiagnosticCode.TypeMismatch,
+            label: "generic opaque types are not defined yet",
+          }),
+        );
+        return unknownType();
+      }
+      const type = opaqueType(declaration.name);
+      this.resolvedTypeSymbols.set(declaration.name, type);
+      return type;
+    }
+
     if (declaration.typeParameters.length === 0) {
       return this.resolveNamedType(declaration.name, declaration.nameSpan, [], declaration.nodeId);
     }
@@ -688,7 +707,12 @@ class Checker {
           typeNode.nodeId,
         );
       case "UnknownType":
-        return unknownType();
+        return unknownType(typeNode.recovery);
+      case "OpaqueType":
+        if (declaredName === undefined) {
+          return unknownType();
+        }
+        return opaqueType(declaredName);
     }
   }
 
@@ -1094,7 +1118,7 @@ class Checker {
       ...(returnType === undefined ? {} : { returnType }),
     });
 
-    if (targetType.kind === "unknown") {
+    if (isRecoveryUnknownType(targetType)) {
       this.inferExpression(value, scope, {
         ifAsValue: true,
         whileAsValue: true,
@@ -1173,7 +1197,7 @@ class Checker {
     });
     this.expectType(indexType, primitiveType("number"), target.index.span);
 
-    if (targetType.kind === "unknown") {
+    if (isRecoveryUnknownType(targetType)) {
       this.inferExpression(value, scope, {
         ifAsValue: true,
         whileAsValue: true,
@@ -1531,7 +1555,7 @@ class Checker {
           options.expectedType?.kind === "array" ? options.expectedType.element : undefined,
       });
 
-      if (elementType === undefined || elementType.kind === "unknown") {
+      if (elementType === undefined || isRecoveryUnknownType(elementType)) {
         elementType = actualType;
         continue;
       }
@@ -1665,8 +1689,8 @@ class Checker {
     if (operator === "==" || operator === "!=") {
       if (
         !sameType(leftType, rightType) &&
-        leftType.kind !== "unknown" &&
-        rightType.kind !== "unknown"
+        !isRecoveryUnknownType(leftType) &&
+        !isRecoveryUnknownType(rightType)
       ) {
         this.diagnostics.push(
           error(
@@ -1681,8 +1705,8 @@ class Checker {
           ),
         );
       } else if (
-        leftType.kind !== "unknown" &&
-        rightType.kind !== "unknown" &&
+        !isRecoveryUnknownType(leftType) &&
+        !isRecoveryUnknownType(rightType) &&
         !isEqualityComparableType(leftType)
       ) {
         const label =
@@ -1702,8 +1726,8 @@ class Checker {
     if (isOrderingOperator(operator)) {
       if (
         !sameType(leftType, rightType) &&
-        leftType.kind !== "unknown" &&
-        rightType.kind !== "unknown"
+        !isRecoveryUnknownType(leftType) &&
+        !isRecoveryUnknownType(rightType)
       ) {
         this.diagnostics.push(
           error(
@@ -1718,8 +1742,8 @@ class Checker {
           ),
         );
       } else if (
-        leftType.kind !== "unknown" &&
-        rightType.kind !== "unknown" &&
+        !isRecoveryUnknownType(leftType) &&
+        !isRecoveryUnknownType(rightType) &&
         !isOrderingComparableType(leftType)
       ) {
         this.diagnostics.push(
@@ -1734,8 +1758,8 @@ class Checker {
 
     if (
       !sameType(leftType, rightType) &&
-      leftType.kind !== "unknown" &&
-      rightType.kind !== "unknown"
+      !isRecoveryUnknownType(leftType) &&
+      !isRecoveryUnknownType(rightType)
     ) {
       this.diagnostics.push(
         error(
@@ -1784,7 +1808,7 @@ class Checker {
       return arrayType(unknownType());
     }
 
-    if (leftType.kind !== "unknown" && rightType.kind !== "unknown") {
+    if (!isRecoveryUnknownType(leftType) && !isRecoveryUnknownType(rightType)) {
       this.diagnostics.push(
         error(
           `Operator '++' requires string or array operands, got '${formatType(
@@ -1836,7 +1860,7 @@ class Checker {
     }
 
     this.expectType(elseType, thenType, expression.elseBlock.span);
-    return thenType.kind === "unknown" ? elseType : thenType;
+    return isRecoveryUnknownType(thenType) ? elseType : thenType;
   }
 
   private inferWhileExpression(
@@ -1897,7 +1921,7 @@ class Checker {
     }
 
     this.expectType(elseType, loopContext.breakType, expression.elseBlock.span);
-    return loopContext.breakType.kind === "unknown" ? elseType : loopContext.breakType;
+    return isRecoveryUnknownType(loopContext.breakType) ? elseType : loopContext.breakType;
   }
 
   private inferBlockType(block: Block, parentScope: Scope, options: InferOptions): Type {
@@ -1999,7 +2023,7 @@ class Checker {
 
     const calleeType = this.inferExpression(expression.callee, scope, options);
 
-    if (calleeType.kind === "unknown") {
+    if (isRecoveryUnknownType(calleeType)) {
       for (const arg of expression.args) {
         this.inferExpression(arg, scope, options);
       }
@@ -2331,7 +2355,7 @@ class Checker {
     });
     this.expectType(indexType, primitiveType("number"), expression.index.span);
 
-    if (targetType.kind === "unknown") {
+    if (isRecoveryUnknownType(targetType)) {
       return unknownType();
     }
 
@@ -2387,7 +2411,7 @@ class Checker {
     }
 
     const targetType = this.inferExpression(expression.target, scope, options);
-    if (targetType.kind === "unknown") {
+    if (isRecoveryUnknownType(targetType)) {
       return unknownType();
     }
 
@@ -2499,7 +2523,7 @@ class Checker {
     }
 
     const enumScrutinee = scrutineeType.kind === "enum" ? scrutineeType : undefined;
-    if (scrutineeType.kind !== "unknown" && enumScrutinee === undefined) {
+    if (!isRecoveryUnknownType(scrutineeType) && enumScrutinee === undefined) {
       this.diagnostics.push(
         error(
           `Cannot match on non-enum type '${formatType(scrutineeType)}'.`,
@@ -2525,7 +2549,7 @@ class Checker {
         expectedType: options.expectedType ?? resultType,
       });
 
-      if (resultType === undefined || resultType.kind === "unknown") {
+      if (resultType === undefined || isRecoveryUnknownType(resultType)) {
         resultType = armType;
         continue;
       }
@@ -2777,7 +2801,7 @@ class Checker {
 
     loopContext.sawValueBreak = true;
     this.expectType(actualType, loopContext.breakType, span);
-    if (loopContext.breakType.kind === "unknown" && actualType.kind !== "unknown") {
+    if (isRecoveryUnknownType(loopContext.breakType) && !isRecoveryUnknownType(actualType)) {
       loopContext.breakType = actualType;
     }
   }
@@ -3340,6 +3364,8 @@ function typeWithImportedModule(type: Type, moduleName: string): Type {
         typeWithImportedModule(type.returnType, moduleName),
         type.typeParameters,
       );
+    case "opaque":
+      return opaqueType(type.name, type.moduleName ?? moduleName);
     case "primitive":
     case "typeParameter":
     case "unknown":
@@ -3418,6 +3444,7 @@ function typeContainsTypeParameter(type: Type): boolean {
         type.params.some(typeContainsTypeParameter) || typeContainsTypeParameter(type.returnType)
       );
     case "primitive":
+    case "opaque":
     case "unknown":
       return false;
   }
@@ -3452,6 +3479,7 @@ function substituteType(type: Type, substitution: ReadonlyMap<string, Type>): Ty
         type.typeParameters,
       );
     case "primitive":
+    case "opaque":
     case "unknown":
       return type;
   }

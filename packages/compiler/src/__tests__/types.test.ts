@@ -9,6 +9,7 @@ import {
   isAssignableTo,
   isEqualityComparableType,
   objectType,
+  opaqueType,
   primitiveType,
   sameType,
   unknownType,
@@ -128,6 +129,7 @@ describe("semantic types", () => {
     expect(formatType(genericEnumType("Option", [primitiveType("number")], []))).toBe(
       "Option<number>",
     );
+    expect(formatType(opaqueType("Date"))).toBe("Date");
     expect(formatType(unknownType())).toBe("unknown");
   });
 

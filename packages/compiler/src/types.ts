@@ -19,7 +19,12 @@ export type Type =
       readonly params: readonly Type[];
       readonly returnType: Type;
     }
-  | { readonly kind: "unknown" };
+  | {
+      readonly kind: "opaque";
+      readonly name: string;
+      readonly moduleName?: string;
+    }
+  | { readonly kind: "unknown"; readonly recovery: boolean };
 
 export type ObjectTypeField = {
   readonly name: string;
@@ -75,8 +80,16 @@ export function functionType(
   return { kind: "function", typeParameters, params, returnType };
 }
 
-export function unknownType(): Type {
-  return { kind: "unknown" };
+export function opaqueType(name: string, moduleName?: string): Type {
+  return { kind: "opaque", name, ...(moduleName === undefined ? {} : { moduleName }) };
+}
+
+export function unknownType(recovery = true): Type {
+  return { kind: "unknown", recovery };
+}
+
+export function isRecoveryUnknownType(type: Type): boolean {
+  return type.kind === "unknown" && type.recovery;
 }
 
 export function sameType(left: Type, right: Type): boolean {
@@ -115,13 +128,17 @@ export function sameType(left: Type, right: Type): boolean {
         }) &&
         sameType(left.returnType, right.returnType)
       );
+    case "opaque":
+      return (
+        right.kind === "opaque" && left.name === right.name && left.moduleName === right.moduleName
+      );
     case "unknown":
       return true;
   }
 }
 
 export function isAssignableTo(source: Type, target: Type): boolean {
-  if (source.kind === "unknown" || target.kind === "unknown" || sameType(source, target)) {
+  if (sameType(source, target) || target.kind === "unknown" || isRecoveryUnknownType(source)) {
     return true;
   }
 
@@ -151,6 +168,8 @@ export function formatType(type: Type): string {
       return type.name;
     case "function":
       return "function";
+    case "opaque":
+      return type.name;
     case "unknown":
       return "unknown";
   }

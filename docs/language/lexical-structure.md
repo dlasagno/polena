@@ -101,6 +101,7 @@ impl
 let
 match
 number
+opaque
 or
 return
 string
@@ -112,4 +113,3 @@ while
 ```
 
 Additional reserved words may be added as the language evolves.
-

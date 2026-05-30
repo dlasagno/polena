@@ -31,11 +31,13 @@ const keywords = new Set([
   "let",
   "match",
   "number",
+  "opaque",
   "or",
   "return",
   "string",
   "true",
   "type",
+  "unknown",
   "void",
   "while",
 ]);

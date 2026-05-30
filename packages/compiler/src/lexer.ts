@@ -28,6 +28,8 @@ const keywords = new Map<string, TokenKind>([
   ["string", "StringType"],
   ["boolean", "BooleanType"],
   ["void", "VoidType"],
+  ["unknown", "UnknownType"],
+  ["opaque", "OpaqueType"],
 ]);
 
 export type LexResult = {

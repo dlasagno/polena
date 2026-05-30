@@ -293,6 +293,7 @@ function findInTypeNode(typeNode: TypeNode, offset: number): HoverTarget | undef
         : undefined;
     case "PrimitiveType":
     case "UnknownType":
+    case "OpaqueType":
       return target("TypeReference", typeNode.nodeId, typeNode.span);
   }
 }

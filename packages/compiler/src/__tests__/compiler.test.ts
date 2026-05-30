@@ -430,6 +430,24 @@ describe("parser", () => {
     });
   });
 
+  test("parses unknown and opaque type syntax", () => {
+    const parseResult = parse(lex("type Json = unknown; type Date = opaque;").tokens);
+
+    expect(parseResult.diagnostics).toHaveLength(0);
+    expect(parseResult.program.declarations).toMatchObject([
+      {
+        kind: "TypeDeclaration",
+        name: "Json",
+        value: { kind: "UnknownType", recovery: false },
+      },
+      {
+        kind: "TypeDeclaration",
+        name: "Date",
+        value: { kind: "OpaqueType" },
+      },
+    ]);
+  });
+
   test("parses generic type declarations and instantiations", () => {
     const parseResult = parse(lex("type Pair<A, B> = { first: A, second: B };").tokens);
 
@@ -1191,6 +1209,82 @@ const value: Label = Label;
 `);
 
     expect(executeValue(result.js)).toBe("Ada");
+  });
+
+  test("supports source unknown as an explicit boundary type", () => {
+    const result = expectCompileOk(`
+type Json = unknown;
+
+fn identity(value: Json): unknown {
+  value
+}
+
+const value: unknown = identity(1);
+`);
+
+    expect(result.js).not.toContain("type Json");
+    expect(executeValue(result.js)).toBe(1);
+  });
+
+  test("rejects implicit conversion from unknown to concrete types", () => {
+    const result = compile(`
+const boundary: unknown = 1;
+const value: number = boundary;
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Expected 'number', got 'unknown'.",
+    );
+  });
+
+  test("rejects inspecting unknown values", () => {
+    const result = compile(`
+const boundary: unknown = { name: "Ada" };
+const value = boundary.name;
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Unknown property 'name' on type 'unknown'.",
+    );
+  });
+
+  test("supports opaque type declarations as nominal types", () => {
+    const result = expectCompileOk(`
+type Date = opaque;
+
+fn keep(date: Date): Date {
+  date
+}
+`);
+
+    expect(result.js).not.toContain("type Date");
+  });
+
+  test("rejects assigning between distinct opaque types", () => {
+    const result = compile(`
+type Date = opaque;
+type Handle = opaque;
+
+fn convert(date: Date): Handle {
+  date
+}
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Expected 'Handle', got 'Date'.",
+    );
+  });
+
+  test("rejects generic opaque types until their rules are defined", () => {
+    const result = compile("type Box<T> = opaque;");
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Opaque type 'Box' cannot be generic yet.",
+    );
   });
 
   test("supports exact object literals with named object types", () => {

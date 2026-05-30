@@ -40,6 +40,12 @@ export type TypeNode =
   | {
       readonly kind: "UnknownType";
       readonly nodeId: NodeId;
+      readonly recovery: boolean;
+      readonly span: Span;
+    }
+  | {
+      readonly kind: "OpaqueType";
+      readonly nodeId: NodeId;
       readonly span: Span;
     };
 

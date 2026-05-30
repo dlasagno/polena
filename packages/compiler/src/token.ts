@@ -32,6 +32,8 @@ export type TokenKind =
   | "StringType"
   | "BooleanType"
   | "VoidType"
+  | "UnknownType"
+  | "OpaqueType"
   | "LeftParen"
   | "RightParen"
   | "LeftBrace"

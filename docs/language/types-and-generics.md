@@ -354,6 +354,10 @@ Values of type `unknown` may be stored, passed as `unknown`, and returned as
 `unknown`. They cannot be inspected, called, used as booleans, accessed through
 fields, indexed, or implicitly converted to another type.
 
+Any value may be assigned to `unknown`. A value whose type is `unknown` may only
+flow to another `unknown` slot until explicit decoding or refinement produces a
+more specific type.
+
 Useful operations on `unknown` require explicit decoding or refinement
 functions that return `Option` or `Result`.
 
@@ -400,7 +404,8 @@ fn to_iso_string(date: Date): string {
 The following opaque-type rules are **TBD**:
 
 - equality,
-- generic opaque types,
 - whether opaque aliases are distinct or transparent,
 - visibility rules for public and private opaque types,
 - whether opaque values can be serialized or cloned.
+
+Generic opaque declarations are not supported yet.
