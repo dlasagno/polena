@@ -76,6 +76,21 @@ describe("semantic tokens", () => {
     expect(decoded).toContainEqual(token("greeting", "variable", []));
     expect(decoded).toContainEqual(token("users", "namespace", ["declaration"]));
   });
+
+  test("classifies compiler directives separately from functions", () => {
+    const source = [
+      "type Color = enum { Red, Green };",
+      "fn enumVariantNames(): []string { [] }",
+      "const directiveNames = @enumVariantNames(Color);",
+      "const functionNames = enumVariantNames();",
+    ].join("\n");
+
+    const decoded = decodeTokens(source, getSemanticTokens(analyze(source)));
+
+    expect(decoded).toContainEqual(token("enumVariantNames", "macro", []));
+    expect(decoded).toContainEqual(token("enumVariantNames", "function", ["declaration"]));
+    expect(decoded).toContainEqual(token("enumVariantNames", "function", []));
+  });
 });
 
 function decodeTokens(source: string, tokens: SemanticTokens): DecodedToken[] {

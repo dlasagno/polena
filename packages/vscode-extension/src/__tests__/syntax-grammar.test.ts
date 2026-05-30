@@ -5,6 +5,7 @@ type TextMatePattern = {
   readonly name?: string;
   readonly match?: string;
   readonly begin?: string;
+  readonly captures?: Record<string, { readonly name?: string }>;
   readonly patterns?: readonly TextMatePattern[];
 };
 
@@ -56,6 +57,8 @@ describe("Polena syntax grammar", () => {
     );
 
     expect(matches(directive, "@enumVariantNames")).toBe(true);
+    expect(matches(directive, "@target.js.option")).toBe(true);
+    expect(directive.captures?.["2"]?.name).toBe("entity.name.directive.polena");
     expect(matches(importPath, "@/users")).toBe(true);
     expect(matches(importPath, "@std/io")).toBe(true);
     expect(matches(importPath, "some_dep/foo")).toBe(true);

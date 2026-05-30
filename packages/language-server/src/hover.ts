@@ -19,6 +19,7 @@ type VariableDeclaration = Extract<TopLevelDeclaration, { readonly kind: "Variab
 type Block = FunctionDeclaration["body"];
 type Statement = Block["statements"][number];
 type Expression = VariableDeclaration["initializer"];
+type DirectiveExpression = Extract<Expression, { readonly kind: "DirectiveExpression" }>;
 type TypeNode = TypeDeclaration["value"];
 type Parameter = FunctionDeclaration["params"][number];
 type ObjectTypeField = Extract<TypeNode, { readonly kind: "ObjectType" }>["fields"][number];
@@ -157,6 +158,11 @@ function renderExpressionHover(
   nodeId: NodeId,
   context: HoverContext,
 ): string | undefined {
+  const node = findAstNode(analysis.program, nodeId);
+  if (node?.kind === "DirectiveExpression") {
+    return renderDirectiveHover(analysis, node);
+  }
+
   const reference = analysis.semantics.references.get(nodeId);
   const referenceHover =
     reference === undefined ? undefined : renderReference(reference, analysis, context);
@@ -170,6 +176,70 @@ function renderExpressionHover(
   }
 
   return renderCodeHover(formatType(type), undefined);
+}
+
+function renderDirectiveHover(
+  analysis: AnalyzeResult,
+  expression: DirectiveExpression,
+): string | undefined {
+  const resultType = analysis.semantics.expressionTypes.get(expression.nodeId);
+  const resultTypeText =
+    resultType === undefined || resultType.kind === "unknown" ? "unknown" : formatType(resultType);
+  const details = directiveHoverDetails(expression.name, resultTypeText);
+  if (details === undefined) {
+    return renderCodeHover(
+      `@${expression.name}(...): ${resultTypeText}`,
+      "Unknown compiler directive. Compiler directives are resolved in a separate namespace and are not ordinary functions.",
+    );
+  }
+
+  return renderCodeHover(details.signature, details.description);
+}
+
+function directiveHoverDetails(
+  name: string,
+  resultTypeText: string,
+): { readonly signature: string; readonly description: string } | undefined {
+  switch (name) {
+    case "enumVariantNames":
+      return {
+        signature: `@enumVariantNames(T): ${resultTypeText}`,
+        description:
+          "Compiler directive. Accepts one enum type operand and expands at compile time to an array of variant names. Directives are resolved in a separate namespace and are not ordinary functions.",
+      };
+    case "enumValues":
+      return {
+        signature: `@enumValues(T): ${resultTypeText}`,
+        description:
+          "Compiler directive. Accepts one fieldless enum type operand and expands at compile time to an array of enum values. Directives are resolved in a separate namespace and are not ordinary functions.",
+      };
+    case "objectFieldNames":
+      return {
+        signature: `@objectFieldNames(T): ${resultTypeText}`,
+        description:
+          "Compiler directive. Accepts one object type operand and expands at compile time to an array of field names. Directives are resolved in a separate namespace and are not ordinary functions.",
+      };
+    case "target.js":
+      return {
+        signature: `@target.js(template, ResultType, ...values): ${resultTypeText}`,
+        description:
+          "Compiler directive. Lowers a literal JavaScript template with checked runtime operands to the requested result type. This is a compile-time target escape, not a function call.",
+      };
+    case "target.js.option":
+      return {
+        signature: `@target.js.option(template, ValueType, ...values): ${resultTypeText}`,
+        description:
+          "Compiler directive. Lowers a literal JavaScript template and wraps the result as an Option. This is a compile-time target escape, not a function call.",
+      };
+    case "target.js.result":
+      return {
+        signature: `@target.js.result(template, OkType, ErrType, ...values): ${resultTypeText}`,
+        description:
+          "Compiler directive. Lowers a literal JavaScript template and wraps the result as a Result. This is a compile-time target escape, not a function call.",
+      };
+    default:
+      return undefined;
+  }
 }
 
 function renderReferenceHover(

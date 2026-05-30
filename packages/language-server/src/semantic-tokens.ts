@@ -22,6 +22,7 @@ type SemanticTokenType =
   | "variable"
   | "property"
   | "function"
+  | "macro"
   | "enumMember"
   | "keyword";
 
@@ -45,6 +46,7 @@ export const semanticTokenTypes: readonly SemanticTokenType[] = [
   "variable",
   "property",
   "function",
+  "macro",
   "enumMember",
   "keyword",
 ];
@@ -341,7 +343,7 @@ function collectExpressionTokens(
       }
       return;
     case "DirectiveExpression":
-      tokens.push({ span: expression.nameSpan, type: "function" });
+      tokens.push({ span: expression.nameSpan, type: "macro" });
       for (const operand of expression.operands) {
         if (operand.kind === "ExpressionOperand") {
           collectExpressionTokens(operand.expression, analysis, tokens);

@@ -149,6 +149,24 @@ describe("LSP hover", () => {
     );
   });
 
+  test("returns directive-specific hovers separate from function hovers", () => {
+    const source = [
+      "type Color = enum { Red, Green };",
+      "fn enumVariantNames(): []string { [] }",
+      "const directiveNames = @enumVariantNames(Color);",
+      "const functionNames = enumVariantNames();",
+    ].join("\n");
+    const document = TextDocument.create("file:///example.plna", "polena", 1, source);
+    const analysis = analyze(source);
+
+    expect(hoverText(document, analysis, source.indexOf("enumVariantNames(Color)"))).toBe(
+      "```polena\n@enumVariantNames(T): []string\n```\n\nCompiler directive. Accepts one enum type operand and expands at compile time to an array of variant names. Directives are resolved in a separate namespace and are not ordinary functions.",
+    );
+    expect(hoverText(document, analysis, source.lastIndexOf("enumVariantNames()"))).toBe(
+      "```polena\nfn enumVariantNames(): []string\n```",
+    );
+  });
+
   test("uses package context for imported member hovers", () => {
     const indexSource = [
       "import @/users.{type Color, type User, greeting} as users;",

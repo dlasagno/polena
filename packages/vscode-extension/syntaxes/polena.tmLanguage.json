@@ -201,13 +201,13 @@
       "patterns": [
         {
           "name": "meta.directive.polena",
-          "match": "(@)([A-Za-z_$][A-Za-z0-9_$]*)\\b",
+          "match": "(@)([A-Za-z_$][A-Za-z0-9_$]*(?:\\.[A-Za-z_$][A-Za-z0-9_$]*)*)\\b",
           "captures": {
             "1": {
               "name": "punctuation.definition.directive.polena"
             },
             "2": {
-              "name": "entity.name.function.directive.polena"
+              "name": "entity.name.directive.polena"
             }
           }
         }
