@@ -1887,6 +1887,8 @@ function assignmentOperatorFromToken(kind: TokenKind): AssignmentOperator | unde
 
 function binaryOperatorFromToken(kind: TokenKind): BinaryOperator | undefined {
   switch (kind) {
+    case "PipeGreater":
+      return "|>";
     case "Plus":
       return "+";
     case "PlusPlus":
@@ -1922,26 +1924,28 @@ function binaryOperatorFromToken(kind: TokenKind): BinaryOperator | undefined {
 
 function binaryPrecedence(operator: BinaryOperator): number {
   switch (operator) {
-    case "or":
+    case "|>":
       return 1;
-    case "and":
+    case "or":
       return 2;
+    case "and":
+      return 3;
     case "==":
     case "!=":
-      return 3;
+      return 4;
     case ">":
     case ">=":
     case "<":
     case "<=":
-      return 4;
+      return 5;
     case "+":
     case "++":
     case "-":
-      return 5;
+      return 6;
     case "*":
     case "/":
     case "%":
-      return 6;
+      return 7;
   }
 }
 

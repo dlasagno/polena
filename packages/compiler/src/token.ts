@@ -58,6 +58,7 @@ export type TokenKind =
   | "SlashEqual"
   | "Percent"
   | "PercentEqual"
+  | "PipeGreater"
   | "Bang"
   | "EqualEqual"
   | "BangEqual"

@@ -453,6 +453,9 @@ class JavaScriptEmitter {
       case "UnaryExpression":
         return `(${expression.operator}${this.emitExpression(expression.operand, indent, loopContext)})`;
       case "BinaryExpression":
+        if (expression.operator === "|>") {
+          return this.emitPipeExpression(expression, indent, loopContext);
+        }
         if (expression.operator === "++") {
           return `(${this.emitExpression(expression.left, indent, loopContext)}.concat(${this.emitExpression(expression.right, indent, loopContext)}))`;
         }
@@ -523,6 +526,23 @@ class JavaScriptEmitter {
     }
 
     return this.emitExpression(callee, indent, loopContext);
+  }
+
+  private emitPipeExpression(
+    expression: Extract<Expression, { readonly kind: "BinaryExpression" }>,
+    indent: string,
+    loopContext?: LoopEmitContext,
+  ): string {
+    const enumConstructor = this.resolveEnumConstructor(expression.right);
+    if (enumConstructor !== undefined && enumConstructor.payloadArity > 0) {
+      return `({ tag: ${JSON.stringify(`${enumConstructor.enumName}.${enumConstructor.variantName}`)}, values: [${this.emitExpression(expression.left, indent, loopContext)}] })`;
+    }
+
+    return `${this.emitCallCallee(expression.right, indent, loopContext)}(${this.emitExpression(
+      expression.left,
+      indent,
+      loopContext,
+    )})`;
   }
 
   private emitEnumConstructorCall(
@@ -858,6 +878,8 @@ class JavaScriptEmitter {
 
 function emitBinaryOperator(operator: BinaryOperator): string {
   switch (operator) {
+    case "|>":
+      throw new Error("Pipe expressions are emitted separately.");
     case "and":
       return "&&";
     case "or":

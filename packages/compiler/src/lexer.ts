@@ -121,6 +121,12 @@ class Lexer {
       case "%":
         this.addToken(this.match("=") ? "PercentEqual" : "Percent", start);
         return;
+      case "|":
+        if (this.match(">")) {
+          this.addToken("PipeGreater", start);
+          return;
+        }
+        break;
       case "!":
         this.addToken(this.match("=") ? "BangEqual" : "Bang", start);
         return;

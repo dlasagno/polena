@@ -1799,6 +1799,10 @@ class Checker {
     scope: Scope,
     options: InferOptions,
   ): Type {
+    if (operator === "|>") {
+      return this.inferPipeExpression(left, right, span, scope, options);
+    }
+
     const leftType = this.inferExpression(left, scope, options);
     const rightType = this.inferExpression(right, scope, options);
 
@@ -1930,6 +1934,26 @@ class Checker {
     }
 
     return primitiveType("boolean");
+  }
+
+  private inferPipeExpression(
+    left: Expression,
+    right: Expression,
+    span: Span,
+    scope: Scope,
+    options: InferOptions,
+  ): Type {
+    return this.inferCallExpression(
+      {
+        kind: "CallExpression",
+        nodeId: left.nodeId,
+        callee: right,
+        args: [left],
+        span,
+      },
+      scope,
+      options,
+    );
   }
 
   private inferConcatenationExpression(leftType: Type, rightType: Type, span: Span): Type {

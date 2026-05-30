@@ -295,7 +295,39 @@ Use explicit optional/defaulting operators for optional values.
 
 ---
 
-### 15.4 Assignment Operators
+### 15.4 Pipe Operator
+
+The pipe operator applies the value on the left to the callable expression on
+the right as a single argument.
+
+```tsx
+const label = 21 |> double |> stringify;
+```
+
+This is equivalent to:
+
+```tsx
+const label = stringify(double(21));
+```
+
+The right-hand expression must have a function type with exactly one parameter.
+The left-hand value must be assignable to that parameter type.
+
+```tsx
+fn double(value: number): number {
+	value * 2
+}
+
+const ok = 21 |> double;
+const invalid = "21" |> double; // Invalid.
+```
+
+The pipe operator is left-associative and has lower precedence than logical
+`or`.
+
+---
+
+### 15.5 Assignment Operators
 
 Basic assignment:
 
@@ -320,7 +352,7 @@ Additional compound operators are **TBD**.
 
 ---
 
-### 15.5 String and Array Concatenation
+### 15.6 String and Array Concatenation
 
 The `++` operator concatenates strings and arrays.
 

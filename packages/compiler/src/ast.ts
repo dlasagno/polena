@@ -363,6 +363,7 @@ export type UnaryExpression = {
 };
 
 export type BinaryOperator =
+  | "|>"
   | "+"
   | "++"
   | "-"

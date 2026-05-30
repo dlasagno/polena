@@ -73,6 +73,7 @@ Status values:
 | Logical `and` / `or` | Implemented | Operands must be `boolean`. |
 | String concatenation with `++` | Implemented | Both operands must be `string`; emitted JavaScript uses `.concat`. |
 | Array concatenation with `++` | Implemented | Both operands must be arrays with the same element type; emitted JavaScript uses `.concat`. |
+| Pipe operator `|>` | Implemented | Applies the left value as the single argument to the callable right-hand expression. |
 
 ---
 

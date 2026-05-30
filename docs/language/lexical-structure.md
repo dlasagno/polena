@@ -113,3 +113,19 @@ while
 ```
 
 Additional reserved words may be added as the language evolves.
+
+---
+
+## 10.1 Operators and Punctuation
+
+The lexer recognizes the following multi-character operator tokens:
+
+```tsx
+=> == != <= >= ++ += -= *= /= %= |>
+```
+
+Single-character operator and punctuation tokens include:
+
+```tsx
+( ) { } [ ] @ . , : ; = < > + - * / % !
+```

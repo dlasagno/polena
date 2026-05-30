@@ -149,7 +149,7 @@ describe("lexer", () => {
   });
 
   test("tokenizes compound assignment operators", () => {
-    const result = lex("value += 1; value %= 2; left ++ right;");
+    const result = lex("value += 1; value %= 2; left ++ right; value |> next;");
 
     expect(result.diagnostics).toHaveLength(0);
     expect(result.tokens.map((token) => token.kind)).toEqual([
@@ -163,6 +163,10 @@ describe("lexer", () => {
       "Semicolon",
       "Identifier",
       "PlusPlus",
+      "Identifier",
+      "Semicolon",
+      "Identifier",
+      "PipeGreater",
       "Identifier",
       "Semicolon",
       "Eof",
@@ -358,6 +362,29 @@ describe("parser", () => {
           operator: "+",
           left: { kind: "BinaryExpression", operator: "++" },
         },
+      },
+    });
+  });
+
+  test("parses pipe expressions with low precedence", () => {
+    const parseResult = parse(lex("const value = 1 + 2 |> double |> stringify;").tokens);
+
+    expect(parseResult.diagnostics).toHaveLength(0);
+    expect(parseResult.program.declarations[0]).toMatchObject({
+      kind: "VariableDeclaration",
+      initializer: {
+        kind: "BinaryExpression",
+        operator: "|>",
+        left: {
+          kind: "BinaryExpression",
+          operator: "|>",
+          left: {
+            kind: "BinaryExpression",
+            operator: "+",
+          },
+          right: { kind: "NameExpression", name: "double" },
+        },
+        right: { kind: "NameExpression", name: "stringify" },
       },
     });
   });
@@ -793,6 +820,26 @@ const value = match message {
 });
 
 describe("compiler", () => {
+  test("compiles pipe expressions as unary function calls", () => {
+    const result = compile(`
+fn double(value: number): number {
+  value * 2
+}
+
+fn stringify(value: number): string {
+  "value"
+}
+
+const label = 21 |> double |> stringify;
+`);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    expect(result.js).toContain("const label = stringify(double(21));");
+  });
+
   test("compiles current-package modules to ESM files", () => {
     const result = compilePackage({
       manifest: { name: "app", version: "0.1.0", target: "executable" },
