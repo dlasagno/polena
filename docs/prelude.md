@@ -8,7 +8,8 @@ imported explicitly when used from a package.
 
 The first standard-library slice lives under `packages/stdlib` and is exposed
 to Polena code as `@std/`. It currently includes `@std/core`, `@std/io`,
-`@std/option`, `@std/result`, `@std/math`, `@std/string`, and `@std/array`.
+`@std/option`, `@std/result`, `@std/math`, `@std/string`, `@std/array`,
+`@std/collections/map`, and `@std/collections/set`.
 
 ---
 
@@ -68,6 +69,11 @@ const trimmed = strings.trim(" Ada ");
 ```
 
 - `@std/array` exports `len`, `is_empty`, `get`, and `push`.
+- `@std/collections/map` exports an opaque `Map<K, V>` type plus `new`, `len`, `get`,
+  `insert`, `contains_key`, and `remove`. These are backed by the JavaScript
+  `Map` object.
+- `@std/collections/set` exports an opaque `Set<T>` type plus `new`, `len`, `add`,
+  `contains`, and `remove`. These are backed by the JavaScript `Set` object.
 
 ---
 

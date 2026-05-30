@@ -1020,6 +1020,138 @@ const value = 1 |> pair(_, _);
     );
   });
 
+  test("compiles standard-library map and set modules", () => {
+    const result = compilePackage({
+      manifest: { name: "app", version: "0.1.0", target: "executable" },
+      rootDir: "app",
+      sourceDir: "app/src",
+      files: [
+        {
+          path: "app/src/index.plna",
+          source: [
+            "import @std/collections/map.{type Map};",
+            "import @std/collections/set.{type Set};",
+            "import @std/core.{type Option};",
+            "import @std/io.{println};",
+            "",
+            "export fn main(): void {",
+            "  let counts: Map<string, number> = map.new();",
+            '  map.insert(counts, "a", 1);',
+            '  const value: Option<number> = map.get(counts, "a");',
+            "  let tags: Set<string> = set.new();",
+            '  set.add(tags, "polena");',
+            '  if set.contains(tags, "polena") {',
+            "    match value {",
+            '      .Some(n) => println("ok"),',
+            '      .None => println("missing"),',
+            "    }",
+            "  }",
+            "}",
+          ].join("\n"),
+        },
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    expect(result.files.map((file) => file.path).sort()).toEqual([
+      "__polena_std/collections/map.js",
+      "__polena_std/collections/set.js",
+      "__polena_std/core.js",
+      "__polena_std/io.js",
+      "index.js",
+    ]);
+    expect(
+      result.files.find((file) => file.path === "__polena_std/collections/map.js")?.contents,
+    ).toContain("new Map()");
+    expect(
+      result.files.find((file) => file.path === "__polena_std/collections/set.js")?.contents,
+    ).toContain("new Set()");
+  });
+
+  test("supports generic type parameters in JavaScript target escape directives", () => {
+    const result = expectCompileOk(`
+${coreTypes}
+
+type Map = opaque;
+
+fn get_value(map: Map, key: string): Option<number> {
+  @target.js.option("$0.get($1)", number, map, key)
+}
+
+const result = get_value(@target.js("new Map()", Map), "count");
+const value = match result {
+  .Some(n) => n,
+  .None => 0,
+};
+`);
+
+    expect(executeValue(result.js)).toBe(0);
+    expect(result.js).toContain('"Option.None"');
+  });
+
+  test("rejects mismatched map value types inferred from the map itself", () => {
+    const result = compilePackage({
+      manifest: { name: "app", version: "0.1.0", target: "executable" },
+      rootDir: "app",
+      sourceDir: "app/src",
+      files: [
+        {
+          path: "app/src/index.plna",
+          source: [
+            "import @std/collections/map.{type Map};",
+            "import @std/core.{type Option};",
+            "",
+            "export fn main(): void {",
+            "  let counts: Map<string, number> = map.new();",
+            '  map.insert(counts, "a", 1);',
+            '  const value: Option<string> = map.get(counts, "a");',
+            "}",
+          ].join("\n"),
+        },
+      ],
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Expected 'Map<string, string>', got 'Map<string, number>'.",
+    );
+  });
+
+  test("rejects map key types that do not match the map key type", () => {
+    const result = compilePackage({
+      manifest: { name: "app", version: "0.1.0", target: "executable" },
+      rootDir: "app",
+      sourceDir: "app/src",
+      files: [
+        {
+          path: "app/src/index.plna",
+          source: [
+            "import @std/collections/map.{type Map};",
+            "",
+            "export fn main(): void {",
+            "  let counts: Map<string, number> = map.new();",
+            "  map.insert(counts, 1, 1);",
+            "}",
+          ].join("\n"),
+        },
+      ],
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Expected 'string', got 'number'.",
+    );
+  });
+
   test("supports explicit core standard-library type imports", () => {
     const result = compilePackage({
       manifest: { name: "app", version: "0.1.0", target: "executable" },
@@ -1511,12 +1643,30 @@ fn convert(date: Date): Handle {
     );
   });
 
-  test("rejects generic opaque types until their rules are defined", () => {
-    const result = compile("type Box<T> = opaque;");
+  test("supports generic opaque type declarations", () => {
+    const result = expectCompileOk(`
+type Box<T> = opaque;
+
+fn keep<T>(box: Box<T>): Box<T> {
+  box
+}
+`);
+
+    expect(result.js).not.toContain("type Box");
+  });
+
+  test("rejects assigning between distinct generic opaque instantiations", () => {
+    const result = compile(`
+type Box<T> = opaque;
+
+fn convert(box: Box<number>): Box<string> {
+  box
+}
+`);
 
     expect(result.ok).toBe(false);
     expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
-      "Opaque type 'Box' cannot be generic yet.",
+      "Expected 'Box<string>', got 'Box<number>'.",
     );
   });
 

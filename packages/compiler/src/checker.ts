@@ -204,6 +204,7 @@ class Checker {
   private readonly resolvedTypeSymbols = new Map<string, Type>();
   private readonly resolvingTypeSymbols = new Set<string>();
   private readonly resolvingGenericTypeSymbols = new Set<string>();
+  private activeTypeEnvironment: TypeEnvironment = new Map();
 
   public constructor(private readonly options: CheckOptions = {}) {}
 
@@ -477,18 +478,19 @@ class Checker {
 
   private resolveTypeDeclaration(declaration: TypeDeclaration): Type {
     if (declaration.value.kind === "OpaqueType") {
-      if (declaration.typeParameters.length > 0) {
-        this.diagnostics.push(
-          error(`Opaque type '${declaration.name}' cannot be generic yet.`, declaration.nameSpan, {
-            code: DiagnosticCode.TypeMismatch,
-            label: "generic opaque types are not defined yet",
-          }),
-        );
-        return unknownType();
+      if (declaration.typeParameters.length === 0) {
+        const type = opaqueType(declaration.name);
+        this.resolvedTypeSymbols.set(declaration.name, type);
+        return type;
       }
-      const type = opaqueType(declaration.name);
-      this.resolvedTypeSymbols.set(declaration.name, type);
-      return type;
+
+      const environment = this.typeEnvironmentFromParameters(
+        declaration.typeParameters.map((param) => param.name),
+      );
+      const typeArguments = declaration.typeParameters.map(
+        (param) => environment.get(param.name) ?? unknownType(),
+      );
+      return this.typeFromNode(declaration.value, declaration.name, environment, typeArguments);
     }
 
     if (declaration.typeParameters.length === 0) {
@@ -578,6 +580,9 @@ class Checker {
     if (symbol.typeParameters.length > 0) {
       const key = `${name}<${typeArguments.map(formatType).join(",")}>`;
       if (this.resolvingGenericTypeSymbols.has(key)) {
+        if (symbol.value.kind === "OpaqueType") {
+          return opaqueType(name, symbol.importedModuleName, typeArguments);
+        }
         return genericEnumType(name, typeArguments, []);
       }
 
@@ -592,6 +597,9 @@ class Checker {
       this.resolvingGenericTypeSymbols.add(key);
       const type = this.typeFromNode(symbol.value, name, environment, typeArguments);
       this.resolvingGenericTypeSymbols.delete(key);
+      if (type.kind === "opaque") {
+        return opaqueType(type.name, symbol.importedModuleName, type.typeArguments);
+      }
       return type;
     }
 
@@ -666,7 +674,7 @@ class Checker {
         if (declaredName === undefined) {
           return unknownType();
         }
-        return opaqueType(declaredName);
+        return opaqueType(declaredName, undefined, declaredTypeArguments);
     }
   }
 
@@ -778,6 +786,8 @@ class Checker {
     const environment = this.typeEnvironmentFromParameters(
       declaration.typeParameters.map((param) => param.name),
     );
+    const previousTypeEnvironment = this.activeTypeEnvironment;
+    this.activeTypeEnvironment = environment;
     const returnType = this.typeFromNode(declaration.returnType, undefined, environment);
 
     for (const param of declaration.params) {
@@ -785,6 +795,7 @@ class Checker {
     }
 
     if (declaration.body.isMissing === true) {
+      this.activeTypeEnvironment = previousTypeEnvironment;
       return;
     }
 
@@ -797,6 +808,7 @@ class Checker {
           whileAsValue: false,
           returnType,
         });
+        this.activeTypeEnvironment = previousTypeEnvironment;
         return;
       }
 
@@ -807,6 +819,7 @@ class Checker {
         expectedType: returnType,
       });
       this.expectType(finalType, returnType, declaration.body.finalExpression.span);
+      this.activeTypeEnvironment = previousTypeEnvironment;
       return;
     }
 
@@ -822,6 +835,8 @@ class Checker {
         ),
       );
     }
+
+    this.activeTypeEnvironment = previousTypeEnvironment;
   }
 
   private checkBlock(block: Block, scope: Scope, returnType: Type): ControlFlowOutcome {
@@ -1832,7 +1847,7 @@ class Checker {
       return undefined;
     }
 
-    return this.typeFromNode(operand.type);
+    return this.typeFromNode(operand.type, undefined, this.activeTypeEnvironment);
   }
 
   private validateTargetJsTemplate(
@@ -3400,6 +3415,18 @@ class Checker {
           this.inferTypeArgumentsFromType(patternArg, actualArg, inferred);
         }
       }
+      return;
+    }
+
+    if (pattern.kind === "opaque" && actual.kind === "opaque" && pattern.name === actual.name) {
+      const count = Math.min(pattern.typeArguments.length, actual.typeArguments.length);
+      for (let index = 0; index < count; index += 1) {
+        const patternArg = pattern.typeArguments[index];
+        const actualArg = actual.typeArguments[index];
+        if (patternArg !== undefined && actualArg !== undefined) {
+          this.inferTypeArgumentsFromType(patternArg, actualArg, inferred);
+        }
+      }
     }
   }
 
@@ -3726,7 +3753,11 @@ function typeWithImportedModule(type: Type, moduleName: string): Type {
         type.typeParameters,
       );
     case "opaque":
-      return opaqueType(type.name, type.moduleName ?? moduleName);
+      return opaqueType(
+        type.name,
+        type.moduleName ?? moduleName,
+        type.typeArguments.map((argument) => typeWithImportedModule(argument, moduleName)),
+      );
     case "primitive":
     case "typeParameter":
     case "unknown":
@@ -3804,8 +3835,9 @@ function typeContainsTypeParameter(type: Type): boolean {
       return (
         type.params.some(typeContainsTypeParameter) || typeContainsTypeParameter(type.returnType)
       );
-    case "primitive":
     case "opaque":
+      return type.typeArguments.some(typeContainsTypeParameter);
+    case "primitive":
     case "unknown":
       return false;
   }
@@ -3839,8 +3871,13 @@ function substituteType(type: Type, substitution: ReadonlyMap<string, Type>): Ty
         substituteType(type.returnType, substitution),
         type.typeParameters,
       );
-    case "primitive":
     case "opaque":
+      return opaqueType(
+        type.name,
+        type.moduleName,
+        type.typeArguments.map((argument) => substituteType(argument, substitution)),
+      );
+    case "primitive":
     case "unknown":
       return type;
   }

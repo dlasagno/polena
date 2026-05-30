@@ -23,6 +23,7 @@ export type Type =
       readonly kind: "opaque";
       readonly name: string;
       readonly moduleName?: string;
+      readonly typeArguments: readonly Type[];
     }
   | { readonly kind: "unknown"; readonly recovery: boolean };
 
@@ -80,8 +81,17 @@ export function functionType(
   return { kind: "function", typeParameters, params, returnType };
 }
 
-export function opaqueType(name: string, moduleName?: string): Type {
-  return { kind: "opaque", name, ...(moduleName === undefined ? {} : { moduleName }) };
+export function opaqueType(
+  name: string,
+  moduleName?: string,
+  typeArguments: readonly Type[] = [],
+): Type {
+  return {
+    kind: "opaque",
+    name,
+    typeArguments,
+    ...(moduleName === undefined ? {} : { moduleName }),
+  };
 }
 
 export function unknownType(recovery = true): Type {
@@ -130,7 +140,14 @@ export function sameType(left: Type, right: Type): boolean {
       );
     case "opaque":
       return (
-        right.kind === "opaque" && left.name === right.name && left.moduleName === right.moduleName
+        right.kind === "opaque" &&
+        left.name === right.name &&
+        left.moduleName === right.moduleName &&
+        left.typeArguments.length === right.typeArguments.length &&
+        left.typeArguments.every((arg, index) => {
+          const rightArg = right.typeArguments[index];
+          return rightArg !== undefined && sameType(arg, rightArg);
+        })
       );
     case "unknown":
       return true;
@@ -169,7 +186,10 @@ export function formatType(type: Type): string {
     case "function":
       return "function";
     case "opaque":
-      return type.name;
+      if (type.typeArguments.length === 0) {
+        return type.name;
+      }
+      return `${type.name}<${type.typeArguments.map(formatType).join(", ")}>`;
     case "unknown":
       return "unknown";
   }

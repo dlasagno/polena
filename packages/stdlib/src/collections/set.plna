@@ -1,0 +1,35 @@
+//! JavaScript-backed set helpers.
+//!
+//! Import with `import @std/collections/set;` or name specific items.
+//!
+//! These wrappers use the JavaScript `Set` object. Value equality follows
+//! JavaScript SameValueZero semantics, which may differ from future Polena
+//! equality rules.
+
+/// An opaque set backed by the JavaScript `Set` object.
+export type Set<T> = opaque;
+
+/// Returns a new empty set.
+export fn new<T>(): Set<T> {
+  @target.js("new Set()", Set<T>)
+}
+
+/// Returns the number of values in `set`.
+export fn len<T>(set: Set<T>): number {
+  @target.js("$0.size", number, set)
+}
+
+/// Adds `value` to `set`.
+export fn add<T>(set: Set<T>, value: T): void {
+  @target.js("$0.add($1)", void, set, value)
+}
+
+/// Returns `true` when `set` contains `value`.
+export fn contains<T>(set: Set<T>, value: T): boolean {
+  @target.js("$0.has($1)", boolean, set, value)
+}
+
+/// Removes `value` from `set` when present and returns whether it existed.
+export fn remove<T>(set: Set<T>, value: T): boolean {
+  @target.js("$0.delete($1)", boolean, set, value)
+}

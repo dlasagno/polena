@@ -114,6 +114,15 @@ describe("semantic types", () => {
     expect(isEqualityComparableType(withPayload)).toBe(false);
   });
 
+  test("treats generic opaque instantiations as distinct by type arguments", () => {
+    const numberBox = opaqueType("Box", undefined, [primitiveType("number")]);
+    const sameNumberBox = opaqueType("Box", undefined, [primitiveType("number")]);
+    const stringBox = opaqueType("Box", undefined, [primitiveType("string")]);
+
+    expect(sameType(numberBox, sameNumberBox)).toBe(true);
+    expect(sameType(numberBox, stringBox)).toBe(false);
+  });
+
   test("formats user-facing type names", () => {
     expect(formatType(primitiveType("number"))).toBe("number");
     expect(formatType(primitiveType("bigint"))).toBe("bigint");
@@ -130,6 +139,7 @@ describe("semantic types", () => {
       "Option<number>",
     );
     expect(formatType(opaqueType("Date"))).toBe("Date");
+    expect(formatType(opaqueType("Box", undefined, [primitiveType("number")]))).toBe("Box<number>");
     expect(formatType(unknownType())).toBe("unknown");
   });
 

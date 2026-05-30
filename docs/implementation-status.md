@@ -147,7 +147,7 @@ Status values:
 | Separate type/value namespaces | Implemented | Type aliases and value bindings may use the same name. |
 | Generics | Partially implemented | Generic type declarations and instantiations are supported, including substitution in object fields, enum payloads, aliases over generic instantiations, and inferred generic function calls. Explicit function call type arguments and constraints are not implemented. |
 | `unknown` source type | Implemented | Values may flow into `unknown`; values of type `unknown` cannot be inspected or implicitly converted to concrete types. |
-| Opaque type declarations | Partially implemented | Supports non-generic nominal declarations with `type Name = opaque;`; generic opaque types and equality rules are not implemented. |
+| Opaque type declarations | Partially implemented | Supports non-generic and generic nominal declarations with `type Name = opaque;` and `type Box<T> = opaque;`; generic opaque instantiations participate in type inference and equality. Visibility and cross-module opaque identity rules are still deferred. |
 
 ---
 

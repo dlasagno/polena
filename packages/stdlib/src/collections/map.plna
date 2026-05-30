@@ -1,0 +1,44 @@
+//! JavaScript-backed map helpers.
+//!
+//! Import with `import @std/collections/map;` or name specific items. The
+//! `Option` type must be in scope where `get` is used, for example via
+//! `import @std/core.{type Option};`.
+//!
+//! These wrappers use the JavaScript `Map` object. Key equality follows
+//! JavaScript SameValueZero semantics, which may differ from future Polena
+//! equality rules.
+
+import @std/core.{type Option};
+
+/// An opaque map backed by the JavaScript `Map` object.
+export type Map<K, V> = opaque;
+
+/// Returns a new empty map.
+export fn new<K, V>(): Map<K, V> {
+  @target.js("new Map()", Map<K, V>)
+}
+
+/// Returns the number of key-value pairs in `map`.
+export fn len<K, V>(map: Map<K, V>): number {
+  @target.js("$0.size", number, map)
+}
+
+/// Returns `.Some(value)` when `key` is present, otherwise `.None`.
+export fn get<K, V>(map: Map<K, V>, key: K): Option<V> {
+  @target.js.option("$0.get($1)", V, map, key)
+}
+
+/// Inserts or replaces the value for `key`.
+export fn insert<K, V>(map: Map<K, V>, key: K, value: V): void {
+  @target.js("$0.set($1, $2)", void, map, key, value)
+}
+
+/// Returns `true` when `map` contains `key`.
+export fn contains_key<K, V>(map: Map<K, V>, key: K): boolean {
+  @target.js("$0.has($1)", boolean, map, key)
+}
+
+/// Removes `key` from `map` when present and returns whether it existed.
+export fn remove<K, V>(map: Map<K, V>, key: K): boolean {
+  @target.js("$0.delete($1)", boolean, map, key)
+}

@@ -1,4 +1,6 @@
 import arraySource from "./array.plna" with { type: "text" };
+import mapSource from "./collections/map.plna" with { type: "text" };
+import setSource from "./collections/set.plna" with { type: "text" };
 import coreSource from "./core.plna" with { type: "text" };
 import ioSource from "./io.plna" with { type: "text" };
 import mathSource from "./math.plna" with { type: "text" };
@@ -19,4 +21,6 @@ export const stdlibSources: readonly StdlibSourceFile[] = [
   { path: "<std>/math.plna", source: mathSource },
   { path: "<std>/string.plna", source: stringSource },
   { path: "<std>/array.plna", source: arraySource },
+  { path: "<std>/collections/map.plna", source: mapSource },
+  { path: "<std>/collections/set.plna", source: setSource },
 ];
