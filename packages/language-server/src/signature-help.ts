@@ -261,6 +261,12 @@ function callInExpression(
       return findFirst(expression.elements, (element) => callInExpression(element, offset));
     case "ObjectLiteral":
       return findFirst(expression.fields, (field) => callInExpression(field.value, offset));
+    case "DirectiveExpression":
+      return findFirst(expression.operands, (operand) =>
+        operand.kind === "ExpressionOperand"
+          ? callInExpression(operand.expression, offset)
+          : undefined,
+      );
     case "UnaryExpression":
       return callInExpression(expression.operand, offset);
     case "BinaryExpression":

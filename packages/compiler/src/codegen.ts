@@ -442,6 +442,8 @@ class JavaScriptEmitter {
         return `{ ${expression.fields
           .map((field) => `${field.name}: ${this.emitExpression(field.value, indent, loopContext)}`)
           .join(", ")} }`;
+      case "DirectiveExpression":
+        return this.emitDirectiveExpression(expression);
       case "EnumVariantExpression":
         return JSON.stringify(
           `${expression.enumName ?? expression.resolvedEnumName ?? ""}.${expression.variantName}`,
@@ -492,6 +494,22 @@ class JavaScriptEmitter {
           return JSON.stringify(`${expression.target.name}.${expression.name}`);
         }
         return `${this.emitExpression(expression.target, indent, loopContext)}.${expression.name}`;
+    }
+  }
+
+  private emitDirectiveExpression(
+    expression: Extract<Expression, { readonly kind: "DirectiveExpression" }>,
+  ): string {
+    const expansion = expression.expansion;
+    switch (expansion?.kind) {
+      case "StringArray":
+        return `[${expansion.values.map((value) => JSON.stringify(value)).join(", ")}]`;
+      case "EnumValueArray":
+        return `[${expansion.variantNames
+          .map((variantName) => JSON.stringify(`${expansion.enumName}.${variantName}`))
+          .join(", ")}]`;
+      default:
+        throw new Error(`Cannot emit unresolved compiler directive '@${expression.name}'.`);
     }
   }
 

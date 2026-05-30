@@ -171,9 +171,9 @@ Status values:
 | Feature | Status | Notes |
 |---|---|---|
 | `comptime` | Not implemented | Spec direction only. |
-| Compiler directive syntax `@directive(...)` | Not implemented | Dedicated directive definitions exist in docs only. |
-| Enum introspection directives | Not implemented | Depends on directives and enums. |
-| Object introspection directives | Not implemented | Depends on directives and object types. |
+| Compiler directive syntax `@directive(...)` | Partially implemented | Expression-position compiler directives parse, check in a directive namespace, and lower during code generation. Declaration, statement, pattern, and type-position directives are not implemented. |
+| Enum introspection directives | Partially implemented | Supports `@enumVariantNames(T)` and fieldless `@enumValues(T)`. Rich enum metadata directives are not implemented. |
+| Object introspection directives | Partially implemented | Supports `@objectFieldNames(T)`. Rich object metadata directives are not implemented. |
 | Target escape directives | Not implemented | Drafted in `docs/target-escapes.md`; depends on directives, explicit result type operands, `unknown`, and opaque types. |
 | User-defined directives/macros | Not implemented | Deferred in the spec. |
 

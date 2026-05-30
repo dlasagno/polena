@@ -2599,6 +2599,68 @@ const value = match message {
     expect(result.js).toContain(".tag ??");
   });
 
+  test("supports enum and object introspection directives", () => {
+    const result = expectCompileOk(`
+type Color = enum {
+  Red,
+  Green,
+  Blue,
+};
+
+type User = {
+  id: string,
+  name: string,
+  active: boolean,
+};
+
+const names = @enumVariantNames(Color);
+const values = @enumValues(Color);
+const fields = @objectFieldNames(User);
+const value = names[1] ++ ":" ++ fields[2];
+`);
+
+    expect(executeValue(result.js)).toBe("Green:active");
+    expect(result.js).toContain('["Red", "Green", "Blue"]');
+    expect(result.js).toContain('["Color.Red", "Color.Green", "Color.Blue"]');
+    expect(result.js).toContain('["id", "name", "active"]');
+  });
+
+  test("rejects invalid compiler directive use without cascading name diagnostics", () => {
+    const unknown = compile("const value = @missing(Color);");
+
+    expect(unknown.ok).toBe(false);
+    expect(unknown.diagnostics.map((diagnostic) => diagnostic.message)).toEqual([
+      "Unknown compiler directive '@missing'.",
+    ]);
+
+    const wrongKind = compile(`
+type User = {
+  id: string,
+};
+
+const value = @enumVariantNames(User);
+`);
+
+    expect(wrongKind.ok).toBe(false);
+    expect(wrongKind.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Directive '@enumVariantNames' requires an enum type operand.",
+    );
+
+    const payloadEnum = compile(`
+type Message = enum {
+  Move(number, number),
+  Quit,
+};
+
+const value = @enumValues(Message);
+`);
+
+    expect(payloadEnum.ok).toBe(false);
+    expect(payloadEnum.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Directive '@enumValues' requires a fieldless enum type; 'Message.Move' has associated data.",
+    );
+  });
+
   test("supports generic object aliases and aliases over generic instantiations", () => {
     const result = expectCompileOk(`
 type Pair<A, B> = { first: A, second: B };

@@ -539,6 +539,12 @@ function spanForExpression(expression: Expression, nodeId: NodeId): Span | undef
       return findFirst(expression.elements, (element) => spanForExpression(element, nodeId));
     case "ObjectLiteral":
       return findFirst(expression.fields, (field) => spanForObjectLiteralField(field, nodeId));
+    case "DirectiveExpression":
+      return findFirst(expression.operands, (operand) =>
+        operand.kind === "ExpressionOperand"
+          ? spanForExpression(operand.expression, nodeId)
+          : spanForTypeNode(operand.type, nodeId),
+      );
     case "UnaryExpression":
       return spanForExpression(expression.operand, nodeId);
     case "BinaryExpression":
@@ -605,6 +611,7 @@ function spanForDirectExpression(expression: Expression): Span {
     case "BooleanLiteral":
     case "ArrayLiteral":
     case "ObjectLiteral":
+    case "DirectiveExpression":
     case "UnaryExpression":
     case "BinaryExpression":
     case "IfExpression":

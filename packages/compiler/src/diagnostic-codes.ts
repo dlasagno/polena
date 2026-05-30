@@ -51,4 +51,6 @@ export const DiagnosticCode = {
   UnreachableMatchArm: "PLN220",
   UnsupportedEnumPayload: "PLN221",
   UnsupportedMatchPayload: "PLN222",
+  UnknownDirective: "PLN230",
+  InvalidDirectiveOperand: "PLN231",
 } as const;

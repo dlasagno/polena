@@ -238,6 +238,7 @@ export type Expression =
   | LiteralExpression
   | ArrayLiteralExpression
   | ObjectLiteralExpression
+  | DirectiveExpression
   | NameExpression
   | UnaryExpression
   | BinaryExpression
@@ -315,6 +316,41 @@ export type ObjectLiteralField = {
   readonly value: Expression;
   readonly span: Span;
 };
+
+export type DirectiveExpression = {
+  readonly kind: "DirectiveExpression";
+  readonly nodeId: NodeId;
+  readonly name: string;
+  readonly nameSpan: Span;
+  readonly operands: readonly DirectiveOperand[];
+  readonly expansion?: DirectiveExpansion;
+  readonly span: Span;
+};
+
+export type DirectiveOperand =
+  | {
+      readonly kind: "TypeOperand";
+      readonly nodeId: NodeId;
+      readonly type: TypeNode;
+      readonly span: Span;
+    }
+  | {
+      readonly kind: "ExpressionOperand";
+      readonly nodeId: NodeId;
+      readonly expression: Expression;
+      readonly span: Span;
+    };
+
+export type DirectiveExpansion =
+  | {
+      readonly kind: "StringArray";
+      readonly values: readonly string[];
+    }
+  | {
+      readonly kind: "EnumValueArray";
+      readonly enumName: string;
+      readonly variantNames: readonly string[];
+    };
 
 export type UnaryOperator = "!" | "-";
 

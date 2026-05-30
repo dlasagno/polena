@@ -200,6 +200,12 @@ function findExpressionInExpression<K extends Expression["kind"]>(
       return findFirst(expression.elements, (element) => findExpressionInExpression(element, kind));
     case "ObjectLiteral":
       return findFirst(expression.fields, (field) => findExpressionInExpression(field.value, kind));
+    case "DirectiveExpression":
+      return findFirst(expression.operands, (operand) =>
+        operand.kind === "ExpressionOperand"
+          ? findExpressionInExpression(operand.expression, kind)
+          : undefined,
+      );
     case "UnaryExpression":
       return findExpressionInExpression(expression.operand, kind);
     case "BinaryExpression":

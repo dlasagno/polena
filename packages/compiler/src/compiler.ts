@@ -476,6 +476,7 @@ function isModuleConstExpression(expression: Expression): boolean {
     case "StringLiteral":
     case "BooleanLiteral":
     case "NameExpression":
+    case "DirectiveExpression":
     case "EnumVariantExpression":
       return true;
     case "ArrayLiteral":

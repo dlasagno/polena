@@ -5,6 +5,7 @@ import type {
   Block,
   BreakStatement,
   ContinueStatement,
+  DirectiveExpression,
   EnumVariantExpression,
   Expression,
   FunctionDeclaration,
@@ -1375,6 +1376,8 @@ class Checker {
         return this.inferArrayLiteral(expression, scope, options);
       case "ObjectLiteral":
         return this.inferObjectLiteral(expression, scope, options);
+      case "DirectiveExpression":
+        return this.inferDirectiveExpression(expression, scope, options);
       case "EnumVariantExpression":
         return this.inferEnumVariantExpression(expression, options.expectedType);
       case "NameExpression": {
@@ -1635,6 +1638,157 @@ class Checker {
     }
 
     return objectType(fields);
+  }
+
+  private inferDirectiveExpression(
+    expression: DirectiveExpression,
+    scope: Scope,
+    options: InferOptions,
+  ): Type {
+    switch (expression.name) {
+      case "enumVariantNames":
+        return this.inferEnumVariantNamesDirective(expression);
+      case "enumValues":
+        return this.inferEnumValuesDirective(expression);
+      case "objectFieldNames":
+        return this.inferObjectFieldNamesDirective(expression);
+      default:
+        void scope;
+        void options;
+        this.diagnostics.push(
+          error(`Unknown compiler directive '@${expression.name}'.`, expression.nameSpan, {
+            code: DiagnosticCode.UnknownDirective,
+            label: "no compiler directive with this name is available",
+          }),
+        );
+        return unknownType();
+    }
+  }
+
+  private inferEnumVariantNamesDirective(expression: DirectiveExpression): Type {
+    const type = this.directiveSingleTypeOperand(expression);
+    if (type === undefined || isRecoveryUnknownType(type)) {
+      return arrayType(primitiveType("string"));
+    }
+
+    if (type.kind !== "enum") {
+      this.diagnostics.push(
+        error(`Directive '@enumVariantNames' requires an enum type operand.`, expression.span, {
+          code: DiagnosticCode.InvalidDirectiveOperand,
+          label: `got '${formatType(type)}' instead`,
+        }),
+      );
+      return arrayType(primitiveType("string"));
+    }
+
+    this.setDirectiveExpansion(expression, {
+      kind: "StringArray",
+      values: type.variants.map((variant) => variant.name),
+    });
+    return arrayType(primitiveType("string"));
+  }
+
+  private inferEnumValuesDirective(expression: DirectiveExpression): Type {
+    const type = this.directiveSingleTypeOperand(expression);
+    if (type === undefined || isRecoveryUnknownType(type)) {
+      return arrayType(unknownType());
+    }
+
+    if (type.kind !== "enum") {
+      this.diagnostics.push(
+        error(`Directive '@enumValues' requires an enum type operand.`, expression.span, {
+          code: DiagnosticCode.InvalidDirectiveOperand,
+          label: `got '${formatType(type)}' instead`,
+        }),
+      );
+      return arrayType(unknownType());
+    }
+
+    const payloadVariant = type.variants.find((variant) => variant.payload.length > 0);
+    if (payloadVariant !== undefined) {
+      this.diagnostics.push(
+        error(
+          `Directive '@enumValues' requires a fieldless enum type; '${type.name}.${payloadVariant.name}' has associated data.`,
+          payloadVariant.nameSpan ?? expression.span,
+          {
+            code: DiagnosticCode.InvalidDirectiveOperand,
+            label: "this variant cannot be enumerated as a single value",
+          },
+        ),
+      );
+      return arrayType(type);
+    }
+
+    this.setDirectiveExpansion(expression, {
+      kind: "EnumValueArray",
+      enumName: type.name,
+      variantNames: type.variants.map((variant) => variant.name),
+    });
+    return arrayType(type);
+  }
+
+  private inferObjectFieldNamesDirective(expression: DirectiveExpression): Type {
+    const type = this.directiveSingleTypeOperand(expression);
+    if (type === undefined || isRecoveryUnknownType(type)) {
+      return arrayType(primitiveType("string"));
+    }
+
+    if (type.kind !== "object") {
+      this.diagnostics.push(
+        error(`Directive '@objectFieldNames' requires an object type operand.`, expression.span, {
+          code: DiagnosticCode.InvalidDirectiveOperand,
+          label: `got '${formatType(type)}' instead`,
+        }),
+      );
+      return arrayType(primitiveType("string"));
+    }
+
+    this.setDirectiveExpansion(expression, {
+      kind: "StringArray",
+      values: type.fields.map((field) => field.name),
+    });
+    return arrayType(primitiveType("string"));
+  }
+
+  private directiveSingleTypeOperand(expression: DirectiveExpression): Type | undefined {
+    if (expression.operands.length !== 1) {
+      this.diagnostics.push(
+        error(
+          `Directive '@${expression.name}' expects 1 type operand, got ${expression.operands.length}.`,
+          expression.span,
+          {
+            code: DiagnosticCode.WrongArgumentCount,
+            label: "wrong number of directive operands",
+          },
+        ),
+      );
+      return undefined;
+    }
+
+    const operand = expression.operands[0];
+    if (operand?.kind !== "TypeOperand") {
+      this.diagnostics.push(
+        error(
+          `Directive '@${expression.name}' expects a type operand.`,
+          operand?.span ?? expression.span,
+          {
+            code: DiagnosticCode.InvalidDirectiveOperand,
+            label: "supply a type name or type expression here",
+          },
+        ),
+      );
+      return undefined;
+    }
+
+    return this.typeFromNode(operand.type);
+  }
+
+  private setDirectiveExpansion(
+    expression: DirectiveExpression,
+    expansion: NonNullable<DirectiveExpression["expansion"]>,
+  ): void {
+    (expression as { expansion?: NonNullable<DirectiveExpression["expansion"]> }).expansion =
+      expansion;
   }
 
   private inferBinaryExpression(
@@ -1999,6 +2153,7 @@ class Checker {
       case "BooleanLiteral":
       case "ArrayLiteral":
       case "ObjectLiteral":
+      case "DirectiveExpression":
       case "EnumVariantExpression":
       case "NameExpression":
       case "UnaryExpression":

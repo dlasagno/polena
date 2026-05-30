@@ -344,6 +344,16 @@ function collectExpressionTokens(
         collectExpressionTokens(field.value, analysis, tokens);
       }
       return;
+    case "DirectiveExpression":
+      tokens.push({ span: expression.nameSpan, type: "function" });
+      for (const operand of expression.operands) {
+        if (operand.kind === "ExpressionOperand") {
+          collectExpressionTokens(operand.expression, analysis, tokens);
+        } else {
+          collectTypeNodeTokens(operand.type, analysis, tokens);
+        }
+      }
+      return;
     case "IfExpression":
       collectExpressionTokens(expression.condition, analysis, tokens);
       collectBlockTokens(expression.thenBlock, analysis, tokens);

@@ -426,6 +426,12 @@ function nestedLocalCompletionsInExpression(
       return expression.fields.flatMap((field) =>
         nestedLocalCompletionsInExpression(field.value, offset),
       );
+    case "DirectiveExpression":
+      return expression.operands.flatMap((operand) =>
+        operand.kind === "ExpressionOperand"
+          ? nestedLocalCompletionsInExpression(operand.expression, offset)
+          : [],
+      );
     case "UnaryExpression":
       return nestedLocalCompletionsInExpression(expression.operand, offset);
     case "BinaryExpression":
@@ -607,6 +613,12 @@ function findExpressionInExpression<T>(
     case "ObjectLiteral":
       return findFirst(expression.fields, (field) =>
         findExpressionInExpression(field.value, predicate),
+      );
+    case "DirectiveExpression":
+      return findFirst(expression.operands, (operand) =>
+        operand.kind === "ExpressionOperand"
+          ? findExpressionInExpression(operand.expression, predicate)
+          : undefined,
       );
     case "UnaryExpression":
       return findExpressionInExpression(expression.operand, predicate);

@@ -576,6 +576,12 @@ function findAstNodeInExpression(expression: Expression, nodeId: NodeId): AstNod
         }
         return findAstNodeInExpression(field.value, nodeId);
       });
+    case "DirectiveExpression":
+      return findFirst(expression.operands, (operand) =>
+        operand.kind === "ExpressionOperand"
+          ? findAstNodeInExpression(operand.expression, nodeId)
+          : findAstNodeInTypeNode(operand.type, nodeId),
+      );
     case "UnaryExpression":
       return findAstNodeInExpression(expression.operand, nodeId);
     case "BinaryExpression":

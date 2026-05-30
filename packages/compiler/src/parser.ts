@@ -5,6 +5,8 @@ import type {
   Block,
   BreakStatement,
   ContinueStatement,
+  DirectiveOperand,
+  EnumPayloadPattern,
   Expression,
   FunctionDeclaration,
   IfExpression,
@@ -13,7 +15,6 @@ import type {
   ImportItem,
   ImportPath,
   LoopContinuation,
-  EnumPayloadPattern,
   MatchArm,
   MatchExpression,
   MatchPattern,
@@ -1107,6 +1108,10 @@ class Parser {
       return this.node({ kind: "BooleanLiteral", value: false, span: token.span });
     }
 
+    if (this.check("At")) {
+      return this.parseDirectiveExpression();
+    }
+
     if (this.match("Dot")) {
       const dot = this.previous();
       const variant = this.expect("Identifier", "Expected enum variant name after '.'.");
@@ -1169,6 +1174,84 @@ class Parser {
       value: 0,
       text: "0",
       span: token.span,
+    });
+  }
+
+  private parseDirectiveExpression(): Expression {
+    const at = this.expect("At", "Expected '@'.");
+    const firstName = this.expect("Identifier", "Expected directive name after '@'.");
+    const nameParts = [firstName.text];
+    let nameSpan = firstName.span;
+
+    while (this.match("Dot")) {
+      const part = this.expect("Identifier", "Expected directive name after '.'.");
+      nameParts.push(part.text);
+      nameSpan = mergeSpans(nameSpan, part.span);
+    }
+
+    const name = nameParts.join(".");
+    this.expect("LeftParen", "Expected '(' after directive name.");
+    const operands = this.parseDirectiveOperands(name);
+    const rightParen = this.expectClosingDelimiter(
+      "RightParen",
+      "Expected ')' after directive operands.",
+    );
+
+    return this.node({
+      kind: "DirectiveExpression",
+      name,
+      nameSpan,
+      operands,
+      span: mergeSpans(at.span, rightParen.span),
+    });
+  }
+
+  private parseDirectiveOperands(name: string): readonly DirectiveOperand[] {
+    const operands: DirectiveOperand[] = [];
+    if (this.check("RightParen")) {
+      return operands;
+    }
+
+    const parseOperand = directiveUsesTypeOperands(name)
+      ? () => this.parseDirectiveTypeOperand()
+      : () => this.parseDirectiveExpressionOperand();
+
+    while (true) {
+      operands.push(parseOperand());
+
+      if (!this.match("Comma")) {
+        break;
+      }
+
+      if (this.check("RightParen")) {
+        this.diagnostics.push(
+          error("Expected a directive operand.", this.current().span, {
+            code: DiagnosticCode.ExpectedExpression,
+            label: "expected a directive operand here",
+          }),
+        );
+        break;
+      }
+    }
+
+    return operands;
+  }
+
+  private parseDirectiveTypeOperand(): DirectiveOperand {
+    const type = this.parseType();
+    return this.node({
+      kind: "TypeOperand" as const,
+      type,
+      span: type.span,
+    });
+  }
+
+  private parseDirectiveExpressionOperand(): DirectiveOperand {
+    const expression = this.parseExpression();
+    return this.node({
+      kind: "ExpressionOperand" as const,
+      expression,
+      span: expression.span,
     });
   }
 
@@ -1759,6 +1842,17 @@ function primitiveTypeFromToken(kind: TokenKind): PrimitiveType | undefined {
 
 function last<T>(items: readonly T[]): T {
   return items[items.length - 1] as T;
+}
+
+function directiveUsesTypeOperands(name: string): boolean {
+  switch (name) {
+    case "enumVariantNames":
+    case "enumValues":
+    case "objectFieldNames":
+      return true;
+    default:
+      return false;
+  }
 }
 
 function unaryOperatorFromToken(kind: TokenKind): UnaryOperator | undefined {

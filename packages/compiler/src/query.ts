@@ -345,6 +345,19 @@ function findInExpression(expression: Expression, offset: number): HoverTarget |
         }
       }
       return undefined;
+    case "DirectiveExpression":
+      for (const operand of expression.operands) {
+        const found =
+          operand.kind === "TypeOperand"
+            ? findInTypeNode(operand.type, offset)
+            : findInExpression(operand.expression, offset);
+        if (found !== undefined) {
+          return found;
+        }
+      }
+      return contains(expression.nameSpan, offset)
+        ? target("Expression", expression.nodeId, expression.nameSpan)
+        : undefined;
     case "UnaryExpression":
       return findInExpression(expression.operand, offset);
     case "BinaryExpression":
