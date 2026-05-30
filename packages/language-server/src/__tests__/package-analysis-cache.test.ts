@@ -10,7 +10,7 @@ describe("package analysis cache", () => {
       { uri: "file:///other/src/index.plna", path: "/other/src/index.plna", version: 9, text: "" },
     ];
 
-    expect(packageAnalysisCacheKey("/app", snapshots)).toMatch(
+    expect(packageAnalysisCacheKey("/app", snapshots).replaceAll("\\", "/")).toMatch(
       /^\/app\/src\/index\.plna@1:[0-9a-f]+\|\/app\/src\/users\.plna@3:[0-9a-f]+$/,
     );
   });

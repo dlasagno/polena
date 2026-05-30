@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { normalize } from "node:path";
+import { pathToFileURL } from "node:url";
 import { analyze, analyzePackage } from "@polena/compiler";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { getDefinition } from "../definition";
@@ -61,7 +63,10 @@ describe("LSP definition", () => {
         { path: "/app/src/users.plna", source: usersSource },
       ],
     });
-    const document = TextDocument.create("file:///app/src/index.plna", "polena", 1, indexSource);
+    const indexUri = testUri("/app/src/index.plna");
+    const usersUri = testUri("/app/src/users.plna");
+    const usersDocument = TextDocument.create(usersUri, "polena", 1, usersSource);
+    const document = TextDocument.create(indexUri, "polena", 1, indexSource);
     const current = result.analyses.find((analysis) => analysis.moduleName === "@/");
     const analysesByModuleName = new Map(
       result.analyses.map((analysis) => [analysis.moduleName, analysis]),
@@ -76,20 +81,16 @@ describe("LSP definition", () => {
     const context = { analysesByModuleName };
     expect(definition(document, current.analysis, indexSource.indexOf("@/users"), context)).toEqual(
       {
-        uri: "file:///app/src/users.plna",
-        range: rangeForText(
-          TextDocument.create("file:///app/src/users.plna", "polena", 1, usersSource),
-          usersSource,
-          "//! User helpers.",
-        ),
+        uri: usersUri,
+        range: rangeForText(usersDocument, usersSource, "//! User helpers."),
       },
     );
     expect(
       definition(document, current.analysis, indexSource.indexOf("User,"), context),
     ).toMatchObject({
-      uri: "file:///app/src/users.plna",
+      uri: usersUri,
       range: rangeForText(
-        TextDocument.create("file:///app/src/users.plna", "polena", 1, usersSource),
+        usersDocument,
         usersSource,
         "User",
         usersSource.indexOf("export type User"),
@@ -98,22 +99,14 @@ describe("LSP definition", () => {
     expect(
       definition(document, current.analysis, indexSource.indexOf("greeting}"), context),
     ).toMatchObject({
-      uri: "file:///app/src/users.plna",
-      range: rangeForText(
-        TextDocument.create("file:///app/src/users.plna", "polena", 1, usersSource),
-        usersSource,
-        "greeting",
-      ),
+      uri: usersUri,
+      range: rangeForText(usersDocument, usersSource, "greeting"),
     });
     expect(
       definition(document, current.analysis, indexSource.lastIndexOf("name"), context),
     ).toMatchObject({
-      uri: "file:///app/src/users.plna",
-      range: rangeForText(
-        TextDocument.create("file:///app/src/users.plna", "polena", 1, usersSource),
-        usersSource,
-        "name",
-      ),
+      uri: usersUri,
+      range: rangeForText(usersDocument, usersSource, "name"),
     });
     expect(
       definition(
@@ -123,12 +116,8 @@ describe("LSP definition", () => {
         context,
       ),
     ).toMatchObject({
-      uri: "file:///app/src/users.plna",
-      range: rangeForText(
-        TextDocument.create("file:///app/src/users.plna", "polena", 1, usersSource),
-        usersSource,
-        "greeting",
-      ),
+      uri: usersUri,
+      range: rangeForText(usersDocument, usersSource, "greeting"),
     });
   });
 
@@ -166,4 +155,8 @@ function rangeForText(document: TextDocument, source: string, text: string, from
     start: document.positionAt(offset),
     end: document.positionAt(offset + text.length),
   };
+}
+
+function testUri(path: string): string {
+  return pathToFileURL(normalize(path)).href;
 }

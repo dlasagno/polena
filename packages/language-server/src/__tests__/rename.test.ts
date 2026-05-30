@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { normalize } from "node:path";
+import { pathToFileURL } from "node:url";
 import { analyze, analyzePackage } from "@polena/compiler";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { getRenameEdit, prepareRename } from "../rename";
@@ -59,12 +61,10 @@ describe("LSP rename", () => {
         { path: "/app/src/users.plna", source: usersSource },
       ],
     });
-    const usersDocument = TextDocument.create(
-      "file:///app/src/users.plna",
-      "polena",
-      1,
-      usersSource,
-    );
+    const indexUri = testUri("/app/src/index.plna");
+    const usersUri = testUri("/app/src/users.plna");
+    const indexDocument = TextDocument.create(indexUri, "polena", 1, indexSource);
+    const usersDocument = TextDocument.create(usersUri, "polena", 1, usersSource);
     const usersAnalysis = result.analyses.find((analysis) => analysis.moduleName === "@/users");
     const analysesByModuleName = new Map(
       result.analyses.map((analysis) => [analysis.moduleName, analysis]),
@@ -86,21 +86,17 @@ describe("LSP rename", () => {
       ),
     ).toEqual({
       changes: {
-        "file:///app/src/users.plna": [
+        [usersUri]: [
           { range: rangeForText(usersDocument, usersSource, "greeting"), newText: "salute" },
         ],
-        "file:///app/src/index.plna": [
+        [indexUri]: [
           {
-            range: rangeForText(
-              TextDocument.create("file:///app/src/index.plna", "polena", 1, indexSource),
-              indexSource,
-              "greeting",
-            ),
+            range: rangeForText(indexDocument, indexSource, "greeting"),
             newText: "salute",
           },
           {
             range: rangeForText(
-              TextDocument.create("file:///app/src/index.plna", "polena", 1, indexSource),
+              indexDocument,
               indexSource,
               "greeting",
               indexSource.indexOf("greeting(user)"),
@@ -136,4 +132,8 @@ function rangeForText(document: TextDocument, source: string, text: string, from
     start: document.positionAt(offset),
     end: document.positionAt(offset + text.length),
   };
+}
+
+function testUri(path: string): string {
+  return pathToFileURL(normalize(path)).href;
 }

@@ -19,9 +19,7 @@ describe("LSP package analysis", () => {
       io,
     });
 
-    const indexDiagnostics = result?.diagnosticsByUri.get(
-      pathToFileURL("/app/src/index.plna").href,
-    );
+    const indexDiagnostics = result?.diagnosticsByUri.get(testUri("/app/src/index.plna"));
     expect(indexDiagnostics?.map((diagnostic) => diagnostic.message)).toContain(
       "Module '@/users' does not export value 'greeting'.",
     );
@@ -43,7 +41,7 @@ describe("LSP package analysis", () => {
       documentPath: "/app/src/index.plna",
       openDocuments: [
         {
-          uri: pathToFileURL("/app/src/users.plna").href,
+          uri: testUri("/app/src/users.plna"),
           path: "/app/src/users.plna",
           text: 'export fn greeting(): string { "Hello" }',
         },
@@ -51,8 +49,8 @@ describe("LSP package analysis", () => {
       io,
     });
 
-    expect(result?.diagnosticsByUri.get(pathToFileURL("/app/src/index.plna").href)).toEqual([]);
-    expect(result?.diagnosticsByUri.get(pathToFileURL("/app/src/users.plna").href)).toEqual([]);
+    expect(result?.diagnosticsByUri.get(testUri("/app/src/index.plna"))).toEqual([]);
+    expect(result?.diagnosticsByUri.get(testUri("/app/src/users.plna"))).toEqual([]);
   });
 
   test("overlays open package manifests before analyzing diagnostics", async () => {
@@ -67,7 +65,7 @@ describe("LSP package analysis", () => {
       documentPath: "/app/polena.toml",
       openDocuments: [
         {
-          uri: pathToFileURL("/app/polena.toml").href,
+          uri: testUri("/app/polena.toml"),
           path: "/app/polena.toml",
           text: 'name = "app"\nversion = "0.1.0"\ntarget = "executable"\nruntime = "invalid"\n',
         },
@@ -75,7 +73,7 @@ describe("LSP package analysis", () => {
       io,
     });
 
-    const diagnostics = result?.diagnosticsByUri.get(pathToFileURL("/app/polena.toml").href);
+    const diagnostics = result?.diagnosticsByUri.get(testUri("/app/polena.toml"));
     expect(diagnostics?.map((diagnostic) => diagnostic.message)).toContain(
       "Invalid package runtime 'invalid'.",
     );
@@ -99,9 +97,9 @@ describe("LSP package analysis", () => {
       io,
     });
 
-    expect(result?.diagnosticsByUri.get(pathToFileURL("/app/src/index.plna").href)).toEqual([]);
-    expect(result?.diagnosticsByUri.has(pathToFileURL("/app/src/users.plna").href)).toBe(true);
-    expect(result?.analysesByUri.has(pathToFileURL("/app/src/users.plna").href)).toBe(true);
+    expect(result?.diagnosticsByUri.get(testUri("/app/src/index.plna"))).toEqual([]);
+    expect(result?.diagnosticsByUri.has(testUri("/app/src/users.plna"))).toBe(true);
+    expect(result?.analysesByUri.has(testUri("/app/src/users.plna"))).toBe(true);
   });
 
   test("drops diagnostics and analyses for source files deleted from disk", async () => {
@@ -121,11 +119,11 @@ describe("LSP package analysis", () => {
       io,
     });
 
-    expect(result?.diagnosticsByUri.has(pathToFileURL("/app/src/users.plna").href)).toBe(false);
-    expect(result?.analysesByUri.has(pathToFileURL("/app/src/users.plna").href)).toBe(false);
+    expect(result?.diagnosticsByUri.has(testUri("/app/src/users.plna"))).toBe(false);
+    expect(result?.analysesByUri.has(testUri("/app/src/users.plna"))).toBe(false);
     expect(
       result?.diagnosticsByUri
-        .get(pathToFileURL("/app/src/index.plna").href)
+        .get(testUri("/app/src/index.plna"))
         ?.map((diagnostic) => diagnostic.message),
     ).toContain("Missing module '@/users'.");
   });
@@ -133,19 +131,19 @@ describe("LSP package analysis", () => {
 
 function createIo(files: ReadonlyMap<string, string>): LanguageServerIo {
   const normalizedFiles = new Map(
-    [...files.entries()].map(([path, source]) => [normalize(path), source]),
+    [...files.entries()].map(([path, source]) => [testPath(path), source]),
   );
 
   return {
     readTextFile: async (path) => {
-      const source = normalizedFiles.get(normalize(path));
+      const source = normalizedFiles.get(testPath(path));
       if (source === undefined) {
         throw new Error(`missing file: ${path}`);
       }
       return source;
     },
     readDir: async (path) => {
-      const dir = normalize(path);
+      const dir = testPath(path);
       const prefix = `${dir}/`;
       const entries = new Set<string>();
       for (const filePath of normalizedFiles.keys()) {
@@ -156,7 +154,7 @@ function createIo(files: ReadonlyMap<string, string>): LanguageServerIo {
       return [...entries].filter((entry) => entry.length > 0).sort();
     },
     stat: async (path) => {
-      const normalizedPath = normalize(path);
+      const normalizedPath = testPath(path);
       if (normalizedFiles.has(normalizedPath)) {
         return "file";
       }
@@ -169,4 +167,12 @@ function createIo(files: ReadonlyMap<string, string>): LanguageServerIo {
       return "missing";
     },
   };
+}
+
+function testPath(path: string): string {
+  return normalize(path).replaceAll("\\", "/");
+}
+
+function testUri(path: string): string {
+  return pathToFileURL(normalize(path)).href;
 }

@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { normalize } from "node:path";
+import { pathToFileURL } from "node:url";
 import { analyze, analyzePackage } from "@polena/compiler";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { getDocumentHighlights, getReferences } from "../references";
@@ -68,12 +70,10 @@ describe("LSP references", () => {
         { path: "/app/src/users.plna", source: usersSource },
       ],
     });
-    const usersDocument = TextDocument.create(
-      "file:///app/src/users.plna",
-      "polena",
-      1,
-      usersSource,
-    );
+    const indexUri = testUri("/app/src/index.plna");
+    const usersUri = testUri("/app/src/users.plna");
+    const indexDocument = TextDocument.create(indexUri, "polena", 1, indexSource);
+    const usersDocument = TextDocument.create(usersUri, "polena", 1, usersSource);
     const usersAnalysis = result.analyses.find((analysis) => analysis.moduleName === "@/users");
     const analysesByModuleName = new Map(
       result.analyses.map((analysis) => [analysis.moduleName, analysis]),
@@ -94,32 +94,15 @@ describe("LSP references", () => {
         { currentModuleName: "@/users", analysesByModuleName },
       ).map((location) => [location.uri, location.range]),
     ).toEqual([
-      ["file:///app/src/users.plna", rangeForText(usersDocument, usersSource, "greeting")],
+      [usersUri, rangeForText(usersDocument, usersSource, "greeting")],
+      [indexUri, rangeForText(indexDocument, indexSource, "greeting")],
       [
-        "file:///app/src/index.plna",
-        rangeForText(
-          TextDocument.create("file:///app/src/index.plna", "polena", 1, indexSource),
-          indexSource,
-          "greeting",
-        ),
+        indexUri,
+        rangeForText(indexDocument, indexSource, "greeting", indexSource.indexOf("greeting(user)")),
       ],
       [
-        "file:///app/src/index.plna",
-        rangeForText(
-          TextDocument.create("file:///app/src/index.plna", "polena", 1, indexSource),
-          indexSource,
-          "greeting",
-          indexSource.indexOf("greeting(user)"),
-        ),
-      ],
-      [
-        "file:///app/src/index.plna",
-        rangeForText(
-          TextDocument.create("file:///app/src/index.plna", "polena", 1, indexSource),
-          indexSource,
-          "greeting",
-          indexSource.indexOf("users.greeting"),
-        ),
+        indexUri,
+        rangeForText(indexDocument, indexSource, "greeting", indexSource.indexOf("users.greeting")),
       ],
     ]);
   });
@@ -143,4 +126,8 @@ function rangeForText(document: TextDocument, source: string, text: string, from
     start: document.positionAt(offset),
     end: document.positionAt(offset + text.length),
   };
+}
+
+function testUri(path: string): string {
+  return pathToFileURL(normalize(path)).href;
 }

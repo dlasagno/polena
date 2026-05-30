@@ -210,7 +210,7 @@ describe("package operations", () => {
     const sources = await readPackageSources("/app", harness.io);
     const result = await buildPackage({ packageRoot: "/app", io: harness.io });
 
-    expect(sources.map((source) => source.path)).toEqual([
+    expect(sources.map((source) => testPath(source.path))).toEqual([
       "/app/src/index.plna",
       "/app/src/users.polena",
     ]);
@@ -242,7 +242,9 @@ describe("package operations", () => {
     const result = await buildPackage({ packageRoot: "/app", io: harness.io });
 
     expect(result.ok).toBe(false);
-    expect(result.diagnostics).toContainEqual(
+    expect(
+      result.diagnostics.map((diagnostic) => normalizeBuildDiagnostic(diagnostic)),
+    ).toContainEqual(
       expect.objectContaining({
         kind: "source",
         path: "/app/src/index.plna",
@@ -434,13 +436,15 @@ function createHarness(
   readonly writes: Map<string, string>;
   readonly commands: string[][];
 } {
-  const sourceFiles = new Map(files);
+  const sourceFiles = new Map(
+    [...files.entries()].map(([path, source]) => [testPath(path), source]),
+  );
   const writes = new Map<string, string>();
   const commands: string[][] = [];
 
   const io: BuildIo = {
     readTextFile: async (path) => {
-      const source = sourceFiles.get(path) ?? writes.get(path);
+      const source = sourceFiles.get(testPath(path)) ?? writes.get(testPath(path));
       if (source === undefined) {
         throw new Error(`missing file: ${path}`);
       }
@@ -450,10 +454,10 @@ function createHarness(
       if (options.failWrites === true) {
         throw new Error("disk full");
       }
-      writes.set(path, contents);
+      writes.set(testPath(path), contents);
     },
     readDir: async (path) => {
-      const prefix = `${path.replace(/\/$/, "")}/`;
+      const prefix = `${testPath(path).replace(/\/$/, "")}/`;
       const entries = new Set<string>();
       for (const file of [...sourceFiles.keys(), ...writes.keys()]) {
         if (!file.startsWith(prefix)) {
@@ -467,10 +471,11 @@ function createHarness(
       return [...entries].sort();
     },
     stat: async (path) => {
-      if (sourceFiles.has(path) || writes.has(path)) {
+      const normalizedPath = testPath(path);
+      if (sourceFiles.has(normalizedPath) || writes.has(normalizedPath)) {
         return "file";
       }
-      const prefix = `${path.replace(/\/$/, "")}/`;
+      const prefix = `${normalizedPath.replace(/\/$/, "")}/`;
       for (const file of [...sourceFiles.keys(), ...writes.keys()]) {
         if (file.startsWith(prefix)) {
           return "directory";
@@ -481,10 +486,22 @@ function createHarness(
     mkdirp: async () => {},
     which: async (binary) => options.binaries?.get(binary),
     spawn: async (command) => {
-      commands.push([...command]);
+      commands.push(command.map(testPath));
       return options.spawnExitCode ?? 0;
     },
   };
 
   return { io, writes, commands };
+}
+
+function testPath(path: string): string {
+  return path.replaceAll("\\", "/");
+}
+
+function normalizeBuildDiagnostic(
+  diagnostic: Awaited<ReturnType<typeof buildPackage>>["diagnostics"][number],
+): Awaited<ReturnType<typeof buildPackage>>["diagnostics"][number] {
+  return diagnostic.kind === "source"
+    ? { ...diagnostic, path: testPath(diagnostic.path) }
+    : diagnostic;
 }

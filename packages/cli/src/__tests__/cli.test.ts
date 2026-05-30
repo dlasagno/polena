@@ -188,7 +188,9 @@ describe("CLI commands", () => {
 
     expect(exitCode).toBe(1);
     expect(harness.stderr.join("\n")).toContain("error[PLN102]: Unknown name 'missing'.");
-    expect(harness.stderr.join("\n")).toContain("--> app/src/index.plna:1:26");
+    expect(harness.stderr.join("\n").replaceAll("\\", "/")).toContain(
+      "--> app/src/index.plna:1:26",
+    );
   });
 
   test("reports missing manifests and write failures", async () => {
@@ -204,7 +206,9 @@ describe("CLI commands", () => {
     expect(await runCli({ args: ["build", "missing"], version: "0.1.0", io: missing.io })).toBe(1);
     expect(await runCli({ args: ["build", "app"], version: "0.1.0", io: failing.io })).toBe(1);
 
-    expect(missing.stderr).toEqual(["error: package is missing 'missing/polena.toml'"]);
+    expect(missing.stderr.map((message) => message.replaceAll("\\", "/"))).toEqual([
+      "error: package is missing 'missing/polena.toml'",
+    ]);
     expect(failing.stderr).toEqual(["error: could not write output: disk full"]);
   });
 
@@ -249,6 +253,9 @@ function createCliHarness(
 } {
   const stdout: string[] = [];
   const stderr: string[] = [];
+  const sourceFiles = new Map(
+    [...files.entries()].map(([path, source]) => [testPath(path), source]),
+  );
   const writes = new Map<string, string>();
   const commands: string[][] = [];
   const prompts: string[] = [];
@@ -257,7 +264,7 @@ function createCliHarness(
   return {
     io: {
       readTextFile: async (path) => {
-        const source = files.get(path) ?? writes.get(path);
+        const source = sourceFiles.get(testPath(path)) ?? writes.get(testPath(path));
         if (source === undefined) {
           throw new Error("file not found");
         }
@@ -267,12 +274,12 @@ function createCliHarness(
         if (options.failWrites === true) {
           throw new Error("disk full");
         }
-        writes.set(path, contents);
+        writes.set(testPath(path), contents);
       },
       readDir: async (path) => {
-        const prefix = `${path.replace(/\/$/, "")}/`;
+        const prefix = `${testPath(path).replace(/\/$/, "")}/`;
         const entries = new Set<string>();
-        for (const file of [...files.keys(), ...writes.keys()]) {
+        for (const file of [...sourceFiles.keys(), ...writes.keys()]) {
           if (!file.startsWith(prefix)) {
             continue;
           }
@@ -284,18 +291,19 @@ function createCliHarness(
         return [...entries].sort();
       },
       stat: async (path) => {
-        if (files.has(path) || writes.has(path)) {
+        const normalizedPath = testPath(path);
+        if (sourceFiles.has(normalizedPath) || writes.has(normalizedPath)) {
           return "file";
         }
-        const prefix = `${path.replace(/\/$/, "")}/`;
-        return [...files.keys(), ...writes.keys()].some((file) => file.startsWith(prefix))
+        const prefix = `${normalizedPath.replace(/\/$/, "")}/`;
+        return [...sourceFiles.keys(), ...writes.keys()].some((file) => file.startsWith(prefix))
           ? "directory"
           : "missing";
       },
       mkdirp: async () => {},
       which: async (binary) => options.binaries?.get(binary),
       spawn: async (command) => {
-        commands.push([...command]);
+        commands.push(command.map(testPath));
         return options.spawnExitCode ?? 0;
       },
       stdout: (text) => stdout.push(text),
@@ -313,4 +321,8 @@ function createCliHarness(
     commands,
     prompts,
   };
+}
+
+function testPath(path: string): string {
+  return path.replaceAll("\\", "/");
 }

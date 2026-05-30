@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { normalize } from "node:path";
+import { pathToFileURL } from "node:url";
 import { analyze, analyzePackage } from "@polena/compiler";
 import { SymbolKind } from "vscode-languageserver/node";
 import {
@@ -72,6 +74,10 @@ describe("workspace symbols", () => {
       getWorkspaceSymbols("greet", workspaceSymbolSourcesFromModules(result.analyses)).map(
         (symbol) => [symbol.name, symbol.kind, symbol.containerName, symbol.location.uri],
       ),
-    ).toEqual([["greeting", SymbolKind.Function, "@/users", "file:///app/src/users.plna"]]);
+    ).toEqual([["greeting", SymbolKind.Function, "@/users", testUri("/app/src/users.plna")]]);
   });
 });
+
+function testUri(path: string): string {
+  return pathToFileURL(normalize(path)).href;
+}
