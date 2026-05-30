@@ -76,9 +76,14 @@ describe("semantic types", () => {
     const left = enumType("UserKind", [{ name: "Admin", payload: [] }]);
     const sameName = enumType("UserKind", [{ name: "Member", payload: [] }]);
     const other = enumType("AccountKind", [{ name: "Admin", payload: [] }]);
+    const otherModule = {
+      ...enumType("UserKind", [{ name: "Admin", payload: [] }]),
+      moduleName: "@/users",
+    };
 
     expect(sameType(left, sameName)).toBe(true);
     expect(sameType(left, other)).toBe(false);
+    expect(sameType(left, otherModule)).toBe(false);
   });
 
   test("treats generic enum instantiations as distinct by type arguments", () => {
@@ -99,9 +104,14 @@ describe("semantic types", () => {
         { name: "None", payload: [] },
       ],
     );
+    const otherModuleNumberOption = {
+      ...genericEnumType("Option", [primitiveType("number")], []),
+      moduleName: "@/option",
+    };
 
     expect(sameType(numberOption, sameNumberOption)).toBe(true);
     expect(sameType(numberOption, stringOption)).toBe(false);
+    expect(sameType(numberOption, otherModuleNumberOption)).toBe(false);
   });
 
   test("only fieldless enums are equality-comparable", () => {

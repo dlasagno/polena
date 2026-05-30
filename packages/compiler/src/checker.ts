@@ -616,7 +616,9 @@ class Checker {
         return opaqueType(type.name, symbol.importedModuleName, type.typeArguments);
       }
       if (type.kind === "enum" && symbol.importedModuleName !== undefined) {
-        return typeWithImportedModule(type, symbol.importedModuleName);
+        return typeWithImportedModule(type, symbol.importedModuleName, {
+          tagEnumTypeArguments: false,
+        });
       }
       return type;
     }
@@ -2894,7 +2896,7 @@ class Checker {
     const expectedType = options.expectedType;
     if (
       expectedType?.kind !== "enum" ||
-      expectedType.name !== typeName ||
+      !enumTypeMatchesSymbol(expectedType, typeName, symbol) ||
       expectedType.typeArguments.length !== symbol.typeParameters.length
     ) {
       this.diagnostics.push(
@@ -3320,7 +3322,7 @@ class Checker {
   ): Type {
     if (
       expectedType?.kind === "enum" &&
-      expectedType.name === name &&
+      enumTypeMatchesSymbol(expectedType, name, symbol) &&
       expectedType.typeArguments.length === symbol.typeParameters.length
     ) {
       return expectedType;
@@ -3339,7 +3341,7 @@ class Checker {
   ): readonly Type[] | undefined {
     if (
       expectedType?.kind === "enum" &&
-      expectedType.name === typeName &&
+      enumTypeMatchesSymbol(expectedType, typeName, symbol) &&
       expectedType.typeArguments.length === symbol.typeParameters.length &&
       !typeContainsTypeParameter(expectedType)
     ) {
@@ -3457,7 +3459,12 @@ class Checker {
       return;
     }
 
-    if (pattern.kind === "enum" && actual.kind === "enum" && pattern.name === actual.name) {
+    if (
+      pattern.kind === "enum" &&
+      actual.kind === "enum" &&
+      pattern.name === actual.name &&
+      pattern.moduleName === actual.moduleName
+    ) {
       const count = Math.min(pattern.typeArguments.length, actual.typeArguments.length);
       for (let index = 0; index < count; index += 1) {
         const patternArg = pattern.typeArguments[index];
@@ -3773,15 +3780,19 @@ function isContextuallyCheckedObjectLiteral(expression: Expression, expectedType
   return expression.kind === "ObjectLiteral" && expectedType.kind === "object";
 }
 
-function typeWithImportedModule(type: Type, moduleName: string): Type {
+function typeWithImportedModule(
+  type: Type,
+  moduleName: string,
+  options: { readonly tagEnumTypeArguments: boolean } = { tagEnumTypeArguments: true },
+): Type {
   switch (type.kind) {
     case "array":
-      return arrayType(typeWithImportedModule(type.element, moduleName));
+      return arrayType(typeWithImportedModule(type.element, moduleName, options));
     case "object":
       return objectType(
         type.fields.map((field) => ({
           ...field,
-          type: typeWithImportedModule(field.type, moduleName),
+          type: typeWithImportedModule(field.type, moduleName, options),
           moduleName: field.moduleName ?? moduleName,
         })),
       );
@@ -3789,25 +3800,27 @@ function typeWithImportedModule(type: Type, moduleName: string): Type {
       return {
         ...type,
         moduleName: type.moduleName ?? moduleName,
+        typeArguments: options.tagEnumTypeArguments
+          ? type.typeArguments.map((argument) =>
+              typeWithImportedModule(argument, moduleName, options),
+            )
+          : type.typeArguments,
         variants: type.variants.map((variant) => ({
           ...variant,
-          payload: variant.payload.map((payloadType) =>
-            typeWithImportedModule(payloadType, moduleName),
-          ),
           moduleName: variant.moduleName ?? moduleName,
         })),
       };
     case "function":
       return functionType(
-        type.params.map((param) => typeWithImportedModule(param, moduleName)),
-        typeWithImportedModule(type.returnType, moduleName),
+        type.params.map((param) => typeWithImportedModule(param, moduleName, options)),
+        typeWithImportedModule(type.returnType, moduleName, options),
         type.typeParameters,
       );
     case "opaque":
       return opaqueType(
         type.name,
         type.moduleName ?? moduleName,
-        type.typeArguments.map((argument) => typeWithImportedModule(argument, moduleName)),
+        type.typeArguments.map((argument) => typeWithImportedModule(argument, moduleName, options)),
       );
     case "primitive":
     case "typeParameter":
@@ -3868,6 +3881,14 @@ function objectAssignabilityMismatch(
 
 function shouldUseGenericParameterContext(type: Type): boolean {
   return type.kind === "enum" && typeContainsTypeParameter(type);
+}
+
+function enumTypeMatchesSymbol(
+  type: Extract<Type, { readonly kind: "enum" }>,
+  localName: string,
+  symbol: TypeSymbol,
+): boolean {
+  return type.name === localName && type.moduleName === symbol.importedModuleName;
 }
 
 function typeContainsTypeParameter(type: Type): boolean {

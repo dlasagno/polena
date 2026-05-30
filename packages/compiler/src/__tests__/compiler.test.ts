@@ -1531,6 +1531,102 @@ const value = match result {
     expect(output).not.toContain('"Box.Wrap"(1)');
   });
 
+  test("keeps same-name enum types from different modules distinct", () => {
+    const assignment = compilePackage({
+      manifest: { name: "app", version: "0.1.0", target: "executable" },
+      rootDir: "app",
+      sourceDir: "app/src",
+      files: [
+        {
+          path: "app/src/left.plna",
+          source: "export type Box = enum { Wrap };",
+        },
+        {
+          path: "app/src/right.plna",
+          source: "export type Box = enum { Wrap };",
+        },
+        {
+          path: "app/src/index.plna",
+          source: [
+            "import @/left.{type Box as LeftBox};",
+            "import @/right.{type Box as RightBox};",
+            "",
+            "export fn main(): void {",
+            "  const value: LeftBox = RightBox.Wrap;",
+            "}",
+          ].join("\n"),
+        },
+      ],
+    });
+    const equality = compilePackage({
+      manifest: { name: "app", version: "0.1.0", target: "executable" },
+      rootDir: "app",
+      sourceDir: "app/src",
+      files: [
+        {
+          path: "app/src/left.plna",
+          source: "export type Box = enum { Wrap };",
+        },
+        {
+          path: "app/src/right.plna",
+          source: "export type Box = enum { Wrap };",
+        },
+        {
+          path: "app/src/index.plna",
+          source: [
+            "import @/left.{type Box as LeftBox};",
+            "import @/right.{type Box as RightBox};",
+            "",
+            "export fn main(): void {",
+            "  const leftValue: LeftBox = LeftBox.Wrap;",
+            "  const rightValue: RightBox = RightBox.Wrap;",
+            "  const same = leftValue == rightValue;",
+            "}",
+          ].join("\n"),
+        },
+      ],
+    });
+    const generic = compilePackage({
+      manifest: { name: "app", version: "0.1.0", target: "executable" },
+      rootDir: "app",
+      sourceDir: "app/src",
+      files: [
+        {
+          path: "app/src/left.plna",
+          source: "export type Box<T> = enum { Wrap(T) };",
+        },
+        {
+          path: "app/src/right.plna",
+          source: "export type Box<T> = enum { Wrap(T) };",
+        },
+        {
+          path: "app/src/index.plna",
+          source: [
+            "import @/left.{type Box as LeftBox};",
+            "import @/right.{type Box as RightBox};",
+            "",
+            "export fn main(): void {",
+            "  const value: LeftBox<number> = RightBox.Wrap(1);",
+            "}",
+          ].join("\n"),
+        },
+      ],
+    });
+
+    expect(assignment.ok).toBe(false);
+    expect(assignment.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Expected 'Box', got 'Box'.",
+    );
+    expect(equality.ok).toBe(false);
+    expect(equality.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Operator '==' requires compatible operands, got 'Box' and 'Box'.",
+    );
+    expect(generic.ok).toBe(false);
+    expect(generic.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Expected 'LeftBox<number>', got 'RightBox<number>'.",
+    );
+  });
+
   test("requires a runtime for main command-line arguments", () => {
     const result = compilePackage({
       manifest: { name: "app", version: "0.1.0", target: "executable" },

@@ -123,6 +123,7 @@ export function sameType(left: Type, right: Type): boolean {
       return (
         right.kind === "enum" &&
         left.name === right.name &&
+        left.moduleName === right.moduleName &&
         left.typeArguments.length === right.typeArguments.length &&
         left.typeArguments.every((arg, index) => {
           const rightArg = right.typeArguments[index];
