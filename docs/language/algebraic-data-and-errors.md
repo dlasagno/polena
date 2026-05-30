@@ -95,6 +95,31 @@ This is **TBD**.
 
 ---
 
+### 18.4 Unwrapping Options
+
+`@std/option` provides helpers for extracting a value from `Option<T>`:
+
+- `unwrap_or(value, fallback)` returns the inner value for `.Some`, otherwise
+  `fallback`.
+- `unwrap(value)` returns the inner value for `.Some` and panics on `.None` with
+  a fixed message.
+- `expect(value, message)` returns the inner value for `.Some` and panics with
+  `message` on `.None`.
+
+```tsx
+import @std/core.{type Option};
+import @std/option.{unwrap, expect, unwrap_or};
+
+const label = unwrap_or(name, "Anonymous");
+const id = expect(userId, "user id must be set after login");
+```
+
+`unwrap` and `expect` are for invariants and scaffolding. Ordinary optional
+handling should prefer `match` or `unwrap_or`. See
+[Panic](algebraic-data-and-errors.md#193-panic).
+
+---
+
 ## 19. Result Values and Error Handling
 
 The language does not use exceptions for ordinary recoverable errors.
@@ -158,6 +183,33 @@ The behavior of `try expr` is:
 The exact typing and error-conversion rules are **TBD**. Until those rules are
 settled, programs should use explicit `match` expressions to handle `Result`
 values.
+
+---
+
+### 19.4 Unwrapping Results
+
+`@std/result` provides helpers for extracting a success value from
+`Result<T, E>`:
+
+- `unwrap_or(value, fallback)` returns the success value for `.Ok`, otherwise
+  `fallback`.
+- `unwrap(value)` returns the success value for `.Ok` and panics on `.Err` with
+  a fixed message. The error payload is not included in the panic message.
+- `expect(value, message)` returns the success value for `.Ok` and panics with
+  `message` on `.Err`.
+
+```tsx
+import @std/core.{type Result};
+import @std/result.{expect, unwrap_or};
+
+const port = unwrap_or(parsePort(input), 8080);
+const user = expect(loadUser(id), "loadUser must succeed after access check");
+```
+
+Prefer `expect` over `unwrap` when a custom message makes a failed `.Err` easier
+to diagnose. Recoverable failures should stay in `Result` and be handled with
+`match` or (eventually) `try`, not `unwrap`. See
+[Panic](algebraic-data-and-errors.md#193-panic).
 
 ---
 

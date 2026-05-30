@@ -29,6 +29,27 @@ export fn unwrap_or<T>(value: Option<T>, fallback: T): T {
   }
 }
 
+/// Returns the inner value when `value` is `.Some`.
+///
+/// Panics when `value` is `.None`. Use only when absence would be a programmer
+/// error; prefer `match` or `unwrap_or` for ordinary optional handling.
+export fn unwrap<T>(value: Option<T>): T {
+  match value {
+    .Some(inner) => inner,
+    .None => panic "called unwrap on None",
+  }
+}
+
+/// Returns the inner value when `value` is `.Some`.
+///
+/// Panics with `message` when `value` is `.None`.
+export fn expect<T>(value: Option<T>, message: string): T {
+  match value {
+    .Some(inner) => inner,
+    .None => panic message,
+  }
+}
+
 /// Returns the inner `Option` when `value` is `.Some`, otherwise returns `.None`.
 export fn flatten<T>(value: Option<Option<T>>): Option<T> {
   match value {

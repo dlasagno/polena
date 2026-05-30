@@ -1060,6 +1060,162 @@ const value = 1 |> pair(_, _);
     expect(core).toContain("__polenaPanic(message)");
   });
 
+  test("compiles standard-library option and result unwrap helpers", () => {
+    const result = compilePackage({
+      manifest: { name: "app", version: "0.1.0", target: "executable" },
+      rootDir: "app",
+      sourceDir: "app/src",
+      files: [
+        {
+          path: "app/src/index.plna",
+          source: [
+            "import @std/core.{type Option, type Result};",
+            "import @std/option;",
+            "import @std/result;",
+            "",
+            "type ParseError = enum {",
+            "  Invalid,",
+            "};",
+            "",
+            "export fn main(): void {",
+            "  const present: Option<number> = .Some(1);",
+            "  const ok: Result<number, ParseError> = .Ok(2);",
+            "  option.unwrap(present);",
+            "  result.unwrap(ok);",
+            "}",
+          ].join("\n"),
+        },
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+
+    const optionJs =
+      result.files.find((file) => file.path === "__polena_std/option.js")?.contents ?? "";
+    const resultJs =
+      result.files.find((file) => file.path === "__polena_std/result.js")?.contents ?? "";
+
+    expect(optionJs).toContain('__polenaPanic("called unwrap on None")');
+    expect(optionJs).toContain("__polenaPanic(message)");
+    expect(resultJs).toContain('__polenaPanic("called unwrap on Err")');
+    expect(resultJs).toContain("__polenaPanic(message)");
+  });
+
+  test("panics when unwrapping None with option.unwrap", () => {
+    const result = expectCompileOk(`
+${coreTypes}
+
+fn unwrap<T>(value: Option<T>): T {
+  match value {
+    .Some(inner) => inner,
+    .None => panic "called unwrap on None",
+  }
+}
+
+const empty: Option<number> = .None;
+const value = unwrap(empty);
+`);
+
+    expectPanic(result.js, "called unwrap on None");
+  });
+
+  test("panics when unwrapping None with option.expect", () => {
+    const result = expectCompileOk(`
+${coreTypes}
+
+fn expect<T>(value: Option<T>, message: string): T {
+  match value {
+    .Some(inner) => inner,
+    .None => panic message,
+  }
+}
+
+const empty: Option<number> = .None;
+const value = expect(empty, "missing user id");
+`);
+
+    expectPanic(result.js, "missing user id");
+  });
+
+  test("panics when unwrapping Err with result.unwrap", () => {
+    const result = expectCompileOk(`
+${coreTypes}
+
+type ParseError = enum {
+  Invalid,
+};
+
+fn unwrap<T, E>(value: Result<T, E>): T {
+  match value {
+    .Ok(inner) => inner,
+    .Err(_) => panic "called unwrap on Err",
+  }
+}
+
+const failed: Result<number, ParseError> = .Err(ParseError.Invalid);
+const value = unwrap(failed);
+`);
+
+    expectPanic(result.js, "called unwrap on Err");
+  });
+
+  test("panics when unwrapping Err with result.expect", () => {
+    const result = expectCompileOk(`
+${coreTypes}
+
+type ParseError = enum {
+  Invalid,
+};
+
+fn expect<T, E>(value: Result<T, E>, message: string): T {
+  match value {
+    .Ok(inner) => inner,
+    .Err(_) => panic message,
+  }
+}
+
+const failed: Result<number, ParseError> = .Err(ParseError.Invalid);
+const value = expect(failed, "parsePort must succeed");
+`);
+
+    expectPanic(result.js, "parsePort must succeed");
+  });
+
+  test("returns the inner value when unwrapping Some or Ok", () => {
+    const result = expectCompileOk(`
+${coreTypes}
+
+fn unwrap_option<T>(value: Option<T>): T {
+  match value {
+    .Some(inner) => inner,
+    .None => panic "called unwrap on None",
+  }
+}
+
+type ParseError = enum {
+  Invalid,
+};
+
+fn unwrap_result<T, E>(value: Result<T, E>): T {
+  match value {
+    .Ok(inner) => inner,
+    .Err(_) => panic "called unwrap on Err",
+  }
+}
+
+const some: Option<number> = .Some(7);
+const ok: Result<number, ParseError> = .Ok(9);
+const fromOption = unwrap_option(some);
+const fromResult = unwrap_result(ok);
+const value = fromOption + fromResult;
+`);
+
+    expect(executeValue(result.js)).toBe(16);
+  });
+
   test("compiles standard-library map and set modules", () => {
     const result = compilePackage({
       manifest: { name: "app", version: "0.1.0", target: "executable" },

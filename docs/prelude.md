@@ -56,10 +56,10 @@ Checked indexing with `items[index]` still panics on invalid indexes.
 - `@std/core` exports `Option`, `Result`, `println`, `assert`, `todo`, and
   `unreachable`.
 - `@std/io` exports `println` and `eprintln`.
-- `@std/option` exports `is_some`, `is_none`, `unwrap_or`, `flatten`, `and_with`, `or_else`,
-  and `to_result`.
-- `@std/result` exports `is_ok`, `is_err`, `unwrap_or`, `flatten`, `and_with`, `or_else`,
-  `ok`, `err`, and `from_option`.
+- `@std/option` exports `is_some`, `is_none`, `unwrap`, `expect`, `unwrap_or`, `flatten`,
+  `and_with`, `or_else`, and `to_result`.
+- `@std/result` exports `is_ok`, `is_err`, `unwrap`, `expect`, `unwrap_or`, `flatten`,
+  `and_with`, `or_else`, `ok`, `err`, and `from_option`.
 - `@std/parse` exports `ParseError`, `parse_int`, and `parse_float`.
 - `@std/math` exports basic JavaScript-backed number helpers such as `abs`,
   `floor`, `ceil`, `round`, `min`, `max`, `pow`, and `sqrt`.

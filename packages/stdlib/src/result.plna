@@ -29,6 +29,28 @@ export fn unwrap_or<T, E>(value: Result<T, E>, fallback: T): T {
   }
 }
 
+/// Returns the success value when `value` is `.Ok`.
+///
+/// Panics when `value` is `.Err`. The error payload is not included in the panic
+/// message. Use only when failure would be a programmer error; prefer `match`,
+/// `unwrap_or`, or `expect` with a descriptive message.
+export fn unwrap<T, E>(value: Result<T, E>): T {
+  match value {
+    .Ok(inner) => inner,
+    .Err(_) => panic "called unwrap on Err",
+  }
+}
+
+/// Returns the success value when `value` is `.Ok`.
+///
+/// Panics with `message` when `value` is `.Err`.
+export fn expect<T, E>(value: Result<T, E>, message: string): T {
+  match value {
+    .Ok(inner) => inner,
+    .Err(_) => panic message,
+  }
+}
+
 /// Returns the inner `Result` when `value` is `.Ok`, otherwise forwards the error.
 export fn flatten<T, E>(value: Result<Result<T, E>, E>): Result<T, E> {
   match value {
