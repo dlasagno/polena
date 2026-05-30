@@ -517,6 +517,8 @@ class JavaScriptEmitter {
     loopContext?: LoopEmitContext,
   ): string {
     switch (expression.kind) {
+      case "RecoveryExpression":
+        return "undefined";
       case "NumberLiteral":
         return expression.text;
       case "BigIntLiteral":

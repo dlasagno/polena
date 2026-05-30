@@ -392,6 +392,7 @@ function collectExpressionTokens(
     case "NumberLiteral":
     case "BigIntLiteral":
     case "BooleanLiteral":
+    case "RecoveryExpression":
       return;
   }
 }

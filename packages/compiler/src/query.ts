@@ -406,6 +406,7 @@ function findInExpression(expression: Expression, offset: number): HoverTarget |
     case "BigIntLiteral":
     case "BooleanLiteral":
     case "NameExpression":
+    case "RecoveryExpression":
       return target("Expression", expression.nodeId, expression.span);
     case "EnumVariantExpression":
       if (expression.enumNameSpan !== undefined && contains(expression.enumNameSpan, offset)) {

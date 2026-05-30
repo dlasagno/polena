@@ -441,6 +441,7 @@ function nestedLocalCompletionsInExpression(
     case "BooleanLiteral":
     case "NameExpression":
     case "EnumVariantExpression":
+    case "RecoveryExpression":
       return [];
   }
 }

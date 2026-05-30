@@ -648,6 +648,7 @@ function isModuleConstExpression(expression: Expression): boolean {
         expression.args.every(isModuleConstExpression)
       );
     case "PanicExpression":
+    case "RecoveryExpression":
     case "IfExpression":
     case "WhileExpression":
     case "MatchExpression":

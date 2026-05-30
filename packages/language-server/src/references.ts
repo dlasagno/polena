@@ -593,6 +593,7 @@ function spanForExpression(expression: Expression, nodeId: NodeId): Span | undef
     case "BigIntLiteral":
     case "BooleanLiteral":
     case "NameExpression":
+    case "RecoveryExpression":
       return undefined;
   }
 }
@@ -609,6 +610,7 @@ function spanForDirectExpression(expression: Expression): Span {
     case "BigIntLiteral":
     case "StringLiteral":
     case "BooleanLiteral":
+    case "RecoveryExpression":
     case "ArrayLiteral":
     case "ObjectLiteral":
     case "DirectiveExpression":

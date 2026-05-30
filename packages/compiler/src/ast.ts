@@ -240,6 +240,7 @@ export type ExpressionStatement = {
 };
 
 export type Expression =
+  | RecoveryExpression
   | LiteralExpression
   | ArrayLiteralExpression
   | ObjectLiteralExpression
@@ -255,6 +256,12 @@ export type Expression =
   | IndexExpression
   | MemberExpression
   | EnumVariantExpression;
+
+export type RecoveryExpression = {
+  readonly kind: "RecoveryExpression";
+  readonly nodeId: NodeId;
+  readonly span: Span;
+};
 
 export type LiteralExpression =
   | {

@@ -1355,6 +1355,8 @@ class Checker {
 
   private inferExpressionType(expression: Expression, scope: Scope, options: InferOptions): Type {
     switch (expression.kind) {
+      case "RecoveryExpression":
+        return unknownType(true);
       case "NumberLiteral":
         return primitiveType("number");
       case "BigIntLiteral":
@@ -2430,6 +2432,7 @@ class Checker {
       case "BigIntLiteral":
       case "StringLiteral":
       case "BooleanLiteral":
+      case "RecoveryExpression":
       case "ArrayLiteral":
       case "ObjectLiteral":
       case "DirectiveExpression":

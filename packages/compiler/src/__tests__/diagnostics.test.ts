@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { Diagnostic } from "../diagnostic";
 import { DiagnosticCode } from "../diagnostic-codes";
-import { analyze, lex } from "../compiler";
+import { analyze, lex, parse } from "../compiler";
 
 type DiagnosticSummary = {
   readonly code: string;
@@ -150,6 +150,48 @@ const value = add(1 2);
     expect(result.diagnostics).toHaveLength(1);
   });
 
+  test("recovers after missing function bodies before the next declaration", () => {
+    const result = analyze("fn value(): number\nconst x = 1;");
+
+    expectDiagnostic(result.diagnostics[0], {
+      code: DiagnosticCode.ParseExpectedToken,
+      message: "Expected '{' before function body.",
+      label: "parser was looking here",
+      span: span(19, 2, 1, 24, 2, 6),
+    });
+    expect(result.diagnostics).toHaveLength(1);
+  });
+
+  test("recovers after missing if, while, and match inputs without literal cascades", () => {
+    const missingIfCondition = analyze("const value = if { 1 } else { 2 };");
+    const missingWhileCondition = analyze("while { break; }");
+    const missingMatchValue = analyze("const value = match { .A => 1, };");
+
+    expectDiagnostic(missingIfCondition.diagnostics[0], {
+      code: DiagnosticCode.ExpectedExpression,
+      message: "Expected if condition before '{'.",
+      label: "expected an expression here",
+      span: span(17, 1, 18, 18, 1, 19),
+    });
+    expect(missingIfCondition.diagnostics).toHaveLength(1);
+
+    expectDiagnostic(missingWhileCondition.diagnostics[0], {
+      code: DiagnosticCode.ExpectedExpression,
+      message: "Expected while condition before '{'.",
+      label: "expected an expression here",
+      span: span(6, 1, 7, 7, 1, 8),
+    });
+    expect(missingWhileCondition.diagnostics).toHaveLength(1);
+
+    expectDiagnostic(missingMatchValue.diagnostics[0], {
+      code: DiagnosticCode.ExpectedExpression,
+      message: "Expected match value before '{'.",
+      label: "expected an expression here",
+      span: span(20, 1, 21, 21, 1, 22),
+    });
+    expect(missingMatchValue.diagnostics).toHaveLength(1);
+  });
+
   test("reports missing if, else, and while blocks with context-specific messages", () => {
     const missingIfBlock = analyze("const value = if true 1 else { 2 };");
     const missingElseBlock = analyze("const value = if true { 1 } else 2;");
@@ -212,6 +254,59 @@ const value: number = match Color.Red {
       message: "Expected '=>' after match pattern.",
       label: "parser was looking here",
       span: span(81, 4, 8, 82, 4, 9),
+    });
+    expect(result.diagnostics).toHaveLength(1);
+  });
+
+  test("recovers after incomplete object literals without checker noise", () => {
+    const result = analyze('const user = { name "Ada", age: 1 };');
+
+    expectDiagnostic(result.diagnostics[0], {
+      code: DiagnosticCode.ParseExpectedToken,
+      message: "Expected ':' after object literal field name.",
+      label: "parser was looking here",
+      span: span(20, 1, 21, 25, 1, 26),
+    });
+    expect(result.diagnostics).toHaveLength(1);
+  });
+
+  test("recovers after broken import and export declarations in module mode", () => {
+    const lexResult = lex("import @/foo.{type, bar as};\nexport let x = 1;\nconst y = 2;");
+    const parseResult = parse(lexResult.tokens, { moduleMode: true });
+    const diagnostics = [...lexResult.diagnostics, ...parseResult.diagnostics];
+
+    expectDiagnostic(diagnostics[0], {
+      code: DiagnosticCode.ParseExpectedToken,
+      message: "Expected imported name.",
+      label: "parser was looking here",
+      span: span(18, 1, 19, 19, 1, 20),
+    });
+    expectDiagnostic(diagnostics[1], {
+      code: DiagnosticCode.ParseExpectedToken,
+      message: "Expected alias after 'as'.",
+      label: "parser was looking here",
+      span: span(26, 1, 27, 27, 1, 28),
+    });
+    expectDiagnostic(diagnostics[2], {
+      code: DiagnosticCode.InvalidExport,
+      message: "The 'export' keyword can only be used with 'type', 'const', or 'fn' declarations.",
+      label: "invalid module-level syntax",
+      span: span(29, 2, 1, 35, 2, 7),
+    });
+    expect(diagnostics).toHaveLength(3);
+    expect(parseResult.program.imports).toHaveLength(1);
+    expect(parseResult.program.declarations).toHaveLength(2);
+  });
+
+  test("reports unterminated interpolation without parser follow-up diagnostics", () => {
+    const result = analyze('const s = "hello ${name";');
+
+    expectDiagnostic(result.diagnostics[0], {
+      code: DiagnosticCode.UnterminatedInterpolation,
+      message: "Unterminated string interpolation.",
+      label: "this interpolation is missing a closing '}'",
+      span: span(10, 1, 11, 24, 1, 25),
+      notes: [{ kind: "help", message: "close the interpolation with '}'" }],
     });
     expect(result.diagnostics).toHaveLength(1);
   });

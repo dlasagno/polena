@@ -156,12 +156,7 @@ class Parser {
     const misplacedModuleDoc = this.parseModuleDocCommentBlock();
     this.reportMisplacedModuleDocComment(misplacedModuleDoc);
     if (misplacedModuleDoc !== undefined && this.check("Eof")) {
-      const expression = this.node({
-        kind: "NumberLiteral" as const,
-        value: 0,
-        text: "0",
-        span: misplacedModuleDoc.span,
-      });
+      const expression = this.recoveryExpression(misplacedModuleDoc.span);
       return this.node({
         kind: "ExpressionStatement",
         expression,
@@ -254,9 +249,7 @@ class Parser {
     }
     const end = this.match("Semicolon") ? this.previous() : token;
     const initializer = this.node({
-      kind: "NumberLiteral" as const,
-      value: 0,
-      text: "0",
+      kind: "RecoveryExpression" as const,
       span: token.span,
     });
 
@@ -1165,9 +1158,7 @@ class Parser {
         "doc comments can only document declarations, object type fields, or enum variants",
       );
       return this.node({
-        kind: "NumberLiteral",
-        value: 0,
-        text: "0",
+        kind: "RecoveryExpression",
         span: doc?.span ?? token.span,
       });
     }
@@ -1176,9 +1167,7 @@ class Parser {
       const doc = this.parseModuleDocCommentBlock();
       this.reportMisplacedModuleDocComment(doc);
       return this.node({
-        kind: "NumberLiteral",
-        value: 0,
-        text: "0",
+        kind: "RecoveryExpression",
         span: doc?.span ?? token.span,
       });
     }
@@ -1192,12 +1181,7 @@ class Parser {
     if (!this.isExpressionRecoveryBoundary()) {
       this.advance();
     }
-    return this.node({
-      kind: "NumberLiteral",
-      value: 0,
-      text: "0",
-      span: token.span,
-    });
+    return this.recoveryExpression(token.span);
   }
 
   private parsePanicExpression(): Expression {
@@ -1405,7 +1389,9 @@ class Parser {
 
   private parseMatchExpression(): MatchExpression {
     const matchToken = this.expect("Match", "Expected 'match'.");
-    const scrutinee = this.parseExpression();
+    const scrutinee = this.check("LeftBrace")
+      ? this.missingExpression(`Expected match value before '{'.`)
+      : this.parseExpression();
     this.expect("LeftBrace", "Expected '{' before match arms.");
     const arms: MatchArm[] = [];
 
@@ -1544,6 +1530,10 @@ class Parser {
   }
 
   private parseCondition(keyword: "if" | "while"): Expression {
+    if (this.check("LeftBrace")) {
+      return this.missingExpression(`Expected ${keyword} condition before '{'.`);
+    }
+
     if (!this.match("LeftParen")) {
       return this.parseExpression();
     }
@@ -1588,6 +1578,24 @@ class Parser {
       }),
     );
     return token;
+  }
+
+  private missingExpression(message: string): Expression {
+    const token = this.current();
+    this.diagnostics.push(
+      error(message, token.span, {
+        code: DiagnosticCode.ExpectedExpression,
+        label: "expected an expression here",
+      }),
+    );
+    return this.recoveryExpression(token.span);
+  }
+
+  private recoveryExpression(span: Span): Expression {
+    return this.node({
+      kind: "RecoveryExpression" as const,
+      span,
+    });
   }
 
   private parseDocCommentBlock(): DocCommentBlock | undefined {
@@ -1789,6 +1797,12 @@ class Parser {
       case "Semicolon":
       case "RightBrace":
       case "Eof":
+      case "Import":
+      case "Export":
+      case "Type":
+      case "Fn":
+      case "Const":
+      case "Let":
         return true;
       default:
         return false;
