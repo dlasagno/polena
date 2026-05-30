@@ -227,7 +227,16 @@ describe("init operation", () => {
 
     expect(result.ok).toBe(true);
     expect(harness.writes.get("/tmp/my-app/polena.toml")).toContain('name = "my_app"');
-    expect(harness.writes.get("/tmp/my-app/src/index.plna")).toContain("Hello, Polena!");
+    expect(harness.writes.get("/tmp/my-app/src/index.plna")).toBe(
+      [
+        "import @std/io;",
+        "",
+        "export fn main(): void {",
+        '  io.println("Hello, Polena!");',
+        "}",
+        "",
+      ].join("\n"),
+    );
     expect(harness.writes.get("/tmp/my-app/.gitignore")).toBe("dist/\n");
   });
 

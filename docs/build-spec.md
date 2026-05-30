@@ -153,8 +153,10 @@ omitted.
 Executable `src/index.plna`:
 
 ```tsx
+import @std/io;
+
 export fn main(): void {
-  println("Hello, Polena!");
+  io.println("Hello, Polena!");
 }
 ```
 

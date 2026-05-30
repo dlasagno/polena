@@ -81,7 +81,8 @@ describe("CLI commands", () => {
 
     expect(exitCode).toBe(0);
     expect(harness.writes.get("app/polena.toml")).toContain('name = "my_app"');
-    expect(harness.writes.get("app/src/index.plna")).toContain("Hello, Polena!");
+    expect(harness.writes.get("app/src/index.plna")).toContain("import @std/io;");
+    expect(harness.writes.get("app/src/index.plna")).toContain('io.println("Hello, Polena!");');
     expect(harness.writes.get("app/.gitignore")).toBe("dist/\n");
     expect(harness.prompts).toEqual([]);
   });

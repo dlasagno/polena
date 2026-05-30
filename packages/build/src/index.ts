@@ -406,7 +406,14 @@ function formatInitEntryModule(target: PackageTarget): string {
     return ["export fn hello(): string {", '  return "Hello, Polena!";', "}", ""].join("\n");
   }
 
-  return ["export fn main(): void {", '  println("Hello, Polena!");', "}", ""].join("\n");
+  return [
+    "import @std/io;",
+    "",
+    "export fn main(): void {",
+    '  io.println("Hello, Polena!");',
+    "}",
+    "",
+  ].join("\n");
 }
 
 function compilerManifestFromBuildManifest(manifest: BuildManifest): {
