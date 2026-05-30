@@ -443,7 +443,7 @@ class JavaScriptEmitter {
           .map((field) => `${field.name}: ${this.emitExpression(field.value, indent, loopContext)}`)
           .join(", ")} }`;
       case "DirectiveExpression":
-        return this.emitDirectiveExpression(expression);
+        return this.emitDirectiveExpression(expression, indent, loopContext);
       case "EnumVariantExpression":
         return JSON.stringify(
           `${expression.enumName ?? expression.resolvedEnumName ?? ""}.${expression.variantName}`,
@@ -502,6 +502,8 @@ class JavaScriptEmitter {
 
   private emitDirectiveExpression(
     expression: Extract<Expression, { readonly kind: "DirectiveExpression" }>,
+    indent: string,
+    loopContext?: LoopEmitContext,
   ): string {
     const expansion = expression.expansion;
     switch (expansion?.kind) {
@@ -511,8 +513,41 @@ class JavaScriptEmitter {
         return `[${expansion.variantNames
           .map((variantName) => JSON.stringify(`${expansion.enumName}.${variantName}`))
           .join(", ")}]`;
+      case "TargetJs":
+        return this.emitTargetJsDirective(expression, expansion, indent, loopContext);
       default:
         throw new Error(`Cannot emit unresolved compiler directive '@${expression.name}'.`);
+    }
+  }
+
+  private emitTargetJsDirective(
+    expression: Extract<Expression, { readonly kind: "DirectiveExpression" }>,
+    expansion: NonNullable<Extract<typeof expression.expansion, { readonly kind: "TargetJs" }>>,
+    indent: string,
+    loopContext?: LoopEmitContext,
+  ): string {
+    const runtimeOperands = expression.operands.slice(expansion.runtimeOperandStart);
+    const emittedTemplate = substituteTargetPlaceholders(expansion.template, (index) => {
+      const operand = runtimeOperands[index];
+      if (operand?.kind !== "ExpressionOperand") {
+        throw new Error(`Cannot emit invalid target operand '$${index}'.`);
+      }
+
+      return this.emitExpression(operand.expression, indent, loopContext);
+    });
+
+    switch (expansion.mode) {
+      case "plain":
+        return emittedTemplate;
+      case "option": {
+        const result = this.nextTemp("target");
+        return `(() => { const ${result} = ${emittedTemplate}; return ${result} == null ? ${JSON.stringify("Option.None")} : { tag: ${JSON.stringify("Option.Some")}, values: [${result}] }; })()`;
+      }
+      case "result": {
+        const result = this.nextTemp("target");
+        const thrown = this.nextTemp("targetError");
+        return `(() => { try { const ${result} = ${emittedTemplate}; return { tag: ${JSON.stringify("Result.Ok")}, values: [${result}] }; } catch (${thrown}) { return { tag: ${JSON.stringify("Result.Err")}, values: [${thrown}] }; } })()`;
+      }
     }
   }
 
@@ -915,6 +950,15 @@ function hasPipePlaceholder(args: readonly Expression[]): boolean {
 
 function isPipePlaceholder(expression: Expression): boolean {
   return expression.kind === "NameExpression" && expression.name === "_";
+}
+
+function substituteTargetPlaceholders(
+  template: string,
+  emitOperand: (index: number) => string,
+): string {
+  return template.replaceAll(/\$(\d+)/g, (_placeholder, digits: string) =>
+    emitOperand(Number(digits)),
+  );
 }
 
 function emitIndexHelper(): string[] {

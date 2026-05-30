@@ -26,7 +26,10 @@ target-specific lowering escape: the author provides a trusted JavaScript
 output template, and the compiler handles checked operands, placeholder
 substitution, result typing, and code generation.
 
-Target escapes are not implemented.
+Target escapes are implemented for the JavaScript target in the initial
+`@target.js`, `@target.js.option`, and `@target.js.result` forms described
+below. Package-level gating and deeper JavaScript template validation are not
+implemented.
 
 ---
 

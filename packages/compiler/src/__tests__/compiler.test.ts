@@ -2721,6 +2721,71 @@ const value = names[1] ++ ":" ++ fields[2];
     expect(result.js).toContain('["id", "name", "active"]');
   });
 
+  test("supports JavaScript target escape directives", () => {
+    const result = expectCompileOk(`
+fn length(input: string): number {
+  @target.js("$0.length", number, input)
+}
+
+fn maybe_env(): Option<string> {
+  @target.js.option("undefined", string)
+}
+
+fn parse(input: string): Result<unknown, unknown> {
+  @target.js.result("JSON.parse($0)", unknown, unknown, input)
+}
+
+const parsed = parse("{\\"name\\":\\"Ada\\"}");
+const parsedValue = match parsed {
+  .Ok(_) => length("Ada"),
+  .Err(_) => 0,
+};
+const missingValue = match maybe_env() {
+  .Some(value) => length(value),
+  .None => 39,
+};
+const value = parsedValue + missingValue;
+`);
+
+    expect(executeValue(result.js)).toBe(42);
+    expect(result.js).toContain(".length");
+    expect(result.js).toContain('"Option.None"');
+    expect(result.js).toContain('"Result.Ok"');
+    expect(result.js).toContain('"Result.Err"');
+  });
+
+  test("rejects invalid JavaScript target escape directives", () => {
+    const missingType = compile('const value = @target.js("Date.now()");');
+    expect(missingType.ok).toBe(false);
+    expect(missingType.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Directive '@target.js' expects at least 2 operands, got 1.",
+    );
+
+    const nonLiteral = compile(`
+const template = "Date.now()";
+const value = @target.js(template, number);
+`);
+    expect(nonLiteral.ok).toBe(false);
+    expect(nonLiteral.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Directive '@target.js' expects a string literal template.",
+    );
+
+    const placeholder = compile('const value = @target.js("$1 + $", number, 1);');
+    expect(placeholder.ok).toBe(false);
+    expect(placeholder.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Target placeholder '$1' has no matching runtime operand.",
+    );
+    expect(placeholder.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Malformed target placeholder in '@target.js'.",
+    );
+
+    const unused = compile('const value = @target.js("$0", number, 1, 2);');
+    expect(unused.ok).toBe(false);
+    expect(unused.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Runtime operand 1 is not used by target template.",
+    );
+  });
+
   test("rejects invalid compiler directive use without cascading name diagnostics", () => {
     const unknown = compile("const value = @missing(Color);");
 

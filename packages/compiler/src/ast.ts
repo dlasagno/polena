@@ -350,6 +350,12 @@ export type DirectiveExpansion =
       readonly kind: "EnumValueArray";
       readonly enumName: string;
       readonly variantNames: readonly string[];
+    }
+  | {
+      readonly kind: "TargetJs";
+      readonly mode: "plain" | "option" | "result";
+      readonly template: string;
+      readonly runtimeOperandStart: number;
     };
 
 export type UnaryOperator = "!" | "-";

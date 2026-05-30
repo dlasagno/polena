@@ -1212,12 +1212,12 @@ class Parser {
       return operands;
     }
 
-    const parseOperand = directiveUsesTypeOperands(name)
-      ? () => this.parseDirectiveTypeOperand()
-      : () => this.parseDirectiveExpressionOperand();
-
     while (true) {
-      operands.push(parseOperand());
+      operands.push(
+        directiveOperandIsType(name, operands.length)
+          ? this.parseDirectiveTypeOperand()
+          : this.parseDirectiveExpressionOperand(),
+      );
 
       if (!this.match("Comma")) {
         break;
@@ -1844,12 +1844,17 @@ function last<T>(items: readonly T[]): T {
   return items[items.length - 1] as T;
 }
 
-function directiveUsesTypeOperands(name: string): boolean {
+function directiveOperandIsType(name: string, index: number): boolean {
   switch (name) {
     case "enumVariantNames":
     case "enumValues":
     case "objectFieldNames":
       return true;
+    case "target.js":
+    case "target.js.option":
+      return index === 1;
+    case "target.js.result":
+      return index === 1 || index === 2;
     default:
       return false;
   }

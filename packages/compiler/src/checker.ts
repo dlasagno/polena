@@ -1652,6 +1652,12 @@ class Checker {
         return this.inferEnumValuesDirective(expression);
       case "objectFieldNames":
         return this.inferObjectFieldNamesDirective(expression);
+      case "target.js":
+        return this.inferTargetJsDirective(expression, scope, "plain");
+      case "target.js.option":
+        return this.inferTargetJsDirective(expression, scope, "option");
+      case "target.js.result":
+        return this.inferTargetJsDirective(expression, scope, "result");
       default:
         void scope;
         void options;
@@ -1748,6 +1754,203 @@ class Checker {
       values: type.fields.map((field) => field.name),
     });
     return arrayType(primitiveType("string"));
+  }
+
+  private inferTargetJsDirective(
+    expression: DirectiveExpression,
+    scope: Scope,
+    mode: "plain" | "option" | "result",
+  ): Type {
+    const minimumOperands = mode === "result" ? 3 : 2;
+    if (expression.operands.length < minimumOperands) {
+      this.diagnostics.push(
+        error(
+          `Directive '@${expression.name}' expects at least ${minimumOperands} operands, got ${expression.operands.length}.`,
+          expression.span,
+          {
+            code: DiagnosticCode.WrongArgumentCount,
+            label: "wrong number of directive operands",
+          },
+        ),
+      );
+      return unknownType();
+    }
+
+    const template = this.targetJsTemplateOperand(expression, 0);
+    const runtimeOperandStart = mode === "result" ? 3 : 2;
+
+    for (const operand of expression.operands.slice(runtimeOperandStart)) {
+      if (operand.kind === "ExpressionOperand") {
+        this.inferExpression(operand.expression, scope);
+        continue;
+      }
+
+      this.diagnostics.push(
+        error(
+          `Directive '@${expression.name}' expects runtime expression operands.`,
+          operand.span,
+          {
+            code: DiagnosticCode.InvalidDirectiveOperand,
+            label: "supply an expression here",
+          },
+        ),
+      );
+    }
+
+    const valueType = this.targetJsTypeOperand(expression, 1);
+    const resultType =
+      mode === "plain"
+        ? valueType
+        : mode === "option"
+          ? this.resolveNamedType("Option", expression.nameSpan, [valueType ?? unknownType()])
+          : this.resolveNamedType("Result", expression.nameSpan, [
+              valueType ?? unknownType(),
+              this.targetJsTypeOperand(expression, 2) ?? unknownType(),
+            ]);
+
+    if (template !== undefined) {
+      this.validateTargetJsTemplate(expression, template, runtimeOperandStart);
+      this.setDirectiveExpansion(expression, {
+        kind: "TargetJs",
+        mode,
+        template,
+        runtimeOperandStart,
+      });
+    }
+
+    return resultType ?? unknownType();
+  }
+
+  private targetJsTemplateOperand(
+    expression: DirectiveExpression,
+    index: number,
+  ): string | undefined {
+    const operand = expression.operands[index];
+    if (operand?.kind !== "ExpressionOperand") {
+      this.diagnostics.push(
+        error(
+          `Directive '@${expression.name}' expects a string literal template.`,
+          operand?.span ?? expression.span,
+          {
+            code: DiagnosticCode.InvalidDirectiveOperand,
+            label: "supply a string literal here",
+          },
+        ),
+      );
+      return undefined;
+    }
+
+    const templateExpression = operand.expression;
+    if (
+      templateExpression.kind !== "StringLiteral" ||
+      templateExpression.parts.some((part) => part.kind !== "StringText")
+    ) {
+      this.diagnostics.push(
+        error(`Directive '@${expression.name}' expects a string literal template.`, operand.span, {
+          code: DiagnosticCode.InvalidDirectiveOperand,
+          label: "the template must be a non-interpolated string literal",
+        }),
+      );
+      return undefined;
+    }
+
+    let value = "";
+    for (const part of templateExpression.parts) {
+      if (part.kind === "StringText") {
+        value += part.value;
+      }
+    }
+    return value;
+  }
+
+  private targetJsTypeOperand(expression: DirectiveExpression, index: number): Type | undefined {
+    const operand = expression.operands[index];
+    if (operand?.kind !== "TypeOperand") {
+      this.diagnostics.push(
+        error(
+          `Directive '@${expression.name}' expects a type operand.`,
+          operand?.span ?? expression.span,
+          {
+            code: DiagnosticCode.InvalidDirectiveOperand,
+            label: "supply a type here",
+          },
+        ),
+      );
+      return undefined;
+    }
+
+    return this.typeFromNode(operand.type);
+  }
+
+  private validateTargetJsTemplate(
+    expression: DirectiveExpression,
+    template: string,
+    runtimeOperandStart: number,
+  ): void {
+    const runtimeOperandCount = expression.operands.length - runtimeOperandStart;
+    const usedIndexes = new Set<number>();
+
+    for (let index = 0; index < template.length; index += 1) {
+      if (template[index] !== "$") {
+        continue;
+      }
+
+      const placeholderStart = index;
+      index += 1;
+      if (!isAsciiDigit(template[index])) {
+        this.diagnostics.push(
+          error(`Malformed target placeholder in '@${expression.name}'.`, expression.span, {
+            code: DiagnosticCode.InvalidDirectiveOperand,
+            label: "placeholders must use '$' followed by a runtime operand index",
+          }),
+        );
+        continue;
+      }
+
+      let digits = "";
+      while (isAsciiDigit(template[index])) {
+        digits += template[index];
+        index += 1;
+      }
+      index -= 1;
+
+      const operandIndex = Number(digits);
+      if (operandIndex >= runtimeOperandCount) {
+        this.diagnostics.push(
+          error(
+            `Target placeholder '$${digits}' has no matching runtime operand.`,
+            expression.span,
+            {
+              code: DiagnosticCode.InvalidDirectiveOperand,
+              label: "add a runtime operand or lower the placeholder index",
+            },
+          ),
+        );
+        continue;
+      }
+
+      if (placeholderStart >= 0) {
+        usedIndexes.add(operandIndex);
+      }
+    }
+
+    for (let index = 0; index < runtimeOperandCount; index += 1) {
+      if (usedIndexes.has(index)) {
+        continue;
+      }
+
+      const operand = expression.operands[runtimeOperandStart + index];
+      this.diagnostics.push(
+        error(
+          `Runtime operand ${index} is not used by target template.`,
+          operand?.span ?? expression.span,
+          {
+            code: DiagnosticCode.InvalidDirectiveOperand,
+            label: `reference this operand as '$${index}' or remove it`,
+          },
+        ),
+      );
+    }
   }
 
   private directiveSingleTypeOperand(expression: DirectiveExpression): Type | undefined {
@@ -3688,6 +3891,10 @@ function substituteType(type: Type, substitution: ReadonlyMap<string, Type>): Ty
     case "unknown":
       return type;
   }
+}
+
+function isAsciiDigit(value: string | undefined): boolean {
+  return value !== undefined && value >= "0" && value <= "9";
 }
 
 function isArithmeticOperator(operator: BinaryOperator): boolean {

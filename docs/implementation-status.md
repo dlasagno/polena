@@ -175,7 +175,7 @@ Status values:
 | Compiler directive syntax `@directive(...)` | Partially implemented | Expression-position compiler directives parse, check in a directive namespace, and lower during code generation. Declaration, statement, pattern, and type-position directives are not implemented. |
 | Enum introspection directives | Partially implemented | Supports `@enumVariantNames(T)` and fieldless `@enumValues(T)`. Rich enum metadata directives are not implemented. |
 | Object introspection directives | Partially implemented | Supports `@objectFieldNames(T)`. Rich object metadata directives are not implemented. |
-| Target escape directives | Not implemented | Drafted in `docs/target-escapes.md`; depends on directives, explicit result type operands, `unknown`, and opaque types. |
+| Target escape directives | Partially implemented | Supports `@target.js`, `@target.js.option`, and `@target.js.result` for the JavaScript target with literal templates, explicit type operands, checked runtime operands, placeholder substitution, and Option/Result wrapping. Package gating and deeper template validation are still deferred. |
 | User-defined directives/macros | Not implemented | Deferred in the spec. |
 
 ---
