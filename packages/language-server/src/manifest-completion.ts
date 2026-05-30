@@ -32,6 +32,11 @@ const manifestFields = [
     insertText: '[build]\nout-dir = "dist"',
     documentation: "Build settings.",
   },
+  {
+    name: "[unsafe]",
+    insertText: "[unsafe]\ntarget_escapes = true",
+    documentation: "Unsafe language feature opt-ins.",
+  },
 ] as const;
 
 const buildFields = [
@@ -39,6 +44,14 @@ const buildFields = [
     name: "out-dir",
     insertText: 'out-dir = "dist"',
     documentation: "Output directory for emitted JavaScript.",
+  },
+] as const;
+
+const unsafeFields = [
+  {
+    name: "target_escapes",
+    insertText: "target_escapes = true",
+    documentation: "Allow JavaScript target escape directives in this package.",
   },
 ] as const;
 
@@ -81,6 +94,13 @@ export function getManifestCompletions(
       .map(fieldCompletion);
   }
 
+  if (section === "unsafe") {
+    const usedFields = fieldsInSection(document.getText(), position.line, "unsafe");
+    return unsafeFields
+      .filter((field) => !usedFields.has(field.name) || field.name === currentKey)
+      .map(fieldCompletion);
+  }
+
   const usedFields = topLevelFieldsInManifest(document.getText(), position.line);
   return manifestFields
     .filter((field) => !usedFields.has(field.name) || field.name === currentKey)
@@ -102,6 +122,8 @@ function topLevelFieldsInManifest(source: string, currentLine: number): Readonly
       section = nextSection;
       if (section === "build") {
         fields.add("[build]");
+      } else if (section === "unsafe") {
+        fields.add("[unsafe]");
       }
       continue;
     }

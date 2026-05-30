@@ -3,4 +3,7 @@ export type PackageManifest = {
   readonly version: string;
   readonly target: "executable" | "library";
   readonly runtime?: "node" | "bun" | "deno";
+  readonly unsafe?: {
+    readonly targetEscapes?: boolean;
+  };
 };

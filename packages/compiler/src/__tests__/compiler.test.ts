@@ -1020,6 +1020,79 @@ const value = 1 |> pair(_, _);
     );
   });
 
+  test("reports missing standard-library modules when no stdlib is provided", () => {
+    const result = compilePackage({
+      manifest: { name: "app", version: "0.1.0", target: "executable" },
+      rootDir: "app",
+      sourceDir: "app/src",
+      standardLibrary: { files: [] },
+      files: [
+        {
+          path: "app/src/index.plna",
+          source: [
+            "import @std/io;",
+            "",
+            "export fn main(): void {",
+            '  io.println("hello");',
+            "}",
+          ].join("\n"),
+        },
+      ],
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Missing module '@std/io'.",
+    );
+  });
+
+  test("compiles with injected standard-library sources", () => {
+    const result = compilePackage({
+      manifest: { name: "app", version: "0.1.0", target: "executable" },
+      rootDir: "app",
+      sourceDir: "app/src",
+      standardLibrary: {
+        files: [
+          {
+            path: "<std>/io.plna",
+            source: [
+              "export fn println(message: string): void {",
+              '  @target.js("console.log($0)", void, message)',
+              "}",
+            ].join("\n"),
+          },
+        ],
+      },
+      files: [
+        {
+          path: "app/src/index.plna",
+          source: [
+            "import @std/io;",
+            "",
+            "export fn main(): void {",
+            '  io.println("hello");',
+            "}",
+          ].join("\n"),
+        },
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    expect(result.files.map((file) => file.path).sort()).toEqual([
+      "__polena_std/io.js",
+      "index.js",
+    ]);
+    expect(result.files.find((file) => file.path === "__polena_std/io.js")?.contents).toContain(
+      "console.log",
+    );
+  });
+
   test("compiles the standard-library assert and unreachable helpers", () => {
     const result = compilePackage({
       manifest: { name: "app", version: "0.1.0", target: "executable" },
@@ -3585,6 +3658,63 @@ const value = @target.js(template, number);
     expect(unused.ok).toBe(false);
     expect(unused.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
       "Runtime operand 1 is not used by target template.",
+    );
+  });
+
+  test("requires package opt-in for JavaScript target escape directives", () => {
+    const result = compilePackage({
+      manifest: { name: "app", version: "0.1.0", target: "executable" },
+      rootDir: "app",
+      sourceDir: "app/src",
+      files: [
+        {
+          path: "app/src/index.plna",
+          source: [
+            "export fn main(): void {",
+            '  @target.js("console.log($0)", void, "hello")',
+            "}",
+          ].join("\n"),
+        },
+      ],
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Target escape directive '@target.js' requires an unsafe opt-in.",
+    );
+  });
+
+  test("allows JavaScript target escape directives with package opt-in", () => {
+    const result = compilePackage({
+      manifest: {
+        name: "app",
+        version: "0.1.0",
+        target: "executable",
+        unsafe: { targetEscapes: true },
+      },
+      rootDir: "app",
+      sourceDir: "app/src",
+      files: [
+        {
+          path: "app/src/index.plna",
+          source: [
+            "export fn main(): void {",
+            '  @target.js("console.log($0)", void, "hello")',
+            "}",
+          ].join("\n"),
+        },
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    expect(result.files.find((file) => file.path === "index.js")?.contents).toContain(
+      "console.log",
     );
   });
 

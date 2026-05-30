@@ -302,6 +302,11 @@ The optional `[build]` section may contain:
 - **`out-dir`** — output directory for emitted JavaScript. It is resolved
   relative to the package root unless absolute and defaults to `dist`.
 
+The optional `[unsafe]` section may contain:
+
+- **`target_escapes`** — when `true`, package source may use JavaScript target
+  escape directives such as `@target.js`.
+
 The `target` field declares what the package produces, not the compilation
 target (browser, Node, and similar) — that concept is separate and **TBD**.
 

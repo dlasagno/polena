@@ -100,6 +100,7 @@ export type CheckOptions = {
   readonly qualifiedImports?: readonly ImportedModule[];
   readonly valueImports?: readonly ImportedName[];
   readonly typeImports?: readonly ImportedName[];
+  readonly allowTargetEscapes?: boolean;
 };
 
 type LoopContext = {
@@ -1768,6 +1769,20 @@ class Checker {
     scope: Scope,
     mode: "plain" | "option" | "result",
   ): Type {
+    if (this.options.allowTargetEscapes === false) {
+      this.diagnostics.push(
+        error(
+          `Target escape directive '@${expression.name}' requires an unsafe opt-in.`,
+          expression.nameSpan,
+          {
+            code: DiagnosticCode.InvalidDirectiveOperand,
+            label: "add [unsafe] target_escapes = true to polena.toml",
+          },
+        ),
+      );
+      return unknownType();
+    }
+
     const minimumOperands = mode === "result" ? 3 : 2;
     if (expression.operands.length < minimumOperands) {
       this.diagnostics.push(

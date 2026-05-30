@@ -48,6 +48,26 @@ export type EmittedFile = {
   readonly contents: string;
 };
 
+export type StandardLibrary = {
+  readonly files: readonly SourceFile[];
+};
+
+export const bundledStandardLibrary: StandardLibrary = {
+  files: stdlibSources,
+};
+
+type PackageCompileInput = {
+  readonly manifest: PackageManifest;
+  readonly rootDir: string;
+  readonly sourceDir: string;
+  readonly files: readonly SourceFile[];
+  readonly standardLibrary?: StandardLibrary;
+};
+
+type NormalizedPackageCompileInput = Omit<PackageCompileInput, "standardLibrary"> & {
+  readonly standardLibrary: StandardLibrary;
+};
+
 export type CompilePackageResult =
   | {
       readonly ok: true;
@@ -129,8 +149,9 @@ export function analyzePackage(input: {
   readonly rootDir: string;
   readonly sourceDir: string;
   readonly files: readonly SourceFile[];
+  readonly standardLibrary?: StandardLibrary;
 }): AnalyzePackageResult {
-  const analysis = analyzePackagePipeline(input);
+  const analysis = analyzePackagePipeline(withStandardLibrary(input));
   if (!analysis.ok) {
     return {
       ok: false,
@@ -152,8 +173,9 @@ export function compilePackage(input: {
   readonly rootDir: string;
   readonly sourceDir: string;
   readonly files: readonly SourceFile[];
+  readonly standardLibrary?: StandardLibrary;
 }): CompilePackageResult {
-  const analysis = analyzePackagePipeline(input);
+  const analysis = analyzePackagePipeline(withStandardLibrary(input));
   const diagnostics = analysis.diagnostics.map(packageDiagnosticToDiagnostic);
 
   if (!analysis.ok) {
@@ -181,12 +203,16 @@ export function compilePackage(input: {
   };
 }
 
-function analyzePackagePipeline(input: {
-  readonly manifest: PackageManifest;
-  readonly rootDir: string;
-  readonly sourceDir: string;
-  readonly files: readonly SourceFile[];
-}): PackageAnalysisPipelineResult {
+function withStandardLibrary(input: PackageCompileInput): NormalizedPackageCompileInput {
+  return {
+    ...input,
+    standardLibrary: input.standardLibrary ?? bundledStandardLibrary,
+  };
+}
+
+function analyzePackagePipeline(
+  input: NormalizedPackageCompileInput,
+): PackageAnalysisPipelineResult {
   const diagnostics: PackageDiagnostic[] = [];
   const programs = new Map<string, Program>();
 
@@ -198,7 +224,7 @@ function analyzePackagePipeline(input: {
     );
     programs.set(file.path, parseResult.program);
   }
-  for (const file of stdlibSources) {
+  for (const file of input.standardLibrary.files) {
     const lexResult = lex(file.source);
     const parseResult = parse(lexResult.tokens, { moduleMode: true });
     diagnostics.push(
@@ -207,7 +233,11 @@ function analyzePackagePipeline(input: {
     programs.set(file.path, parseResult.program);
   }
 
-  const packageResult = buildPackageProgram({ ...input, stdFiles: stdlibSources, programs });
+  const packageResult = buildPackageProgram({
+    ...input,
+    stdFiles: input.standardLibrary.files,
+    programs,
+  });
   diagnostics.push(...packageDiagnostics(packageResult.diagnostics, input.sourceDir));
   if (!packageResult.ok) {
     return { ok: false, diagnostics, analyses: [] };
@@ -235,6 +265,9 @@ function analyzePackagePipeline(input: {
     );
     const checkResult = check(moduleFile.program, {
       ...imports,
+      allowTargetEscapes:
+        moduleFile.origin === "std" ||
+        packageResult.packageProgram.manifest.unsafe?.targetEscapes === true,
     });
     moduleDiagnostics.push(...checkResult.diagnostics);
     diagnostics.push(...diagnosticsForPath(moduleFile.path, moduleDiagnostics));

@@ -25,14 +25,15 @@ describe("manifest parsing", () => {
     }
   });
 
-  test("accepts runtime and build out dir", () => {
+  test("accepts runtime, unsafe options, and build out dir", () => {
     const result = parseBuildManifest(
-      'name = "app"\nversion = "0.1.0"\ntarget = "executable"\nruntime = "node"\n\n[build]\nout-dir = "build"\n',
+      'name = "app"\nversion = "0.1.0"\ntarget = "executable"\nruntime = "node"\n\n[unsafe]\ntarget_escapes = true\n\n[build]\nout-dir = "build"\n',
     );
 
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.manifest.runtime).toBe("node");
+      expect(result.manifest.unsafe?.targetEscapes).toBe(true);
       expect(result.manifest.build.outDir).toBe("build");
     }
   });
@@ -89,6 +90,20 @@ describe("manifest parsing", () => {
     );
   });
 
+  test("rejects unknown and non-boolean unsafe fields", () => {
+    const result = parseBuildManifest(
+      'name = "app"\nversion = "0.1.0"\ntarget = "library"\n\n[unsafe]\ntarget_escapes = "yes"\nother = true\n',
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toEqual(
+      expect.arrayContaining([
+        "Invalid unsafe field 'target_escapes'.",
+        "Unknown unsafe field 'other'.",
+      ]),
+    );
+  });
+
   test("rejects non-string manifest values and TOML syntax errors", () => {
     const typed = parseBuildManifest('name = 1\nversion = "0.1.0"\ntarget = "library"\n');
     const syntax = parseBuildManifest("name = =\n");
@@ -125,6 +140,26 @@ describe("package operations", () => {
 
     expect(result.ok).toBe(true);
     expect(harness.writes.get("/app/dist/index.js")).toContain("main();");
+  });
+
+  test("passes unsafe target escape opt-in to the compiler", async () => {
+    const harness = createHarness(
+      new Map([
+        [
+          "/app/polena.toml",
+          'name = "app"\nversion = "0.1.0"\ntarget = "executable"\n\n[unsafe]\ntarget_escapes = true\n',
+        ],
+        [
+          "/app/src/index.plna",
+          'export fn main(): void { @target.js("console.log($0)", void, "Hello"); }',
+        ],
+      ]),
+    );
+
+    const result = await buildPackage({ packageRoot: "/app", io: harness.io });
+
+    expect(result.ok).toBe(true);
+    expect(harness.writes.get("/app/dist/index.js")).toContain("console.log");
   });
 
   test("uses manifest out dir and lets override win", async () => {

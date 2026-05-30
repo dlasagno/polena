@@ -8,21 +8,31 @@ import optionSource from "./option.plna" with { type: "text" };
 import parseSource from "./parse.plna" with { type: "text" };
 import resultSource from "./result.plna" with { type: "text" };
 import stringSource from "./string.plna" with { type: "text" };
+import {
+  stdlibModuleSourcePaths,
+  stdlibVirtualPath,
+  type StdlibModuleSourcePath,
+} from "./manifest";
 
 export type StdlibSourceFile = {
   readonly path: string;
   readonly source: string;
 };
 
-export const stdlibSources: readonly StdlibSourceFile[] = [
-  { path: "<std>/core.plna", source: coreSource },
-  { path: "<std>/io.plna", source: ioSource },
-  { path: "<std>/option.plna", source: optionSource },
-  { path: "<std>/result.plna", source: resultSource },
-  { path: "<std>/parse.plna", source: parseSource },
-  { path: "<std>/math.plna", source: mathSource },
-  { path: "<std>/string.plna", source: stringSource },
-  { path: "<std>/array.plna", source: arraySource },
-  { path: "<std>/collections/map.plna", source: mapSource },
-  { path: "<std>/collections/set.plna", source: setSource },
-];
+const sourcesByPath: Record<StdlibModuleSourcePath, string> = {
+  "array.plna": arraySource,
+  "collections/map.plna": mapSource,
+  "collections/set.plna": setSource,
+  "core.plna": coreSource,
+  "io.plna": ioSource,
+  "math.plna": mathSource,
+  "option.plna": optionSource,
+  "parse.plna": parseSource,
+  "result.plna": resultSource,
+  "string.plna": stringSource,
+};
+
+export const stdlibSources: readonly StdlibSourceFile[] = stdlibModuleSourcePaths.map((path) => ({
+  path: stdlibVirtualPath(path),
+  source: sourcesByPath[path],
+}));

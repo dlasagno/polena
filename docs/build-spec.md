@@ -63,7 +63,13 @@ The manifest is a TOML 1.0 file. The fields below are recognized. Unknown top-le
 |-----------|--------|----------|-------|
 | `out-dir` | string | no       | Output directory, resolved relative to the package root. Defaults to `dist`. |
 
-### 4.3 Example
+### 4.3 `[unsafe]` section
+
+| Field            | Type    | Required | Notes |
+|------------------|---------|----------|-------|
+| `target_escapes` | boolean | no       | Allows JavaScript target escape directives such as `@target.js` in package source files. Defaults to `false`. |
+
+### 4.4 Example
 
 ```toml
 name = "my_app"
@@ -75,7 +81,14 @@ runtime = "node"
 out-dir = "dist"
 ```
 
-### 4.4 Validation
+Packages that intentionally use target escape directives opt in explicitly:
+
+```toml
+[unsafe]
+target_escapes = true
+```
+
+### 4.5 Validation
 
 - Missing required fields produce a diagnostic that names the field and points at the manifest.
 - An invalid value for `target` or `runtime` produces a diagnostic that lists the permitted values.

@@ -12,6 +12,7 @@ describe("manifest completions", () => {
       "target",
       "runtime",
       "[build]",
+      "[unsafe]",
     ]);
   });
 
@@ -36,6 +37,13 @@ describe("manifest completions", () => {
     const completions = getManifestCompletions(document, { line: 3, character: 0 });
 
     expect(completions.map((item) => item.label)).toEqual(["out-dir"]);
+  });
+
+  test("offers unsafe fields inside the unsafe section", () => {
+    const document = manifestDocument('name = "app"\n\n[unsafe]\n');
+    const completions = getManifestCompletions(document, { line: 3, character: 0 });
+
+    expect(completions.map((item) => item.label)).toEqual(["target_escapes"]);
   });
 
   test("does not offer field snippets inside comments or assigned values", () => {

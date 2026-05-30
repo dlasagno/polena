@@ -15,6 +15,9 @@ export type BuildManifest = {
   readonly version: string;
   readonly target: PackageTarget;
   readonly runtime?: PackageRuntime;
+  readonly unsafe?: {
+    readonly targetEscapes?: boolean;
+  };
   readonly build: {
     readonly outDir?: string;
   };
@@ -61,8 +64,9 @@ export type BuildIo = {
 };
 
 const supportedSourceExtensions = [".plna", ".polena"] as const;
-const topLevelFields = new Set(["name", "version", "target", "runtime", "build"]);
+const topLevelFields = new Set(["name", "version", "target", "runtime", "build", "unsafe"]);
 const buildFields = new Set(["out-dir"]);
+const unsafeFields = new Set(["target_escapes"]);
 const validTargets = new Set(["executable", "library"]);
 const validRuntimes = new Set(["node", "bun", "deno"]);
 
@@ -106,6 +110,7 @@ export function parseBuildManifest(source: string): ParseBuildManifestResult {
   }
 
   const buildValue = parsed.build;
+  const unsafeValue = parsed.unsafe;
   if (buildValue !== undefined && !isPlainObject(buildValue)) {
     diagnostics.push(
       manifestError("Invalid manifest field 'build'.", spanForKey(spans, "build", source), {
@@ -126,12 +131,35 @@ export function parseBuildManifest(source: string): ParseBuildManifestResult {
     }
   }
 
+  if (unsafeValue !== undefined && !isPlainObject(unsafeValue)) {
+    diagnostics.push(
+      manifestError("Invalid manifest field 'unsafe'.", spanForKey(spans, "unsafe", source), {
+        label: "expected an [unsafe] section",
+      }),
+    );
+  }
+
+  if (isPlainObject(unsafeValue)) {
+    for (const key of Object.keys(unsafeValue)) {
+      if (!unsafeFields.has(key)) {
+        diagnostics.push(
+          manifestError(`Unknown unsafe field '${key}'.`, spanForUnsafeKey(spans, key, source), {
+            label: "remove this field or check its spelling",
+          }),
+        );
+      }
+    }
+  }
+
   const name = readRequiredString(parsed, "name", source, spans, diagnostics);
   const version = readRequiredString(parsed, "version", source, spans, diagnostics);
   const target = readRequiredString(parsed, "target", source, spans, diagnostics);
   const runtime = readOptionalString(parsed, "runtime", source, spans, diagnostics);
   const outDir = isPlainObject(buildValue)
     ? readOptionalBuildString(buildValue, "out-dir", source, spans, diagnostics)
+    : undefined;
+  const targetEscapes = isPlainObject(unsafeValue)
+    ? readOptionalUnsafeBoolean(unsafeValue, "target_escapes", source, spans, diagnostics)
     : undefined;
 
   if (name !== undefined && !isValidPackageName(name)) {
@@ -174,6 +202,7 @@ export function parseBuildManifest(source: string): ParseBuildManifestResult {
       version,
       target: target as PackageTarget,
       ...(runtime === undefined ? {} : { runtime: runtime as PackageRuntime }),
+      ...(targetEscapes === undefined ? {} : { unsafe: { targetEscapes } }),
       build: {
         ...(outDir === undefined ? {} : { outDir }),
       },
@@ -421,12 +450,16 @@ function compilerManifestFromBuildManifest(manifest: BuildManifest): {
   readonly version: string;
   readonly target: PackageTarget;
   readonly runtime?: PackageRuntime;
+  readonly unsafe?: {
+    readonly targetEscapes?: boolean;
+  };
 } {
   return {
     name: manifest.name,
     version: manifest.version,
     target: manifest.target,
     ...(manifest.runtime === undefined ? {} : { runtime: manifest.runtime }),
+    ...(manifest.unsafe === undefined ? {} : { unsafe: manifest.unsafe }),
   };
 }
 
@@ -459,6 +492,7 @@ async function readSourceFiles(
 type ManifestSpans = {
   readonly topLevel: ReadonlyMap<string, Span>;
   readonly build: ReadonlyMap<string, Span>;
+  readonly unsafe: ReadonlyMap<string, Span>;
   readonly sections: ReadonlyMap<string, Span>;
 };
 
@@ -467,6 +501,7 @@ type Span = NonNullable<Diagnostic["span"]>;
 function scanManifestSpans(source: string): ManifestSpans {
   const topLevel = new Map<string, Span>();
   const build = new Map<string, Span>();
+  const unsafe = new Map<string, Span>();
   const sections = new Map<string, Span>();
   const lines = source.split(/\n/);
   let offset = 0;
@@ -490,6 +525,8 @@ function scanManifestSpans(source: string): ManifestSpans {
       const key = fieldMatch[1] ?? "";
       if (section === "build") {
         build.set(key, spanForText(offset, lineNumber, line, key));
+      } else if (section === "unsafe") {
+        unsafe.set(key, spanForText(offset, lineNumber, line, key));
       } else if (section === undefined) {
         topLevel.set(key, spanForText(offset, lineNumber, line, key));
       }
@@ -498,7 +535,7 @@ function scanManifestSpans(source: string): ManifestSpans {
     offset += line.length + 1;
   }
 
-  return { topLevel, build, sections };
+  return { topLevel, build, unsafe, sections };
 }
 
 function readRequiredString(
@@ -572,6 +609,28 @@ function readOptionalBuildString(
   return value;
 }
 
+function readOptionalUnsafeBoolean(
+  table: Record<string, unknown>,
+  key: string,
+  source: string,
+  spans: ManifestSpans,
+  diagnostics: Diagnostic[],
+): boolean | undefined {
+  const value = table[key];
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== "boolean") {
+    diagnostics.push(
+      manifestError(`Invalid unsafe field '${key}'.`, spanForUnsafeKey(spans, key, source), {
+        label: "expected a boolean value",
+      }),
+    );
+    return undefined;
+  }
+  return value;
+}
+
 function manifestError(
   message: string,
   span: Span,
@@ -599,6 +658,10 @@ function spanForKey(spans: ManifestSpans, key: string, source: string): Span {
 
 function spanForBuildKey(spans: ManifestSpans, key: string, source: string): Span {
   return spans.build.get(key) ?? spanForManifest(source);
+}
+
+function spanForUnsafeKey(spans: ManifestSpans, key: string, source: string): Span {
+  return spans.unsafe.get(key) ?? spanForManifest(source);
 }
 
 function spanForManifest(source: string): Span {

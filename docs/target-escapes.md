@@ -28,8 +28,8 @@ substitution, result typing, and code generation.
 
 Target escapes are implemented for the JavaScript target in the initial
 `@target.js`, `@target.js.option`, and `@target.js.result` forms described
-below. Package-level gating and deeper JavaScript template validation are not
-implemented.
+below. Package source must opt in with `[unsafe] target_escapes = true` in
+`polena.toml`. Deeper JavaScript template validation is not implemented.
 
 ---
 
