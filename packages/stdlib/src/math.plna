@@ -1,31 +1,43 @@
+//! Basic numeric helpers backed by the JavaScript `Math` object.
+//!
+//! Import with `import @std/math;` or name specific items.
+
+/// Returns the absolute value of `value`.
 export fn abs(value: number): number {
   @target.js("Math.abs($0)", number, value)
 }
 
+/// Returns the largest integer less than or equal to `value`.
 export fn floor(value: number): number {
   @target.js("Math.floor($0)", number, value)
 }
 
+/// Returns the smallest integer greater than or equal to `value`.
 export fn ceil(value: number): number {
   @target.js("Math.ceil($0)", number, value)
 }
 
+/// Returns the nearest integer to `value`.
 export fn round(value: number): number {
   @target.js("Math.round($0)", number, value)
 }
 
+/// Returns the smaller of `left` and `right`.
 export fn min(left: number, right: number): number {
   @target.js("Math.min($0, $1)", number, left, right)
 }
 
+/// Returns the larger of `left` and `right`.
 export fn max(left: number, right: number): number {
   @target.js("Math.max($0, $1)", number, left, right)
 }
 
+/// Returns `base` raised to the power `exponent`.
 export fn pow(base: number, exponent: number): number {
   @target.js("Math.pow($0, $1)", number, base, exponent)
 }
 
+/// Returns the square root of `value`.
 export fn sqrt(value: number): number {
   @target.js("Math.sqrt($0)", number, value)
 }

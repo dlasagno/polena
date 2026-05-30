@@ -1,13 +1,27 @@
+//! Foundational `Option` and `Result` types plus basic console output.
+//!
+//! Import with `import @std/core;` or name specific items, for example
+//! `import @std/core.{type Option, type Result, println};`.
+
+/// A value that may be present (`Some`) or absent (`None`).
 export type Option<T> = enum {
+  /// The contained value.
   Some(T),
+  /// No value.
   None,
 };
 
+/// A value that is either success (`Ok`) or failure (`Err`).
 export type Result<T, E> = enum {
+  /// The success value.
   Ok(T),
+  /// The error value.
   Err(E),
 };
 
+/// Writes `message` and a newline to standard output.
+///
+/// On the JavaScript target this uses `console.log`.
 export fn println(message: string): void {
   @target.js("console.log($0)", void, message)
 }

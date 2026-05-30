@@ -1,5 +1,11 @@
+//! Helpers for working with `Option` values.
+//!
+//! Import with `import @std/option;`. The `Option` type must be in scope,
+//! for example via `import @std/core.{type Option};`.
+
 import @std/core.{type Option};
 
+/// Returns `true` when `value` is `.Some(_)`.
 export fn is_some<T>(value: Option<T>): boolean {
   match value {
     .Some(_) => true,
@@ -7,6 +13,7 @@ export fn is_some<T>(value: Option<T>): boolean {
   }
 }
 
+/// Returns `true` when `value` is `.None`.
 export fn is_none<T>(value: Option<T>): boolean {
   match value {
     .Some(_) => false,
@@ -14,6 +21,7 @@ export fn is_none<T>(value: Option<T>): boolean {
   }
 }
 
+/// Returns the inner value when `value` is `.Some`, otherwise returns `fallback`.
 export fn unwrap_or<T>(value: Option<T>, fallback: T): T {
   match value {
     .Some(inner) => inner,

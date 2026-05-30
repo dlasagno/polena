@@ -1,5 +1,11 @@
+//! Helpers for working with `Result` values.
+//!
+//! Import with `import @std/result;`. The `Result` type must be in scope,
+//! for example via `import @std/core.{type Result};`.
+
 import @std/core.{type Result};
 
+/// Returns `true` when `value` is `.Ok(_)`.
 export fn is_ok<T, E>(value: Result<T, E>): boolean {
   match value {
     .Ok(_) => true,
@@ -7,6 +13,7 @@ export fn is_ok<T, E>(value: Result<T, E>): boolean {
   }
 }
 
+/// Returns `true` when `value` is `.Err(_)`.
 export fn is_err<T, E>(value: Result<T, E>): boolean {
   match value {
     .Ok(_) => false,
@@ -14,6 +21,7 @@ export fn is_err<T, E>(value: Result<T, E>): boolean {
   }
 }
 
+/// Returns the success value when `value` is `.Ok`, otherwise returns `fallback`.
 export fn unwrap_or<T, E>(value: Result<T, E>, fallback: T): T {
   match value {
     .Ok(inner) => inner,

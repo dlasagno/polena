@@ -1,7 +1,18 @@
+//! Console output helpers for the JavaScript target.
+//!
+//! Import with `import @std/io;` or name specific items, for example
+//! `import @std/io.{println, eprintln};`.
+
+/// Writes `message` and a newline to standard output.
+///
+/// On the JavaScript target this uses `console.log`.
 export fn println(message: string): void {
   @target.js("console.log($0)", void, message)
 }
 
+/// Writes `message` and a newline to standard error.
+///
+/// On the JavaScript target this uses `console.error`.
 export fn eprintln(message: string): void {
   @target.js("console.error($0)", void, message)
 }

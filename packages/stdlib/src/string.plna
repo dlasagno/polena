@@ -1,13 +1,23 @@
+//! Basic string helpers backed by JavaScript string methods.
+//!
+//! Because `string` is a primitive type name, import this module with an alias
+//! when using qualified calls, for example `import @std/string as strings;`.
+
 import @std/core.{type Option};
 
+/// Returns the number of UTF-16 code units in `input`.
 export fn len(input: string): number {
   @target.js("$0.length", number, input)
 }
 
+/// Returns `true` when `input` has length zero.
 export fn is_empty(input: string): boolean {
   len(input) == 0
 }
 
+/// Returns the substring from `start` up to but not including `end`.
+///
+/// When `end` is `.None`, the slice runs through the end of `input`.
 export fn slice(input: string, start: number, end: Option<number>): string {
   match end {
     .Some(value) => @target.js("$0.slice($1, $2)", string, input, start, value),
@@ -15,26 +25,32 @@ export fn slice(input: string, start: number, end: Option<number>): string {
   }
 }
 
+/// Returns `true` when `input` contains `needle`.
 export fn contains(input: string, needle: string): boolean {
   @target.js("$0.includes($1)", boolean, input, needle)
 }
 
+/// Returns `true` when `input` starts with `prefix`.
 export fn starts_with(input: string, prefix: string): boolean {
   @target.js("$0.startsWith($1)", boolean, input, prefix)
 }
 
+/// Returns `true` when `input` ends with `suffix`.
 export fn ends_with(input: string, suffix: string): boolean {
   @target.js("$0.endsWith($1)", boolean, input, suffix)
 }
 
+/// Returns `input` with leading and trailing whitespace removed.
 export fn trim(input: string): string {
   @target.js("$0.trim()", string, input)
 }
 
+/// Returns `input` converted to lowercase.
 export fn lowercase(input: string): string {
   @target.js("$0.toLowerCase()", string, input)
 }
 
+/// Returns `input` converted to uppercase.
 export fn uppercase(input: string): string {
   @target.js("$0.toUpperCase()", string, input)
 }

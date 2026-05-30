@@ -1,17 +1,28 @@
+//! Array length, access, and mutation helpers.
+//!
+//! Import with `import @std/array;`. The `Option` type must be in scope where
+//! `get` is used, for example via `import @std/core.{type Option};`.
+
 import @std/core.{type Option};
 
+/// Returns the number of elements in `items`.
 export fn len<T>(items: []T): number {
   @target.js("$0.length", number, items)
 }
 
+/// Returns `true` when `items` has no elements.
 export fn is_empty<T>(items: []T): boolean {
   @target.js("$0.length === 0", boolean, items)
 }
 
+/// Returns `.Some(value)` when `index` is in bounds, otherwise `.None`.
+///
+/// This delegates to the language's checked `items.get(index)` helper.
 export fn get<T>(items: []T, index: number): Option<T> {
   items.get(index)
 }
 
+/// Appends `value` to the end of `items`.
 export fn push<T>(items: []T, value: T): void {
   @target.js("$0.push($1)", void, items, value)
 }
