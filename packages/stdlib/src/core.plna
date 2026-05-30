@@ -1,0 +1,13 @@
+export type Option<T> = enum {
+  Some(T),
+  None,
+};
+
+export type Result<T, E> = enum {
+  Ok(T),
+  Err(E),
+};
+
+export fn println(message: string): void {
+  @target.js("console.log($0)", void, message)
+}

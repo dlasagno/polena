@@ -1,0 +1,22 @@
+import @std/core.{type Result};
+
+export fn is_ok<T, E>(value: Result<T, E>): boolean {
+  match value {
+    .Ok(_) => true,
+    .Err(_) => false,
+  }
+}
+
+export fn is_err<T, E>(value: Result<T, E>): boolean {
+  match value {
+    .Ok(_) => false,
+    .Err(_) => true,
+  }
+}
+
+export fn unwrap_or<T, E>(value: Result<T, E>, fallback: T): T {
+  match value {
+    .Ok(inner) => inner,
+    .Err(_) => fallback,
+  }
+}

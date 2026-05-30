@@ -1,5 +1,8 @@
 //! Generic aliases and functions keep reusable code strongly typed.
 
+import @std/core.{type Option, type Result};
+import @std/io.{println};
+
 type Box<T> = {
   value: T,
 };

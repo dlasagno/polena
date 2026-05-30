@@ -23,10 +23,9 @@ type Option<T> = enum {
 };
 ```
 
-It is considered a fundamental standard-library type. During the bootstrap
-period, the compiler may provide `Option<T>` through the prelude before the
-standard library is packaged as ordinary Polena modules. It follows the normal
-enum construction and match rules.
+It is considered a fundamental standard-library type provided by `@std/core`.
+It follows the normal enum construction and match rules and must be imported
+explicitly where used.
 
 A shorthand surface syntax for optional types, such as `string?` for
 `Option<string>`, is **TBD**. See
@@ -111,10 +110,9 @@ type Result<T, E> = enum {
 };
 ```
 
-It is considered a fundamental standard-library type. During the bootstrap
-period, the compiler may provide `Result<T, E>` through the prelude before the
-standard library is packaged as ordinary Polena modules. It follows the normal
-enum construction and match rules.
+It is considered a fundamental standard-library type provided by `@std/core`.
+It follows the normal enum construction and match rules and must be imported
+explicitly where used.
 
 ```tsx
 const result: Result<number, NumberError> = .Ok(42);

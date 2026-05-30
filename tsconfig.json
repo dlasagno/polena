@@ -32,7 +32,8 @@
       "@polena/build": ["./packages/build/src/index.ts"],
       "@polena/compiler": ["./packages/compiler/src/index.ts"],
       "@polena/cli": ["./packages/cli/src/index.ts"],
-      "@polena/language-server": ["./packages/language-server/src/index.ts"]
+      "@polena/language-server": ["./packages/language-server/src/index.ts"],
+      "@polena/stdlib": ["./packages/stdlib/src/index.ts"]
     }
   }
 }

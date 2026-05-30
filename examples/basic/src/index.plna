@@ -1,4 +1,5 @@
 import @/users.{type User, summary} as users;
+import @std/io.{println};
 
 export fn main(): void {
   const ada: User = {

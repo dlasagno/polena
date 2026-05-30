@@ -20,8 +20,8 @@ end-to-end. It supports:
 - Final-expression function returns and explicit `return expr;`
 - `void` function returns
 - Function calls
-- A provisional prelude with `println(message: string): void`, `Option<T>`, and
-  `Result<T, E>`
+- A bundled first standard-library slice under `@std/`, including `@std/core`
+  with `Option<T>`, `Result<T, E>`, and `println(message: string): void`
 - Unary `!` and `-`
 - Binary arithmetic, comparison, `and`, and `or` expressions
 - String and array concatenation with `++`
@@ -43,7 +43,7 @@ end-to-end. It supports:
   symbols
 
 It intentionally does not yet support object field readonly controls,
-external packages, standard-library imports, workspaces, explicit generic
+external packages, workspaces, explicit generic
 function call type arguments, or the full type system from the language draft.
 
 Example:
@@ -80,7 +80,8 @@ Polena is organized as a small Bun workspace:
   intended language design.
 - [docs/implementation-status.md](docs/implementation-status.md) tracks what the
   current TypeScript compiler actually implements.
-- [docs/prelude.md](docs/prelude.md) documents compiler-provided prelude items.
+- [docs/prelude.md](docs/prelude.md) documents the current no-prelude policy
+  and the explicit `@std/core` replacements.
 - [docs/build-spec.md](docs/build-spec.md) and
   [docs/cli-spec.md](docs/cli-spec.md) define package and CLI behavior.
 - [docs/roadmap.md](docs/roadmap.md) lists current planning priorities.
@@ -138,6 +139,8 @@ runtime = "node"
 
 ```tsx
 // src/index.plna
+import @std/io.{println};
+
 export fn main(): void {
   println("Hello");
 }
@@ -176,8 +179,8 @@ error[PLN102]: Unknown name 'missing'.
 help: declare it before using it, or check for a spelling mistake
 ```
 
-See [docs/prelude.md](docs/prelude.md) for the currently available prelude
-functions.
+See [docs/prelude.md](docs/prelude.md) for the current no-prelude policy and
+the explicit `@std/core` replacements.
 
 See [docs/implementation-status.md](docs/implementation-status.md) for a
 feature-by-feature view of what the current MVP implements from the language

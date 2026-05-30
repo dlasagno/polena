@@ -2,6 +2,18 @@ import { describe, expect, test } from "bun:test";
 import type { CompileResult } from "../compiler";
 import { analyzePackage, compile, compilePackage, lex, parse } from "../compiler";
 
+const coreTypes = `
+type Option<T> = enum {
+  Some(T),
+  None,
+};
+
+type Result<T, E> = enum {
+  Ok(T),
+  Err(E),
+};
+`;
+
 describe("lexer", () => {
   test("tokenizes declarations and skips line comments", () => {
     const result = lex("// ignored\nconst answer: number = 42;");
@@ -901,7 +913,7 @@ const value = 1 |> pair(_, _);
             "import @/users.{type User, parseUser} as users;",
             "export fn main(): void {",
             '  const user: User = users.parseUser("Ada");',
-            "  println(user.name);",
+            "  const name = user.name;",
             "}",
           ].join("\n"),
         },
@@ -939,7 +951,7 @@ const value = 1 |> pair(_, _);
       files: [
         {
           path: "app/src/index.plna",
-          source: "export fn main(args: []string): void { println(args[0]); }",
+          source: "export fn main(args: []string): void { const first = args[0]; }",
         },
       ],
     });
@@ -950,6 +962,122 @@ const value = 1 |> pair(_, _);
     }
     expect(result.files.find((file) => file.path === "index.js")?.contents).toContain(
       "main(process.argv.slice(2));",
+    );
+  });
+
+  test("compiles standard-library imports to bundled ESM files", () => {
+    const result = compilePackage({
+      manifest: { name: "app", version: "0.1.0", target: "executable" },
+      rootDir: "app",
+      sourceDir: "app/src",
+      files: [
+        {
+          path: "app/src/index.plna",
+          source: [
+            "import @std/array;",
+            "import @std/io;",
+            "import @std/math;",
+            "import @std/option;",
+            "import @std/result;",
+            "import @std/string as strings;",
+            "import @std/core.{type Result};",
+            "",
+            "export fn main(): void {",
+            '  const words = [" Ada ", "Grace"];',
+            "  const first = array.get(words, 0);",
+            '  const name = strings.trim(option.unwrap_or(first, "unknown"));',
+            "  const rounded = math.round(1.4);",
+            "  const parsed: Result<number, string> = .Ok(rounded);",
+            "  const value = result.unwrap_or(parsed, 0);",
+            "  if value == 1 {",
+            "    io.println(name);",
+            "  }",
+            "}",
+          ].join("\n"),
+        },
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    expect(result.files.map((file) => file.path).sort()).toEqual([
+      "__polena_std/array.js",
+      "__polena_std/core.js",
+      "__polena_std/io.js",
+      "__polena_std/math.js",
+      "__polena_std/option.js",
+      "__polena_std/result.js",
+      "__polena_std/string.js",
+      "index.js",
+    ]);
+    expect(result.files.find((file) => file.path === "index.js")?.contents).toContain(
+      'import * as strings from "./__polena_std/string.js";',
+    );
+    expect(result.files.find((file) => file.path === "__polena_std/io.js")?.contents).toContain(
+      "console.log",
+    );
+  });
+
+  test("supports explicit core standard-library type imports", () => {
+    const result = compilePackage({
+      manifest: { name: "app", version: "0.1.0", target: "executable" },
+      rootDir: "app",
+      sourceDir: "app/src",
+      files: [
+        {
+          path: "app/src/index.plna",
+          source: [
+            "import @std/core.{type Option} as core;",
+            "",
+            "export fn main(): void {",
+            "  const value: Option<number> = .Some(1);",
+            '  core.println("ok");',
+            "}",
+          ].join("\n"),
+        },
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    expect(result.files.map((file) => file.path).sort()).toEqual([
+      "__polena_std/core.js",
+      "index.js",
+    ]);
+  });
+
+  test("emits imported standard-library enum constructors through type aliases", () => {
+    const result = compilePackage({
+      manifest: { name: "app", version: "0.1.0", target: "executable" },
+      rootDir: "app",
+      sourceDir: "app/src",
+      files: [
+        {
+          path: "app/src/index.plna",
+          source: [
+            "import @std/core.{type Option as Maybe};",
+            "",
+            "export fn main(): void {",
+            "  const value: Maybe<number> = Maybe.Some(1);",
+            "}",
+          ].join("\n"),
+        },
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    expect(result.files.find((file) => file.path === "index.js")?.contents).toContain(
+      'tag: "Option.Some"',
+    );
+    expect(result.files.find((file) => file.path === "index.js")?.contents).not.toContain(
+      "Maybe.Some",
     );
   });
 
@@ -1032,21 +1160,30 @@ const value = add(20, 22);
     expect(executeValue(result.js)).toBe(42);
   });
 
-  test("supports println from the prelude", () => {
+  test("supports JavaScript-backed println functions", () => {
     const result = expectCompileOk(`
+fn println(message: string): void {
+  @target.js("console.log($0)", void, message)
+}
+
 println("Hello");
 `);
 
-    expect(result.js).toContain('console.log("Hello");');
+    expect(result.js).toContain("return console.log(message);");
+    expect(result.js).toContain('println("Hello");');
   });
 
   test("supports interpolation in println calls", () => {
     const result = expectCompileOk(`
+fn println(message: string): void {
+  @target.js("console.log($0)", void, message)
+}
+
 const value = 42;
 println("value ${"$"}{value}");
 `);
 
-    expect(result.js).toContain(["console.log(`value ", "$", "{value}`);"].join(""));
+    expect(result.js).toContain(["println(`value ", "$", "{value}`);"].join(""));
   });
 
   test("supports explicit return statements", () => {
@@ -1248,7 +1385,7 @@ const value = add(answer, 1);
             "import @/users.{type User, greeting} as users;",
             "export fn main(): void {",
             '  const user: User = { name: "Ada" };',
-            "  println(users.greeting(user));",
+            "  const message = users.greeting(user);",
             "}",
           ].join("\n"),
         },
@@ -2577,7 +2714,13 @@ const user: User = value;
   });
 
   test("rejects wrong println argument types", () => {
-    const result = compile("println(1);");
+    const result = compile(`
+fn println(message: string): void {
+  @target.js("console.log($0)", void, message)
+}
+
+println(1);
+`);
 
     expect(result.ok).toBe(false);
     expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
@@ -2586,7 +2729,13 @@ const user: User = value;
   });
 
   test("rejects wrong println arity", () => {
-    const result = compile("println();");
+    const result = compile(`
+fn println(message: string): void {
+  @target.js("console.log($0)", void, message)
+}
+
+println();
+`);
 
     expect(result.ok).toBe(false);
     expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
@@ -2723,6 +2872,8 @@ const value = names[1] ++ ":" ++ fields[2];
 
   test("supports JavaScript target escape directives", () => {
     const result = expectCompileOk(`
+${coreTypes}
+
 fn length(input: string): number {
   @target.js("$0.length", number, input)
 }
@@ -2836,6 +2987,8 @@ const value = pair.second;
 
   test("supports generic enum construction and payload matching", () => {
     const result = expectCompileOk(`
+${coreTypes}
+
 const one = Option.Some(1);
 const empty: Option<number> = .None;
 const nested: Option<Option<number>> = .Some(one);
@@ -2851,8 +3004,10 @@ const value = match nested {
     expect(executeValue(result.js)).toBe(1);
   });
 
-  test("supports prelude Option and Result types", () => {
+  test("supports locally defined Option and Result types", () => {
     const result = expectCompileOk(`
+${coreTypes}
+
 type ParseError = enum {
   Empty,
   Invalid,
@@ -2883,8 +3038,10 @@ const value = optionValue + resultValue;
     expect(result.js).toContain("const failed =");
   });
 
-  test("supports safe array get through prelude Option", () => {
+  test("supports safe array get through in-scope Option", () => {
     const result = expectCompileOk(`
+${coreTypes}
+
 const values = [10, 20];
 const first = match values.get(0) {
   .Some(value) => value,
@@ -2917,6 +3074,8 @@ const value = first + missing;
 
   test("supports generic functions over arrays, objects, and enums", () => {
     const result = expectCompileOk(`
+${coreTypes}
+
 type Box<T> = { value: T };
 
 fn identity<T>(value: T): T {
@@ -2952,6 +3111,8 @@ const value = if boxed == "ok" { firstValue } else { 0 };
 
   test("infers generic function return type from context", () => {
     const result = expectCompileOk(`
+${coreTypes}
+
 fn none<T>(): Option<T> {
   .None
 }
@@ -2982,11 +3143,8 @@ const score: Score<string> = 1;
       "Type 'Score' does not take type arguments.",
     );
 
-    const preludeConflict = compile("type Option<T> = enum { Some(T), None };");
-    expect(preludeConflict.ok).toBe(false);
-    expect(preludeConflict.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
-      "Duplicate type name 'Option'.",
-    );
+    const userOption = compile("type Option<T> = enum { Some(T), None };");
+    expect(userOption.ok).toBe(true);
   });
 
   test("rejects invalid generic function usage", () => {
@@ -2997,6 +3155,8 @@ const score: Score<string> = 1;
     );
 
     const cannotInfer = compile(`
+${coreTypes}
+
 fn make<T>(): Option<T> {
   .None
 }
@@ -3023,6 +3183,8 @@ const value = choose(1, "two");
 
   test("rejects generic enum construction when type arguments cannot be inferred", () => {
     const result = compile(`
+${coreTypes}
+
 const empty = Option.None;
 `);
 

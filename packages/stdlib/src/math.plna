@@ -1,0 +1,31 @@
+export fn abs(value: number): number {
+  @target.js("Math.abs($0)", number, value)
+}
+
+export fn floor(value: number): number {
+  @target.js("Math.floor($0)", number, value)
+}
+
+export fn ceil(value: number): number {
+  @target.js("Math.ceil($0)", number, value)
+}
+
+export fn round(value: number): number {
+  @target.js("Math.round($0)", number, value)
+}
+
+export fn min(left: number, right: number): number {
+  @target.js("Math.min($0, $1)", number, left, right)
+}
+
+export fn max(left: number, right: number): number {
+  @target.js("Math.max($0, $1)", number, left, right)
+}
+
+export fn pow(base: number, exponent: number): number {
+  @target.js("Math.pow($0, $1)", number, base, exponent)
+}
+
+export fn sqrt(value: number): number {
+  @target.js("Math.sqrt($0)", number, value)
+}

@@ -15,6 +15,7 @@ export type ModuleId = number;
 export type ModuleFile = {
   readonly id: ModuleId;
   readonly name: ModuleName;
+  readonly origin: "package" | "std";
   readonly path: string;
   readonly source: string;
   readonly program: Program;
@@ -52,11 +53,23 @@ export function buildPackageProgram(input: {
   readonly rootDir: string;
   readonly sourceDir: string;
   readonly files: readonly SourceFile[];
+  readonly stdFiles?: readonly SourceFile[];
   readonly programs: ReadonlyMap<string, Program>;
 }): BuildPackageProgramResult {
   const diagnostics: Diagnostic[] = [];
   const modules: ModuleFile[] = [];
   const moduleNames = new Map<string, ModuleFile>();
+
+  for (const file of input.stdFiles ?? []) {
+    if (!isSupportedSourceFile(file.path)) {
+      continue;
+    }
+    const name = stdModuleNameFromPath(file.path);
+    if (name === undefined) {
+      continue;
+    }
+    addModule(file, name, "std");
+  }
 
   for (const file of input.files) {
     if (!isSupportedSourceFile(file.path)) {
@@ -66,9 +79,13 @@ export function buildPackageProgram(input: {
     if (name === undefined) {
       continue;
     }
+    addModule(file, name, "package");
+  }
+
+  function addModule(file: SourceFile, name: ModuleName, origin: ModuleFile["origin"]): void {
     const program = input.programs.get(file.path);
     if (program === undefined) {
-      continue;
+      return;
     }
     const existing = moduleNames.get(name);
     if (existing !== undefined) {
@@ -80,11 +97,12 @@ export function buildPackageProgram(input: {
           notes: [{ kind: "help", message: `conflicts with ${existing.path}` }],
         }),
       );
-      continue;
+      return;
     }
     const moduleFile = {
       id: modules.length,
       name,
+      origin,
       path: file.path,
       source: file.source,
       program,
@@ -108,18 +126,22 @@ export function buildPackageProgram(input: {
   for (const moduleFile of modules) {
     const resolved: ResolvedImport[] = [];
     for (const declaration of moduleFile.program.imports) {
-      if (declaration.path.prefix !== "current-package") {
+      if (declaration.path.prefix !== "current-package" && declaration.path.prefix !== "std") {
         diagnostics.push(
           error(`Unsupported import '${declaration.path.text}'.`, declaration.path.span, {
             code: DiagnosticCode.UnsupportedModuleImport,
             sourcePath: moduleFile.path,
-            label: "only current-package imports beginning with '@/' are implemented",
+            label:
+              "only current-package imports beginning with '@/' and standard-library imports beginning with '@std/' are implemented",
           }),
         );
         continue;
       }
 
-      const importedName = `@/${declaration.path.segments.join("/")}`;
+      const importedName =
+        declaration.path.prefix === "std"
+          ? `@std/${declaration.path.segments.join("/")}`
+          : `@/${declaration.path.segments.join("/")}`;
       const importedModule = moduleNames.get(importedName);
       if (importedModule === undefined) {
         diagnostics.push(
@@ -180,6 +202,9 @@ export function moduleNameFromPath(path: string, sourceDir: string): ModuleName 
 export function jsPathForModule(moduleName: ModuleName): string {
   if (moduleName === "@/") {
     return "index.js";
+  }
+  if (moduleName.startsWith("@std/")) {
+    return `__polena_std/${moduleName.slice("@std/".length)}.js`;
   }
   return `${moduleName.slice(2)}.js`;
 }
@@ -269,6 +294,23 @@ function topologicalOrder(
 
 function isSupportedSourceFile(path: string): boolean {
   return path.endsWith(".plna") || path.endsWith(".polena");
+}
+
+function stdModuleNameFromPath(path: string): ModuleName | undefined {
+  const normalized = normalizePath(path);
+  const prefix = "<std>/";
+  if (!normalized.startsWith(prefix)) {
+    return undefined;
+  }
+  const relative = normalized.slice(prefix.length);
+  const withoutExtension = relative.replace(/\.(plna|polena)$/, "");
+  if (withoutExtension === "index") {
+    return "@std/core";
+  }
+  if (withoutExtension.endsWith("/index")) {
+    return `@std/${withoutExtension.slice(0, -"/index".length)}`;
+  }
+  return `@std/${withoutExtension}`;
 }
 
 function normalizePath(path: string): string {

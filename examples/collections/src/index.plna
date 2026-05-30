@@ -1,5 +1,8 @@
 //! Arrays, checked access, mutation, loops, and result values.
 
+import @std/core.{type Option, type Result};
+import @std/io.{println};
+
 type SummaryError = enum {
   Empty,
 };

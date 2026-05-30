@@ -17,7 +17,6 @@ import type {
 } from "./ast";
 import type { ModuleFile, ModuleGraph, PackageProgram } from "./modules";
 import { relativeJsImportPath } from "./modules";
-import { getPreludeFunction, preludeEnumTypes } from "./prelude";
 
 export function generateJavaScript(program: Program): string {
   return new JavaScriptEmitter().emitProgram(program);
@@ -39,13 +38,23 @@ type LoopEmitContext = {
   readonly resultVar?: string;
 };
 
+type EnumTypeNode = Extract<
+  Extract<TopLevelDeclaration, { readonly kind: "TypeDeclaration" }>["value"],
+  { readonly kind: "EnumType" }
+>;
+
+type EnumRuntimeInfo = {
+  readonly emittedEnumName: string;
+  readonly payloadArity: number;
+};
+
 class JavaScriptEmitter {
   private tempCounter = 0;
   private usesIndexHelper = false;
   private usesIndexSetHelper = false;
   private usesIndexUpdateHelper = false;
   private usesArrayGetHelper = false;
-  private readonly enumTypes = new Map<string, Map<string, { readonly payloadArity: number }>>();
+  private readonly enumTypes = new Map<string, Map<string, EnumRuntimeInfo>>();
 
   public emitProgram(program: Program): string {
     const lines: string[] = [];
@@ -66,7 +75,8 @@ class JavaScriptEmitter {
     readonly isEntry: boolean;
   }): string {
     const lines: string[] = [];
-    this.registerEnumTypes(input.module.program);
+    this.registerPackageEnumTypes(input.packageProgram);
+    this.registerImportedEnumAliases(input.module, input.moduleGraph, input.packageProgram);
 
     lines.push(
       ...this.emitImportDeclarations(input.module, input.moduleGraph, input.packageProgram),
@@ -91,29 +101,69 @@ class JavaScriptEmitter {
   }
 
   private registerEnumTypes(program: Program): void {
-    for (const enumType of preludeEnumTypes) {
-      this.enumTypes.set(
-        enumType.name,
-        new Map(
-          enumType.variants.map((variant) => [
-            variant.name,
-            { payloadArity: variant.payload.length },
-          ]),
-        ),
-      );
-    }
-
     for (const declaration of program.declarations) {
       if (declaration.kind === "TypeDeclaration" && declaration.value.kind === "EnumType") {
-        this.enumTypes.set(
-          declaration.name,
-          new Map(
-            declaration.value.variants.map((variant) => [
-              variant.name,
-              { payloadArity: variant.payload.length },
-            ]),
-          ),
+        this.registerEnumType(declaration.name, declaration.name, declaration.value.variants);
+      }
+    }
+  }
+
+  private registerEnumType(
+    localName: string,
+    emittedEnumName: string,
+    variants: EnumTypeNode["variants"],
+  ): void {
+    this.enumTypes.set(
+      localName,
+      new Map(
+        variants.map((variant) => [
+          variant.name,
+          { emittedEnumName, payloadArity: variant.payload.length },
+        ]),
+      ),
+    );
+  }
+
+  private registerPackageEnumTypes(packageProgram: PackageProgram): void {
+    for (const moduleFile of packageProgram.modules) {
+      this.registerEnumTypes(moduleFile.program);
+    }
+  }
+
+  private registerImportedEnumAliases(
+    moduleFile: ModuleFile,
+    graph: ModuleGraph,
+    packageProgram: PackageProgram,
+  ): void {
+    const resolvedImports = graph.importsByModule.get(moduleFile.id) ?? [];
+    for (const importDeclaration of moduleFile.program.imports) {
+      const resolved = resolvedImports.find(
+        (candidate) => candidate.declaration.nodeId === importDeclaration.nodeId,
+      );
+      if (resolved === undefined) {
+        continue;
+      }
+      const importedModule = packageProgram.modules[resolved.moduleId];
+      if (importedModule === undefined) {
+        continue;
+      }
+      for (const item of importDeclaration.items) {
+        if (item.namespace !== "type") {
+          continue;
+        }
+        const declaration = importedModule.program.declarations.find(
+          (
+            candidate,
+          ): candidate is Extract<TopLevelDeclaration, { readonly kind: "TypeDeclaration" }> =>
+            candidate.kind === "TypeDeclaration" && candidate.name === item.name,
         );
+        if (declaration?.value.kind === "EnumType") {
+          this.registerEnumType(
+            item.alias?.name ?? item.name,
+            item.name,
+            declaration.value.variants,
+          );
+        }
       }
     }
   }
@@ -494,7 +544,10 @@ class JavaScriptEmitter {
           expression.target.kind === "NameExpression" &&
           this.enumTypes.get(expression.target.name)?.get(expression.name)?.payloadArity === 0
         ) {
-          return JSON.stringify(`${expression.target.name}.${expression.name}`);
+          const variant = this.enumTypes.get(expression.target.name)?.get(expression.name);
+          return JSON.stringify(
+            `${variant?.emittedEnumName ?? expression.target.name}.${expression.name}`,
+          );
         }
         return `${this.emitExpression(expression.target, indent, loopContext)}.${expression.name}`;
     }
@@ -557,7 +610,7 @@ class JavaScriptEmitter {
     loopContext?: LoopEmitContext,
   ): string {
     if (callee.kind === "NameExpression") {
-      return getPreludeFunction(callee.name)?.jsEmitName ?? emitIdentifier(callee.name);
+      return emitIdentifier(callee.name);
     }
 
     return this.emitExpression(callee, indent, loopContext);
@@ -649,7 +702,7 @@ class JavaScriptEmitter {
       }
 
       return {
-        enumName: callee.target.name,
+        enumName: variant.emittedEnumName,
         variantName: callee.name,
         payloadArity: variant.payloadArity,
       };
@@ -666,7 +719,11 @@ class JavaScriptEmitter {
         return undefined;
       }
 
-      return { enumName, variantName: callee.variantName, payloadArity: variant.payloadArity };
+      return {
+        enumName: variant.emittedEnumName,
+        variantName: callee.variantName,
+        payloadArity: variant.payloadArity,
+      };
     }
 
     return undefined;

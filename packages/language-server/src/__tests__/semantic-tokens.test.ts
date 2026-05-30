@@ -41,11 +41,11 @@ describe("semantic tokens", () => {
     expect(decoded).toContainEqual(token("value", "parameter", ["declaration"]));
   });
 
-  test("classifies package imports and prelude references", () => {
+  test("classifies package imports", () => {
     const indexSource = [
       "import @/users.{type User, greeting} as users;",
       "fn main(user: User): void {",
-      "  println(greeting(user));",
+      "  const message = greeting(user);",
       "}",
     ].join("\n");
     const usersSource = [
@@ -75,7 +75,6 @@ describe("semantic tokens", () => {
     expect(decoded).toContainEqual(token("User", "type", []));
     expect(decoded).toContainEqual(token("greeting", "variable", []));
     expect(decoded).toContainEqual(token("users", "namespace", ["declaration"]));
-    expect(decoded).toContainEqual(token("println", "variable", ["defaultLibrary"]));
   });
 });
 

@@ -75,8 +75,6 @@ function referenceLocation(
   }
 
   switch (reference.kind) {
-    case "Prelude":
-      return null;
     case "Module":
       return moduleLocation(reference.moduleName, context);
     case "Local":
@@ -168,7 +166,6 @@ function moduleNameForReference(reference: ReferenceTarget): string | undefined 
       return reference.moduleName;
     case "Local":
     case "Function":
-    case "Prelude":
       return undefined;
   }
 }

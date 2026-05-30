@@ -286,8 +286,6 @@ function identityForReference(
   currentModuleKey: string,
 ): SymbolIdentity | undefined {
   switch (reference.kind) {
-    case "Prelude":
-      return undefined;
     case "Module":
       return { kind: "Module", moduleName: reference.moduleName };
     case "Local":

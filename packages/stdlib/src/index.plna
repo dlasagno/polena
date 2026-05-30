@@ -1,0 +1,4 @@
+//! Polena standard library package entry point.
+//!
+//! Standard-library modules are currently imported directly, for example
+//! `@std/core`, `@std/io`, and `@std/array`.

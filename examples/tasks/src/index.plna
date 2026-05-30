@@ -1,4 +1,5 @@
 import @/tasks.{type Task, firstOpen, taskLabel} as tasks;
+import @std/io.{println};
 
 fn defaultTasks(): []Task {
   [

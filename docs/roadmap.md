@@ -123,15 +123,15 @@ Exit criteria:
 
 ## Track 3: Standard Library and Runtime Model
 
-Goal: move from a tiny compiler-provided prelude toward the comprehensive
-standard library described in the language goals. The near-term work is
-deliberate and small; the long-term target is a stdlib broad enough that most
-programs do not need third-party packages for common tasks.
+Goal: grow the explicit `@std` package toward the comprehensive standard
+library described in the language goals. The near-term work is deliberate and
+small; the long-term target is a stdlib broad enough that most programs do not
+need third-party packages for common tasks.
 
 Candidate work:
 
-- Decide which prelude items are stable language affordances and which are
-  bootstrap conveniences.
+- Keep foundational names such as `Option`, `Result`, and `println` in
+  ordinary `@std/core` modules rather than compiler-injected scope.
 - Define runtime profiles for Node, Bun, Deno, browser, and shared JavaScript
   environments only when they affect source checking or emitted code.
 - Add basic string, array, numeric, and formatting helpers when their signatures
@@ -154,7 +154,7 @@ Exit criteria:
 - Common small programs do not depend on compiler magic beyond intentional
   built-ins.
 - Runtime helpers have tests and documented behavior.
-- The prelude is documented as stable or explicitly provisional.
+- The no-prelude policy and explicit `@std/core` imports are documented.
 
 ---
 

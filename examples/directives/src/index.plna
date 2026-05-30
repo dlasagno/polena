@@ -3,6 +3,8 @@
 //! This example keeps the package runnable while showing the runtime shape that
 //! future schema/type directives are expected to replace.
 
+import @std/io.{println};
+
 type FieldKind = enum {
   String,
   Number,

@@ -25,7 +25,7 @@ type SemanticTokenType =
   | "enumMember"
   | "keyword";
 
-type SemanticTokenModifier = "declaration" | "readonly" | "defaultLibrary";
+type SemanticTokenModifier = "declaration" | "readonly";
 
 type SemanticToken = {
   readonly span: Span;
@@ -49,11 +49,7 @@ export const semanticTokenTypes: readonly SemanticTokenType[] = [
   "keyword",
 ];
 
-export const semanticTokenModifiers: readonly SemanticTokenModifier[] = [
-  "declaration",
-  "readonly",
-  "defaultLibrary",
-];
+export const semanticTokenModifiers: readonly SemanticTokenModifier[] = ["declaration", "readonly"];
 
 export const semanticTokensLegend = {
   tokenTypes: [...semanticTokenTypes],
@@ -466,7 +462,6 @@ function tokenTypeForReference(
     case "Imported":
       return "variable";
     case "Local":
-    case "Prelude":
       return "variable";
     case undefined:
       return undefined;
@@ -477,8 +472,6 @@ function tokenModifiersForReference(
   reference: ReferenceTarget | undefined,
 ): SemanticTokenModifier[] | undefined {
   switch (reference?.kind) {
-    case "Prelude":
-      return ["defaultLibrary"];
     case "EnumVariant":
     case "Field":
       return ["readonly"];

@@ -92,7 +92,7 @@ function functionDeclarationForCall(
   context: SignatureHelpContext,
 ): FunctionDeclaration | undefined {
   const reference = analysis.semantics.references.get(call.callee.nodeId);
-  if (reference === undefined || reference.kind === "Prelude" || reference.kind === "Module") {
+  if (reference === undefined || reference.kind === "Module") {
     return undefined;
   }
 
@@ -105,7 +105,7 @@ function functionDeclarationForCall(
 }
 
 function analysisForReference(
-  reference: Exclude<ReferenceTarget, { readonly kind: "Prelude" | "Module" }>,
+  reference: Exclude<ReferenceTarget, { readonly kind: "Module" }>,
   fallback: AnalyzeResult,
   context: SignatureHelpContext,
 ): AnalyzeResult {
@@ -118,7 +118,7 @@ function analysisForReference(
 }
 
 function moduleNameForReference(
-  reference: Exclude<ReferenceTarget, { readonly kind: "Prelude" | "Module" }>,
+  reference: Exclude<ReferenceTarget, { readonly kind: "Module" }>,
 ): string | undefined {
   switch (reference.kind) {
     case "Imported":

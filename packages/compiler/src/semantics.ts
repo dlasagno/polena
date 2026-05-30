@@ -5,7 +5,6 @@ import type { Type } from "./types";
 export type DefinitionKind =
   | "Local"
   | "Function"
-  | "Prelude"
   | "TypeAlias"
   | "PatternBinding"
   | "EnumVariant"
@@ -33,10 +32,6 @@ export type ReferenceTarget =
       readonly definitionNodeId: NodeId;
       readonly nameSpan: Span;
       readonly fullSpan: Span;
-    }
-  | {
-      readonly kind: "Prelude";
-      readonly name: string;
     }
   | {
       readonly kind: "TypeAlias";

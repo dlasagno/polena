@@ -306,7 +306,7 @@ class Parser {
           end = this.previous();
         } else {
           do {
-            const segment = this.expect("Identifier", "Expected module path segment.");
+            const segment = this.parseModulePathSegment();
             segments.push(segment.text);
             end = segment;
           } while (this.match("Slash"));
@@ -317,7 +317,7 @@ class Parser {
         end = std;
         if (this.match("Slash")) {
           do {
-            const segment = this.expect("Identifier", "Expected module path segment.");
+            const segment = this.parseModulePathSegment();
             segments.push(segment.text);
             end = segment;
           } while (this.match("Slash"));
@@ -331,11 +331,11 @@ class Parser {
         );
       }
     } else {
-      const segment = this.expect("Identifier", "Expected import path.");
+      const segment = this.parseModulePathSegment("Expected import path.");
       segments.push(segment.text);
       end = segment;
       while (this.match("Slash")) {
-        const next = this.expect("Identifier", "Expected module path segment.");
+        const next = this.parseModulePathSegment();
         segments.push(next.text);
         end = next;
       }
@@ -354,6 +354,20 @@ class Parser {
       prefix,
       span: mergeSpans(first.span, end.span),
     });
+  }
+
+  private parseModulePathSegment(message = "Expected module path segment."): Token {
+    if (
+      this.check("Identifier") ||
+      this.check("NumberType") ||
+      this.check("BigIntType") ||
+      this.check("StringType") ||
+      this.check("BooleanType") ||
+      this.check("VoidType")
+    ) {
+      return this.advance();
+    }
+    return this.expect("Identifier", message);
   }
 
   private parseImportItems(): readonly ImportItem[] {

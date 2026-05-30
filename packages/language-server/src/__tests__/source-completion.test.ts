@@ -5,7 +5,7 @@ import { TextDocument } from "vscode-languageserver-textdocument";
 import { getSourceCompletions } from "../source-completion";
 
 describe("source completions", () => {
-  test("returns visible values, types, imports, locals, and prelude names", () => {
+  test("returns visible values, types, imports, and locals", () => {
     const source = [
       "import @/users.{type User, greeting} as users;",
       "type Status = enum { Ready };",
@@ -62,10 +62,7 @@ describe("source completions", () => {
       kind: CompletionItemKind.Module,
       detail: "@/users",
     });
-    expect(completion(completions, "println")).toMatchObject({
-      kind: CompletionItemKind.Function,
-      detail: "prelude",
-    });
+    expect(completion(completions, "println")).toBeUndefined();
   });
 
   test("returns object field and array property completions after dot", () => {
@@ -138,10 +135,7 @@ describe("source completions", () => {
     expect(completion(completions, "number")).toMatchObject({
       kind: CompletionItemKind.Keyword,
     });
-    expect(completion(completions, "Option")).toMatchObject({
-      kind: CompletionItemKind.Enum,
-      detail: "prelude",
-    });
+    expect(completion(completions, "Option")).toBeUndefined();
     expect(completion(completions, "[]")).toMatchObject({
       detail: "array type",
       insertText: "[]$1",
@@ -174,10 +168,7 @@ describe("source completions", () => {
     expect(completion(completions, "input")).toMatchObject({
       kind: CompletionItemKind.Variable,
     });
-    expect(completion(completions, "println")).toMatchObject({
-      kind: CompletionItemKind.Function,
-      detail: "prelude",
-    });
+    expect(completion(completions, "println")).toBeUndefined();
     expect(completion(completions, "true")).toMatchObject({
       kind: CompletionItemKind.Keyword,
     });

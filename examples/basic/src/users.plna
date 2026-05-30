@@ -1,5 +1,7 @@
 //! User declarations shared by the package entry point.
 
+import @std/core.{type Option};
+
 export type Role = enum {
   Admin,
   Member,

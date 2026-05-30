@@ -1,0 +1,22 @@
+import @std/core.{type Option};
+
+export fn is_some<T>(value: Option<T>): boolean {
+  match value {
+    .Some(_) => true,
+    .None => false,
+  }
+}
+
+export fn is_none<T>(value: Option<T>): boolean {
+  match value {
+    .Some(_) => false,
+    .None => true,
+  }
+}
+
+export fn unwrap_or<T>(value: Option<T>, fallback: T): T {
+  match value {
+    .Some(inner) => inner,
+    .None => fallback,
+  }
+}

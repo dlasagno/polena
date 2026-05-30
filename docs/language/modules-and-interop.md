@@ -152,6 +152,10 @@ import @std/io;              // standard library
 import some_dep/foo;         // external dependency
 ```
 
+Current implementation note: the compiler MVP supports current-package imports
+and a bundled first slice of `@std` modules from `packages/stdlib`. External
+package imports are still deferred.
+
 The `@` sigil is also used elsewhere in the language for compiler directives.
 The import-path forms `@/...` and `@<name>/...` are unambiguous in import
 position. See
@@ -254,9 +258,8 @@ runtime-specific module is itself constrained to that runtime and must
 declare so — is **TBD**.
 
 The full contents of the standard library are **TBD** and intentionally small
-for the prototype. Until specific standard-library modules ship, the prelude
-(see `../prelude.md`) provides a small set of names implicitly, without an
-import declaration.
+for the prototype. There is no compiler-provided prelude; standard-library
+names such as `Option`, `Result`, and `println` must be imported explicitly.
 
 ---
 

@@ -81,15 +81,15 @@ describe("signature help", () => {
     });
   });
 
-  test("returns fallback signature help for prelude functions", () => {
-    const source = 'const value = println("Hello");';
+  test("returns signature help for local functions without docs", () => {
+    const source = 'fn println(message: string): void {}\nconst value = println("Hello");';
     const document = TextDocument.create("file:///example.plna", "polena", 1, source);
     const analysis = analyze(source);
-    const help = getSignatureHelp(document, analysis, document.positionAt(source.indexOf(")")));
+    const help = getSignatureHelp(document, analysis, document.positionAt(source.lastIndexOf(")")));
 
     expect(help?.signatures[0]).toEqual({
-      label: "println(arg0: string): void",
-      parameters: [{ label: "arg0: string" }],
+      label: "println(message: string): void",
+      parameters: [{ label: "message: string" }],
       documentation: undefined,
     });
     expect(help?.activeParameter).toBe(0);

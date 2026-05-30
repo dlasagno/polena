@@ -1,5 +1,6 @@
 import { check, type ImportedModule, type ImportedName, type ModuleExports } from "./checker";
 import { generateJavaScript, generateJavaScriptModule } from "./codegen";
+import { stdlibSources } from "@polena/stdlib";
 import type { Expression, Program } from "./ast";
 import { error, type Diagnostic } from "./diagnostic";
 import { DiagnosticCode } from "./diagnostic-codes";
@@ -126,8 +127,16 @@ export function analyzePackage(input: {
     );
     programs.set(file.path, parseResult.program);
   }
+  for (const file of stdlibSources) {
+    const lexResult = lex(file.source);
+    const parseResult = parse(lexResult.tokens, { moduleMode: true });
+    diagnostics.push(
+      ...diagnosticsForPath(file.path, [...lexResult.diagnostics, ...parseResult.diagnostics]),
+    );
+    programs.set(file.path, parseResult.program);
+  }
 
-  const packageResult = buildPackageProgram({ ...input, programs });
+  const packageResult = buildPackageProgram({ ...input, stdFiles: stdlibSources, programs });
   diagnostics.push(...packageDiagnostics(packageResult.diagnostics, input.sourceDir));
   if (!packageResult.ok) {
     return { ok: false, diagnostics, analyses: [] };
@@ -153,7 +162,9 @@ export function analyzePackage(input: {
       exportsByModule,
       moduleDiagnostics,
     );
-    const checkResult = check(moduleFile.program, imports);
+    const checkResult = check(moduleFile.program, {
+      ...imports,
+    });
     moduleDiagnostics.push(...checkResult.diagnostics);
     diagnostics.push(...diagnosticsForPath(moduleFile.path, moduleDiagnostics));
     analyses.push({
@@ -199,8 +210,14 @@ export function compilePackage(input: {
     diagnostics.push(...lexResult.diagnostics, ...parseResult.diagnostics);
     programs.set(file.path, parseResult.program);
   }
+  for (const file of stdlibSources) {
+    const lexResult = lex(file.source);
+    const parseResult = parse(lexResult.tokens, { moduleMode: true });
+    diagnostics.push(...lexResult.diagnostics, ...parseResult.diagnostics);
+    programs.set(file.path, parseResult.program);
+  }
 
-  const packageResult = buildPackageProgram({ ...input, programs });
+  const packageResult = buildPackageProgram({ ...input, stdFiles: stdlibSources, programs });
   diagnostics.push(...packageResult.diagnostics);
   if (!packageResult.ok) {
     return { ok: false, diagnostics };
@@ -224,7 +241,9 @@ export function compilePackage(input: {
       exportsByModule,
       diagnostics,
     );
-    const checkResult = check(moduleFile.program, imports);
+    const checkResult = check(moduleFile.program, {
+      ...imports,
+    });
     diagnostics.push(...checkResult.diagnostics);
     exportsByModule.set(moduleFile.id, checkResult.exports);
   }
@@ -239,16 +258,40 @@ export function compilePackage(input: {
     ok: true,
     packageProgram: packageResult.packageProgram,
     diagnostics,
-    files: packageResult.packageProgram.modules.map((moduleFile) => ({
-      path: jsPathForModule(moduleFile.name),
-      contents: generateJavaScriptModule({
-        module: moduleFile,
-        packageProgram: packageResult.packageProgram,
-        moduleGraph: packageResult.graph,
-        isEntry: moduleFile.id === packageResult.packageProgram.entryModuleId,
-      }),
-    })),
+    files: packageResult.packageProgram.modules
+      .filter((moduleFile) =>
+        modulesToEmit(packageResult.packageProgram, packageResult.graph).has(moduleFile.id),
+      )
+      .map((moduleFile) => ({
+        path: jsPathForModule(moduleFile.name),
+        contents: generateJavaScriptModule({
+          module: moduleFile,
+          packageProgram: packageResult.packageProgram,
+          moduleGraph: packageResult.graph,
+          isEntry: moduleFile.id === packageResult.packageProgram.entryModuleId,
+        }),
+      })),
   };
+}
+
+function modulesToEmit(packageProgram: PackageProgram, graph: ModuleGraph): ReadonlySet<ModuleId> {
+  const included = new Set<ModuleId>();
+  function include(moduleId: ModuleId): void {
+    if (included.has(moduleId)) {
+      return;
+    }
+    included.add(moduleId);
+    for (const imported of graph.importsByModule.get(moduleId) ?? []) {
+      include(imported.moduleId);
+    }
+  }
+
+  for (const moduleFile of packageProgram.modules) {
+    if (moduleFile.origin === "package") {
+      include(moduleFile.id);
+    }
+  }
+  return included;
 }
 
 function buildCheckImports(

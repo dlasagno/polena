@@ -1,0 +1,40 @@
+import @std/core.{type Option};
+
+export fn len(input: string): number {
+  @target.js("$0.length", number, input)
+}
+
+export fn is_empty(input: string): boolean {
+  len(input) == 0
+}
+
+export fn slice(input: string, start: number, end: Option<number>): string {
+  match end {
+    .Some(value) => @target.js("$0.slice($1, $2)", string, input, start, value),
+    .None => @target.js("$0.slice($1)", string, input, start),
+  }
+}
+
+export fn contains(input: string, needle: string): boolean {
+  @target.js("$0.includes($1)", boolean, input, needle)
+}
+
+export fn starts_with(input: string, prefix: string): boolean {
+  @target.js("$0.startsWith($1)", boolean, input, prefix)
+}
+
+export fn ends_with(input: string, suffix: string): boolean {
+  @target.js("$0.endsWith($1)", boolean, input, suffix)
+}
+
+export fn trim(input: string): string {
+  @target.js("$0.trim()", string, input)
+}
+
+export fn lowercase(input: string): string {
+  @target.js("$0.toLowerCase()", string, input)
+}
+
+export fn uppercase(input: string): string {
+  @target.js("$0.toUpperCase()", string, input)
+}

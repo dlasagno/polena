@@ -32,6 +32,9 @@
     "packages/compiler": {
       "name": "@polena/compiler",
       "version": "0.1.0",
+      "dependencies": {
+        "@polena/stdlib": "workspace:*",
+      },
     },
     "packages/language-server": {
       "name": "@polena/language-server",
@@ -45,6 +48,10 @@
         "vscode-languageserver": "^9.0.1",
         "vscode-languageserver-textdocument": "^1.0.12",
       },
+    },
+    "packages/stdlib": {
+      "name": "@polena/stdlib",
+      "version": "0.1.0",
     },
     "packages/vscode-extension": {
       "name": "polena-vscode",
@@ -122,6 +129,8 @@
     "@polena/compiler": ["@polena/compiler@workspace:packages/compiler"],
 
     "@polena/language-server": ["@polena/language-server@workspace:packages/language-server"],
+
+    "@polena/stdlib": ["@polena/stdlib@workspace:packages/stdlib"],
 
     "@secretlint/config-creator": ["@secretlint/config-creator@10.2.2", "", { "dependencies": { "@secretlint/types": "^10.2.2" } }, "sha512-BynOBe7Hn3LJjb3CqCHZjeNB09s/vgf0baBaHVw67w7gHF0d25c3ZsZ5+vv8TgwSchRdUCRrbbcq5i2B1fJ2QQ=="],
 

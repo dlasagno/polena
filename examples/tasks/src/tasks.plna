@@ -1,5 +1,7 @@
 //! Shared task domain declarations.
 
+import @std/core.{type Option};
+
 export type Priority = enum {
   Low,
   Normal,

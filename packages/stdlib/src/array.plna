@@ -1,0 +1,17 @@
+import @std/core.{type Option};
+
+export fn len<T>(items: []T): number {
+  @target.js("$0.length", number, items)
+}
+
+export fn is_empty<T>(items: []T): boolean {
+  @target.js("$0.length === 0", boolean, items)
+}
+
+export fn get<T>(items: []T, index: number): Option<T> {
+  items.get(index)
+}
+
+export fn push<T>(items: []T, value: T): void {
+  @target.js("$0.push($1)", void, items, value)
+}

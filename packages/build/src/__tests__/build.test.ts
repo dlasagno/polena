@@ -114,7 +114,10 @@ describe("package operations", () => {
     const harness = createHarness(
       new Map([
         ["/app/polena.toml", 'name = "app"\nversion = "0.1.0"\ntarget = "executable"\n'],
-        ["/app/src/index.plna", 'export fn main(): void { println("Hello"); }'],
+        [
+          "/app/src/index.plna",
+          'import @std/io.{println};\nexport fn main(): void { println("Hello"); }',
+        ],
       ]),
     );
 
@@ -147,7 +150,10 @@ describe("package operations", () => {
       new Map([
         ["/app/polena.toml", 'name = "app"\nversion = "0.1.0"\ntarget = "executable"\n'],
         ["/app/src/index.plna", "import @/users;\nexport fn main(): void { users.run(); }"],
-        ["/app/src/users.polena", 'export fn run(): void { println("ok"); }'],
+        [
+          "/app/src/users.polena",
+          'import @std/io.{println};\nexport fn run(): void { println("ok"); }',
+        ],
         ["/app/ignored.plna", "this is not read"],
       ]),
     );

@@ -207,8 +207,6 @@ function renderReference(
     case "Local":
     case "Function":
       return renderNodeHover(definitionAnalysis, reference.definitionNodeId);
-    case "Prelude":
-      return renderCodeHover(reference.name, undefined);
     case "TypeAlias":
       return renderNodeHover(definitionAnalysis, reference.definitionNodeId);
     case "EnumVariant":
@@ -252,7 +250,6 @@ function moduleNameForReference(reference: ReferenceTarget): string | undefined 
       return reference.moduleName;
     case "Local":
     case "Function":
-    case "Prelude":
       return undefined;
   }
 }

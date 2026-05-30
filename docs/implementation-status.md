@@ -160,8 +160,8 @@ Status values:
 | Enum equality | Implemented | `==` and `!=` are valid for fieldless enum values of the same enum type. Equality for enums with associated data is not implemented. |
 | Match expressions | Partially implemented | Supports expression arms over enum values with `.Variant`, `Enum.Variant`, payload patterns, and `_` patterns. Guards are not implemented. |
 | Exhaustiveness checking | Implemented | Enum matches must cover every variant unless a wildcard arm is present. Duplicate and unreachable arms are rejected. |
-| `Option<T>` | Implemented | Provided by the compiler prelude as a generic enum with `.Some(T)` and `.None`. |
-| `Result<T, E>` | Implemented | Provided by the compiler prelude as a generic enum with `.Ok(T)` and `.Err(E)`. |
+| `Option<T>` | Implemented | Provided by `@std/core` as a generic enum with `.Some(T)` and `.None`; import it explicitly where used. |
+| `Result<T, E>` | Implemented | Provided by `@std/core` as a generic enum with `.Ok(T)` and `.Err(E)`; import it explicitly where used. |
 | `try` operator | Not implemented | Depends on `Result`. |
 | Panic model | Partially implemented | Checked indexing throws a JavaScript `RangeError`; the general panic model is TBD. |
 
@@ -184,7 +184,7 @@ Status values:
 
 | Feature | Status | Notes |
 |---|---|---|
-| Modules/imports/exports | Partially implemented | Package compilation supports current-package `@/` imports, declaration exports, cycle/missing-module diagnostics, and ESM output. External packages, `@std`, workspaces, and re-exports are not implemented. |
+| Modules/imports/exports | Partially implemented | Package compilation supports current-package `@/` imports, a bundled first slice of `@std` modules sourced from `packages/stdlib`, declaration exports, cycle/missing-module diagnostics, and ESM output. External packages, workspaces, and re-exports are not implemented. |
 | JavaScript/TypeScript interop declarations | Not implemented | Still TBD in the spec. |
 | TypeScript declaration generation | Not implemented | Goal, not MVP behavior. |
 | Async functions | Not implemented | Still TBD in the spec. |

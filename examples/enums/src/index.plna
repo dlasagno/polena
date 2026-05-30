@@ -1,5 +1,7 @@
 //! Enums model closed sets and associated data.
 
+import @std/io.{println};
+
 type Severity = enum {
   Debug,
   Info,

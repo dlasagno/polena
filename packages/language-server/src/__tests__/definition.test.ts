@@ -132,12 +132,12 @@ describe("LSP definition", () => {
     });
   });
 
-  test("returns null for prelude definitions and punctuation", () => {
-    const source = 'const message = println("Hello");';
+  test("returns null for unknown names and punctuation", () => {
+    const source = 'const message = missing("Hello");';
     const document = TextDocument.create("file:///example.plna", "polena", 1, source);
     const analysis = analyze(source);
 
-    expect(definition(document, analysis, source.indexOf("println"))).toBeNull();
+    expect(definition(document, analysis, source.indexOf("missing"))).toBeNull();
     expect(definition(document, analysis, source.indexOf("="))).toBeNull();
   });
 });

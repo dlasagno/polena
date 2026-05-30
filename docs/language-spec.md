@@ -37,7 +37,8 @@ design. For current implementation support, see
 - Use [`build-spec.md`](build-spec.md) for `polena.toml`, package layout, and
   build/init/run operation semantics.
 - Use [`cli-spec.md`](cli-spec.md) for command-line behavior.
-- Use [`prelude.md`](prelude.md) for currently compiler-provided prelude items.
+- Use [`prelude.md`](prelude.md) for the current no-prelude policy and
+  `@std/core` migration notes.
 - Use [`implementation-status.md`](implementation-status.md) for implemented
   compiler behavior.
 - Use [`compiler-directives.md`](compiler-directives.md) for directive-specific

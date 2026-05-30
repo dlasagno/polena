@@ -25,7 +25,6 @@ import type {
 } from "./ast";
 import { error, type Diagnostic } from "./diagnostic";
 import { DiagnosticCode } from "./diagnostic-codes";
-import { preludeEnumTypes, preludeFunctions, type PreludeEnumType } from "./prelude";
 import {
   emptySemantics,
   type DefinitionKind,
@@ -69,6 +68,8 @@ export type ExportedValueSymbol = SymbolInfo;
 
 export type ExportedTypeSymbol = {
   readonly name: string;
+  readonly typeParameters: readonly string[];
+  readonly value: TypeNode;
   readonly type: Type;
   readonly span: Span;
   readonly definitionNodeId: number;
@@ -157,41 +158,6 @@ function returnOutcome(): ControlFlowOutcome {
   };
 }
 
-function preludeEnumTypeSymbol(
-  enumType: PreludeEnumType,
-  span: Span,
-  typeIndex: number,
-): TypeSymbol {
-  const nodeBase = -1_000 - typeIndex * 1_000;
-  return {
-    name: enumType.name,
-    typeParameters: enumType.typeParameters,
-    value: {
-      kind: "EnumType",
-      nodeId: nodeBase,
-      variants: enumType.variants.map((variant, variantIndex) => ({
-        kind: "EnumVariantType" as const,
-        nodeId: nodeBase - 10 - variantIndex,
-        name: variant.name,
-        nameSpan: span,
-        payload: variant.payload.map((name, payloadIndex) => ({
-          kind: "NamedType" as const,
-          nodeId: nodeBase - 100 - variantIndex * 10 - payloadIndex,
-          name,
-          nameSpan: span,
-          typeArguments: [],
-          span,
-        })),
-        span,
-      })),
-      span,
-    },
-    span,
-    definitionNodeId: nodeBase,
-    fullSpan: span,
-  };
-}
-
 function breakOutcome(): ControlFlowOutcome {
   return {
     canFallThrough: false,
@@ -243,8 +209,6 @@ class Checker {
 
   public check(program: Program): CheckResult {
     const scope = new Scope();
-    this.declarePreludeTypes(program.span);
-    this.declarePrelude(scope, program.span);
     this.declareImportedTypes();
     this.declareImportedValues(scope);
 
@@ -313,19 +277,24 @@ class Checker {
         continue;
       }
       const symbol = imported.symbol as ExportedTypeSymbol;
-      this.resolvedTypeSymbols.set(
-        imported.localName,
-        typeWithImportedModule(symbol.type, imported.moduleName),
-      );
+      if (symbol.typeParameters.length === 0) {
+        this.resolvedTypeSymbols.set(
+          imported.localName,
+          typeWithImportedModule(symbol.type, imported.moduleName),
+        );
+      }
       this.typeSymbols.set(imported.localName, {
         name: imported.localName,
-        typeParameters: [],
-        value: {
-          kind: "UnknownType",
-          nodeId: symbol.definitionNodeId,
-          recovery: true,
-          span: symbol.span,
-        },
+        typeParameters: symbol.typeParameters,
+        value:
+          symbol.typeParameters.length === 0
+            ? {
+                kind: "UnknownType",
+                nodeId: symbol.definitionNodeId,
+                recovery: true,
+                span: symbol.span,
+              }
+            : symbol.value,
         span: symbol.span,
         definitionNodeId: symbol.definitionNodeId,
         fullSpan: symbol.fullSpan,
@@ -336,19 +305,24 @@ class Checker {
 
     for (const moduleImport of this.options.qualifiedImports ?? []) {
       for (const [name, symbol] of moduleImport.types) {
-        this.resolvedTypeSymbols.set(
-          `${moduleImport.alias}.${name}`,
-          typeWithImportedModule(symbol.type, moduleImport.moduleName),
-        );
+        if (symbol.typeParameters.length === 0) {
+          this.resolvedTypeSymbols.set(
+            `${moduleImport.alias}.${name}`,
+            typeWithImportedModule(symbol.type, moduleImport.moduleName),
+          );
+        }
         this.typeSymbols.set(`${moduleImport.alias}.${name}`, {
           name: `${moduleImport.alias}.${name}`,
-          typeParameters: [],
-          value: {
-            kind: "UnknownType",
-            nodeId: symbol.definitionNodeId,
-            recovery: true,
-            span: symbol.span,
-          },
+          typeParameters: symbol.typeParameters,
+          value:
+            symbol.typeParameters.length === 0
+              ? {
+                  kind: "UnknownType",
+                  nodeId: symbol.definitionNodeId,
+                  recovery: true,
+                  span: symbol.span,
+                }
+              : symbol.value,
           span: symbol.span,
           definitionNodeId: symbol.definitionNodeId,
           fullSpan: symbol.fullSpan,
@@ -430,6 +404,8 @@ class Checker {
       if (declaration.kind === "TypeDeclaration") {
         types.set(declaration.name, {
           name: declaration.name,
+          typeParameters: declaration.typeParameters.map((param) => param.name),
+          value: declaration.value,
           type: this.resolveTypeDeclaration(declaration),
           span: declaration.nameSpan,
           definitionNodeId: declaration.nodeId,
@@ -443,29 +419,6 @@ class Checker {
       }
     }
     return { values, types };
-  }
-
-  private declarePrelude(scope: Scope, span: Span): void {
-    for (const fn of preludeFunctions) {
-      scope.declare({
-        name: fn.name,
-        type: functionType(
-          fn.params.map((param) => primitiveType(param)),
-          primitiveType(fn.returnType),
-        ),
-        span,
-        assignability: "immutable-binding",
-      });
-    }
-  }
-
-  private declarePreludeTypes(span: Span): void {
-    for (let index = 0; index < preludeEnumTypes.length; index += 1) {
-      const enumType = preludeEnumTypes[index];
-      if (enumType !== undefined) {
-        this.typeSymbols.set(enumType.name, preludeEnumTypeSymbol(enumType, span, index));
-      }
-    }
   }
 
   private declareType(declaration: TypeDeclaration): void {
@@ -3674,7 +3627,7 @@ class Checker {
     }
 
     if (symbol.definitionNodeId === undefined) {
-      return { kind: "Prelude", name: symbol.name };
+      throw new Error(`Cannot record reference for symbol '${symbol.name}' without a definition.`);
     }
 
     if (symbol.importedModuleName !== undefined) {

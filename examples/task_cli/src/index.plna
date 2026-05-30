@@ -1,5 +1,8 @@
 //! A complete command-line app using arguments, enums, arrays, and Result.
 
+import @std/core.{type Option, type Result};
+import @std/io.{println};
+
 type Priority = enum {
   Low,
   Normal,

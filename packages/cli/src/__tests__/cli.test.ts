@@ -39,7 +39,10 @@ describe("CLI commands", () => {
     const harness = createCliHarness(
       new Map([
         ["polena.toml", packageManifest()],
-        ["src/index.plna", 'export fn main(): void { println("Hello"); }'],
+        [
+          "src/index.plna",
+          'import @std/io.{println};\nexport fn main(): void { println("Hello"); }',
+        ],
       ]),
     );
 

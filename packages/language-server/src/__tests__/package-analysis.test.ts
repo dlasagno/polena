@@ -33,7 +33,7 @@ describe("LSP package analysis", () => {
         ["/app/polena.toml", 'name = "app"\nversion = "0.1.0"\ntarget = "executable"\n'],
         [
           "/app/src/index.plna",
-          "import @/users.{greeting};\nexport fn main(): void { println(greeting()); }",
+          "import @/users.{greeting};\nexport fn main(): void { const message = greeting(); }",
         ],
         ["/app/src/users.plna", "export const name = 1;"],
       ]),
@@ -87,7 +87,7 @@ describe("LSP package analysis", () => {
         ["/app/polena.toml", 'name = "app"\nversion = "0.1.0"\ntarget = "executable"\n'],
         [
           "/app/src/index.plna",
-          "import @/users.{greeting};\nexport fn main(): void { println(greeting()); }",
+          "import @/users.{greeting};\nexport fn main(): void { const message = greeting(); }",
         ],
         ["/app/src/users.plna", 'export fn greeting(): string { "Hello" }'],
       ]),
@@ -110,7 +110,7 @@ describe("LSP package analysis", () => {
         ["/app/polena.toml", 'name = "app"\nversion = "0.1.0"\ntarget = "executable"\n'],
         [
           "/app/src/index.plna",
-          "import @/users.{greeting};\nexport fn main(): void { println(greeting()); }",
+          "import @/users.{greeting};\nexport fn main(): void { const message = greeting(); }",
         ],
       ]),
     );

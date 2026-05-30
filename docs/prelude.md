@@ -1,91 +1,39 @@
 # Prelude
 
-Status: provisional
+Status: removed
 
-The prelude is a small set of names that are available in every Polena program
-without an import.
+Polena currently has no compiler-provided prelude. Names such as `Option`,
+`Result`, and `println` are ordinary standard-library declarations and must be
+imported explicitly when used from a package.
 
-The current prelude is intentionally tiny. It exists to make small programs
-useful while the standard library, external packages, and runtime profiles are
-still being designed.
-
-Prelude items are compiler-provided for now. This should be treated as a
-temporary implementation detail, not as the final standard library design.
+The first standard-library slice lives under `packages/stdlib` and is exposed
+to Polena code as `@std/`. It currently includes `@std/core`, `@std/io`,
+`@std/option`, `@std/result`, `@std/math`, `@std/string`, and `@std/array`.
 
 ---
 
-## `println`
+## Core
+
+`@std/core` exports the foundational enum types and a basic print function:
 
 ```tsx
-println(message: string): void
+import @std/core.{type Option, type Result, println};
 ```
-
-Writes `message` followed by a line break.
-
-For the current JavaScript target, `println` is emitted as `console.log`.
-
-Example:
-
-```tsx
-const name = "Ada";
-println("Hello ${name}");
-```
-
-Only `string` values may be passed directly. Other values should be printed with
-string interpolation:
-
-```tsx
-const count = 3;
-println("count = ${count}");
-```
-
----
-
-## `Option<T>`
 
 ```tsx
 type Option<T> = enum {
 	Some(T),
 	None,
 }
-```
 
-Represents either a present value or no value.
-
-Example:
-
-```tsx
-const values = [10, 20];
-
-const label = match values.get(0) {
-	.Some(value) => "value ${value}",
-	.None => "missing",
-};
-```
-
----
-
-## `Result<T, E>`
-
-```tsx
 type Result<T, E> = enum {
 	Ok(T),
 	Err(E),
 }
 ```
 
-Represents either a successful value or a recoverable error value.
-
-Example:
-
-```tsx
-type ParseError = enum {
-	Empty,
-	Invalid,
-};
-
-const parsed: Result<number, ParseError> = .Ok(42);
-```
+`println(message: string): void` writes a line through the JavaScript target's
+`console.log`.
 
 ---
 
@@ -96,16 +44,37 @@ items.get(index): Option<T>
 ```
 
 Returns `.Some(value)` when `index` is an integer within bounds, otherwise
-returns `.None`.
+returns `.None`. The `Option` type must be in scope where `.get` is used.
 
 Checked indexing with `items[index]` still panics on invalid indexes.
 
 ---
 
+## Standard Library Modules
+
+- `@std/core` exports `Option`, `Result`, and `println`.
+- `@std/io` exports `println` and `eprintln`.
+- `@std/option` exports `is_some`, `is_none`, and `unwrap_or`.
+- `@std/result` exports `is_ok`, `is_err`, and `unwrap_or`.
+- `@std/math` exports basic JavaScript-backed number helpers such as `abs`,
+  `floor`, `ceil`, `round`, `min`, `max`, `pow`, and `sqrt`.
+- `@std/string` exports basic string helpers. Since `string` is a primitive
+  type token, import it with an alias when using qualified calls:
+
+```tsx
+import @std/string as strings;
+
+const trimmed = strings.trim(" Ada ");
+```
+
+- `@std/array` exports `len`, `is_empty`, `get`, and `push`.
+
+---
+
 ## Deferred Items
 
-The prelude does not yet include input, sleeping, parsing helpers, filesystem
-access, or other runtime APIs.
+The standard library does not yet include input, sleeping, parsing helpers,
+filesystem access, or other runtime APIs.
 
 These features are deferred because they require more language and runtime
 design:
@@ -115,5 +84,4 @@ design:
 - Numeric parsing should return an explicit `Result` or `Option`.
 - Sleeping is naturally asynchronous in JavaScript, and async functions are not
   part of the current compiler MVP.
-- A real core or standard library depends on a stable package/import model for
-  standard-library code, external packages, and runtime-specific APIs.
+- Runtime-specific APIs need a stable package/import model.

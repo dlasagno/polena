@@ -20,8 +20,6 @@ type MatchArm = Extract<Expression, { readonly kind: "MatchExpression" }>["arms"
 type MatchPattern = MatchArm["pattern"];
 
 const primitiveTypes = ["number", "bigint", "string", "boolean", "void", "unknown"] as const;
-const preludeValues = ["println"] as const;
-const preludeTypes = ["Option", "Result"] as const;
 const topLevelKeywords = ["import", "export", "type", "fn", "const", "let"] as const;
 const statementKeywords = [
   "const",
@@ -72,12 +70,10 @@ export function getSourceCompletions(
         ...keywordCompletions(statementKeywords),
         ...visibleValueCompletions(analysis.program, offset),
         ...visibleTypeCompletions(analysis.program, offset),
-        ...preludeValueCompletions(),
       ]);
     case "expression":
       return uniqueCompletions([
         ...visibleValueCompletions(analysis.program, offset),
-        ...preludeValueCompletions(),
         ...keywordCompletions(expressionKeywords),
       ]);
   }
@@ -172,11 +168,6 @@ function visibleValueCompletions(program: Program, offset: number): CompletionIt
 function typeCompletions(program: Program, offset: number): CompletionItem[] {
   return [
     ...visibleTypeCompletions(program, offset),
-    ...preludeTypes.map((name) => ({
-      label: name,
-      kind: CompletionItemKind.Enum,
-      detail: "prelude",
-    })),
     ...primitiveTypes.map((name) => ({
       label: name,
       kind: CompletionItemKind.Keyword,
@@ -201,14 +192,6 @@ function typeCompletions(program: Program, offset: number): CompletionItem[] {
       detail: "opaque type",
     },
   ];
-}
-
-function preludeValueCompletions(): CompletionItem[] {
-  return preludeValues.map((name) => ({
-    label: name,
-    kind: CompletionItemKind.Function,
-    detail: "prelude",
-  }));
 }
 
 function keywordCompletions(keywords: readonly string[]): CompletionItem[] {
