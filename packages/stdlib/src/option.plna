@@ -3,7 +3,7 @@
 //! Import with `import @std/option;`. The `Option` type must be in scope,
 //! for example via `import @std/core.{type Option};`.
 
-import @std/core.{type Option};
+import @std/core.{type Option, type Result};
 
 /// Returns `true` when `value` is `.Some(_)`.
 export fn is_some<T>(value: Option<T>): boolean {
@@ -26,5 +26,37 @@ export fn unwrap_or<T>(value: Option<T>, fallback: T): T {
   match value {
     .Some(inner) => inner,
     .None => fallback,
+  }
+}
+
+/// Returns the inner `Option` when `value` is `.Some`, otherwise returns `.None`.
+export fn flatten<T>(value: Option<Option<T>>): Option<T> {
+  match value {
+    .Some(inner) => inner,
+    .None => .None,
+  }
+}
+
+/// Returns `other` when `value` is `.Some`, otherwise returns `.None`.
+export fn and_with<T, U>(value: Option<T>, other: Option<U>): Option<U> {
+  match value {
+    .Some(_) => other,
+    .None => .None,
+  }
+}
+
+/// Returns `value` when it is `.Some`, otherwise returns `fallback`.
+export fn or_else<T>(value: Option<T>, fallback: Option<T>): Option<T> {
+  match value {
+    .Some(_) => value,
+    .None => fallback,
+  }
+}
+
+/// Converts `value` to `.Ok(inner)` when present, otherwise returns `.Err(error)`.
+export fn to_result<T, E>(value: Option<T>, error: E): Result<T, E> {
+  match value {
+    .Some(inner) => .Ok(inner),
+    .None => .Err(error),
   }
 }

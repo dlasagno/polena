@@ -1,7 +1,8 @@
 //! Array length, access, and mutation helpers.
 //!
 //! Import with `import @std/array;`. The `Option` type must be in scope where
-//! `get` is used, for example via `import @std/core.{type Option};`.
+//! `get`, `pop`, and `last` are used, for example via
+//! `import @std/core.{type Option};`.
 
 import @std/core.{type Option};
 
@@ -22,7 +23,32 @@ export fn get<T>(items: []T, index: number): Option<T> {
   items.get(index)
 }
 
+/// Returns `.Some(last element)` when `items` is not empty, otherwise `.None`.
+export fn last<T>(items: []T): Option<T> {
+  items.get(@target.js("$0.length - 1", number, items))
+}
+
+/// Returns the elements from `start` up to but not including `end`.
+///
+/// When `end` is `.None`, the slice runs through the end of `items`.
+export fn slice<T>(items: []T, start: number, end: Option<number>): []T {
+  match end {
+    .Some(value) => @target.js("$0.slice($1, $2)", []T, items, start, value),
+    .None => @target.js("$0.slice($1)", []T, items, start),
+  }
+}
+
+/// Returns a new array containing the elements of `left` followed by `right`.
+export fn concat<T>(left: []T, right: []T): []T {
+  @target.js("$0.concat($1)", []T, left, right)
+}
+
 /// Appends `value` to the end of `items`.
 export fn push<T>(items: []T, value: T): void {
   @target.js("$0.push($1)", void, items, value)
+}
+
+/// Removes and returns the last element when `items` is not empty, otherwise `.None`.
+export fn pop<T>(items: []T): Option<T> {
+  @target.js.option("$0.pop()", T, items)
 }

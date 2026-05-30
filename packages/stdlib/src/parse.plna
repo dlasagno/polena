@@ -1,0 +1,51 @@
+//! Parse strings into typed values with explicit errors.
+//!
+//! Import with `import @std/parse;`. The `Result` type must be in scope where
+//! these functions are used, for example via `import @std/core.{type Result};`.
+
+import @std/core.{type Result};
+import @std/string as strings;
+
+/// A recoverable parse failure.
+export type ParseError = enum {
+  /// The input is not a valid representation of the requested type.
+  Invalid,
+};
+
+/// Parses a base-10 integer from `input`.
+///
+/// Leading and trailing whitespace is ignored. Partial matches such as `"42abc"`
+/// are rejected.
+export fn parse_int(input: string): Result<number, ParseError> {
+  const trimmed = strings.trim(input);
+  if strings.is_empty(trimmed) {
+    return .Err(ParseError.Invalid);
+  }
+
+  const parsed = @target.js("Number.parseInt($0, 10)", number, trimmed);
+  const valid = @target.js("Number.isFinite($0) && String($0) === $1", boolean, parsed, trimmed);
+  if valid {
+    .Ok(parsed)
+  } else {
+    .Err(ParseError.Invalid)
+  }
+}
+
+/// Parses a floating-point number from `input`.
+///
+/// Leading and trailing whitespace is ignored. Partial matches such as
+/// `"1.5abc"` are rejected.
+export fn parse_float(input: string): Result<number, ParseError> {
+  const trimmed = strings.trim(input);
+  if strings.is_empty(trimmed) {
+    return .Err(ParseError.Invalid);
+  }
+
+  const parsed = @target.js("Number.parseFloat($0)", number, trimmed);
+  const valid = @target.js("Number.isFinite($0) && String($0) === $1", boolean, parsed, trimmed);
+  if valid {
+    .Ok(parsed)
+  } else {
+    .Err(ParseError.Invalid)
+  }
+}

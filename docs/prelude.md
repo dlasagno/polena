@@ -8,7 +8,7 @@ imported explicitly when used from a package.
 
 The first standard-library slice lives under `packages/stdlib` and is exposed
 to Polena code as `@std/`. It currently includes `@std/core`, `@std/io`,
-`@std/option`, `@std/result`, `@std/math`, `@std/string`, `@std/array`,
+`@std/option`, `@std/result`, `@std/parse`, `@std/math`, `@std/string`, `@std/array`,
 `@std/collections/map`, and `@std/collections/set`.
 
 ---
@@ -55,12 +55,16 @@ Checked indexing with `items[index]` still panics on invalid indexes.
 
 - `@std/core` exports `Option`, `Result`, and `println`.
 - `@std/io` exports `println` and `eprintln`.
-- `@std/option` exports `is_some`, `is_none`, and `unwrap_or`.
-- `@std/result` exports `is_ok`, `is_err`, and `unwrap_or`.
+- `@std/option` exports `is_some`, `is_none`, `unwrap_or`, `flatten`, `and_with`, `or_else`,
+  and `to_result`.
+- `@std/result` exports `is_ok`, `is_err`, `unwrap_or`, `flatten`, `and_with`, `or_else`,
+  `ok`, `err`, and `from_option`.
+- `@std/parse` exports `ParseError`, `parse_int`, and `parse_float`.
 - `@std/math` exports basic JavaScript-backed number helpers such as `abs`,
   `floor`, `ceil`, `round`, `min`, `max`, `pow`, and `sqrt`.
-- `@std/string` exports basic string helpers. Since `string` is a primitive
-  type token, import it with an alias when using qualified calls:
+- `@std/string` exports basic string helpers including `trim`, `split`, `join`,
+  and `replace_all`. Since `string` is a primitive type token, import it with
+  an alias when using qualified calls:
 
 ```tsx
 import @std/string as strings;
@@ -68,7 +72,8 @@ import @std/string as strings;
 const trimmed = strings.trim(" Ada ");
 ```
 
-- `@std/array` exports `len`, `is_empty`, `get`, and `push`.
+- `@std/array` exports `len`, `is_empty`, `get`, `last`, `slice`, `concat`,
+  `push`, and `pop`.
 - `@std/collections/map` exports an opaque `Map<K, V>` type plus `new`, `len`, `get`,
   `insert`, `contains_key`, and `remove`. These are backed by the JavaScript
   `Map` object.
@@ -79,15 +84,12 @@ const trimmed = strings.trim(" Ada ");
 
 ## Deferred Items
 
-The standard library does not yet include input, sleeping, parsing helpers,
-filesystem access, or other runtime APIs.
+The standard library does not yet include input, sleeping, filesystem access,
+or other runtime APIs. Basic numeric parsing lives in `@std/parse`.
 
 These features are deferred because they require more language and runtime
 design:
 
 - Input depends on whether the program runs in a CLI, browser, or another
   JavaScript host.
-- Numeric parsing should return an explicit `Result` or `Option`.
-- Sleeping is naturally asynchronous in JavaScript, and async functions are not
-  part of the current compiler MVP.
 - Runtime-specific APIs need a stable package/import model.

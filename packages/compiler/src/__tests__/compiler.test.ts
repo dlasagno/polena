@@ -1152,6 +1152,85 @@ const value = match result {
     );
   });
 
+  test("compiles expanded standard-library helpers", () => {
+    const result = compilePackage({
+      manifest: { name: "app", version: "0.1.0", target: "executable" },
+      rootDir: "app",
+      sourceDir: "app/src",
+      files: [
+        {
+          path: "app/src/index.plna",
+          source: [
+            "import @std/array;",
+            "import @std/option;",
+            "import @std/parse.{type ParseError};",
+            "import @std/result;",
+            "import @std/string as strings;",
+            "import @std/core.{type Option, type Result};",
+            "",
+            "export fn main(): void {",
+            '  let items = ["a", "b"];',
+            '  const joined = strings.join(items, "-");',
+            '  const parts = strings.split(joined, "-");',
+            "  const last = array.last(parts);",
+            "  const popped = array.pop(items);",
+            "  const nested: Option<Option<number>> = .Some(.Some(41));",
+            "  const flat = option.flatten(nested);",
+            '  const parsed = parse.parse_int(" 42 ");',
+            "  const total = result.unwrap_or(parsed, 0) + option.unwrap_or(flat, 0);",
+            "  if total == 83 {",
+            '    strings.replace_all("x-y", "x", "z");',
+            "  }",
+            "}",
+          ].join("\n"),
+        },
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    expect(result.files.map((file) => file.path).sort()).toContain("__polena_std/parse.js");
+    const indexJs = result.files.find((file) => file.path === "index.js")?.contents ?? "";
+    const parseJs =
+      result.files.find((file) => file.path === "__polena_std/parse.js")?.contents ?? "";
+    expect(indexJs).toContain("join");
+    expect(parseJs).toContain("parseInt");
+  });
+
+  test("compiles parse_int through the standard library", () => {
+    const result = compilePackage({
+      manifest: { name: "app", version: "0.1.0", target: "executable" },
+      rootDir: "app",
+      sourceDir: "app/src",
+      files: [
+        {
+          path: "app/src/index.plna",
+          source: [
+            "import @std/parse.{type ParseError};",
+            "import @std/result;",
+            "import @std/core.{type Result};",
+            "",
+            "export fn main(): void {",
+            '  const parsed: Result<number, ParseError> = parse.parse_int("42abc");',
+            "  result.unwrap_or(parsed, 0);",
+            "}",
+          ].join("\n"),
+        },
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    const parseJs =
+      result.files.find((file) => file.path === "__polena_std/parse.js")?.contents ?? "";
+    expect(parseJs).toContain("ParseError.Invalid");
+    expect(parseJs).toContain("parseInt");
+  });
+
   test("supports explicit core standard-library type imports", () => {
     const result = compilePackage({
       manifest: { name: "app", version: "0.1.0", target: "executable" },

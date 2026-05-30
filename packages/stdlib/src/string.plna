@@ -54,3 +54,18 @@ export fn lowercase(input: string): string {
 export fn uppercase(input: string): string {
   @target.js("$0.toUpperCase()", string, input)
 }
+
+/// Returns the segments of `input` split around each occurrence of `separator`.
+export fn split(input: string, separator: string): []string {
+  @target.js("$0.split($1)", []string, input, separator)
+}
+
+/// Returns the concatenation of `parts` with `separator` between each element.
+export fn join(parts: []string, separator: string): string {
+  @target.js("$0.join($1)", string, parts, separator)
+}
+
+/// Returns `input` with every occurrence of `search` replaced by `replacement`.
+export fn replace_all(input: string, search: string, replacement: string): string {
+  @target.js("$0.replaceAll($1, $2)", string, input, search, replacement)
+}

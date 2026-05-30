@@ -1,6 +1,7 @@
 //! Polena standard library package entry point.
 //!
 //! Standard-library modules are imported by path, for example `@std/core`,
-//! `@std/io`, `@std/option`, `@std/result`, `@std/math`, `@std/string`,
-//! `@std/array`, `@std/collections/map`, and `@std/collections/set`. There is
-//! no compiler-provided prelude; import names explicitly.
+//! `@std/io`, `@std/option`, `@std/result`, `@std/parse`, `@std/math`,
+//! `@std/string`, `@std/array`, `@std/collections/map`, and
+//! `@std/collections/set`. There is no compiler-provided prelude; import names
+//! explicitly.
