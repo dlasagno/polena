@@ -23,6 +23,14 @@ import type {
   WhileExpression,
 } from "./ast";
 import { inferCompilerDirectiveExpression } from "./checker-directives";
+import {
+  checkEnumPayloadPattern,
+  checkMatchArmCoverage,
+  checkMatchExhaustiveness,
+  createMatchCoverageState,
+  recordCoveredVariant,
+  resolveShorthandMatchPattern,
+} from "./checker-match";
 import { error, type Diagnostic } from "./diagnostic";
 import { DiagnosticCode } from "./diagnostic-codes";
 import {
@@ -2666,25 +2674,17 @@ class Checker {
     parentScope: Scope,
   ): Map<number, Scope> {
     const armScopes = new Map<number, Scope>();
-    const seenVariants = new Set<string>();
-    let sawWildcard = false;
+    const coverage = createMatchCoverageState();
 
     for (const arm of expression.arms) {
       const armScope = new Scope(parentScope);
       armScopes.set(arm.nodeId, armScope);
 
-      if (sawWildcard) {
-        this.diagnostics.push(
-          error("Unreachable match arm.", arm.pattern.span, {
-            code: DiagnosticCode.UnreachableMatchArm,
-            label: "a previous wildcard arm already matches this value",
-          }),
-        );
+      const armCoverage = checkMatchArmCoverage(coverage, arm.pattern, this.diagnostics);
+      if (armCoverage.kind === "unreachable" || armCoverage.kind === "wildcard") {
         continue;
       }
-
-      if (arm.pattern.kind === "WildcardPattern") {
-        sawWildcard = true;
+      if (arm.pattern.kind !== "EnumVariantPattern") {
         continue;
       }
 
@@ -2731,127 +2731,44 @@ class Checker {
         continue;
       }
 
-      this.resolveShorthandMatchPattern(arm.pattern, scrutineeType.name);
+      resolveShorthandMatchPattern(arm.pattern, scrutineeType.name);
       this.recordEnumVariantReference(arm.pattern.nodeId, scrutineeType, arm.pattern.variantName);
-      this.checkEnumPayloadPattern(arm.pattern, variant, scrutineeType, armScope);
+      this.checkEnumPayloadPatternBindings(arm.pattern, variant, scrutineeType, armScope);
 
-      if (seenVariants.has(arm.pattern.variantName)) {
-        this.diagnostics.push(
-          error(`Duplicate match arm for '.${arm.pattern.variantName}'.`, arm.pattern.span, {
-            code: DiagnosticCode.DuplicateMatchArm,
-            label: "this variant was already matched earlier",
-          }),
-        );
-        continue;
-      }
-
-      seenVariants.add(arm.pattern.variantName);
+      recordCoveredVariant(coverage, arm.pattern, this.diagnostics);
     }
 
-    if (sawWildcard) {
-      return armScopes;
-    }
-
-    const missingVariants = scrutineeType.variants
-      .map((variant) => variant.name)
-      .filter((variant) => !seenVariants.has(variant));
-
-    if (missingVariants.length > 0) {
-      this.diagnostics.push(
-        error(
-          `Non-exhaustive match; missing ${missingVariants.map((name) => `'.${name}'`).join(", ")}.`,
-          expression.span,
-          {
-            code: DiagnosticCode.NonExhaustiveMatch,
-            label: "this match does not cover every enum variant",
-          },
-        ),
-      );
-    }
+    checkMatchExhaustiveness(expression, scrutineeType, coverage, this.diagnostics);
 
     return armScopes;
   }
 
-  private checkEnumPayloadPattern(
+  private checkEnumPayloadPatternBindings(
     pattern: Extract<MatchPattern, { readonly kind: "EnumVariantPattern" }>,
     variant: EnumVariantType,
     enumType: Extract<Type, { readonly kind: "enum" }>,
     armScope: Scope,
   ): void {
-    const payload = pattern.payload;
-
-    if (variant.payload.length === 0) {
-      if (payload !== undefined) {
-        this.diagnostics.push(
-          error(
-            `Enum variant '${enumType.name}.${variant.name}' has no associated data.`,
-            pattern.payloadSpan ?? pattern.span,
-            {
-              code: DiagnosticCode.WrongArgumentCount,
-              label: "fieldless variants match without parentheses",
-            },
-          ),
-        );
-      }
-      return;
-    }
-
-    if (payload === undefined) {
-      this.diagnostics.push(
-        error(
-          `Enum variant '${enumType.name}.${variant.name}' requires ${variant.payload.length} payload pattern(s).`,
-          pattern.span,
-          {
-            code: DiagnosticCode.WrongArgumentCount,
-            label: "payload variants must match with parentheses",
-          },
-        ),
-      );
-      return;
-    }
-
-    if (payload.length !== variant.payload.length) {
-      this.diagnostics.push(
-        error(
-          `Expected ${variant.payload.length} payload pattern(s), got ${payload.length}.`,
-          pattern.payloadSpan ?? pattern.span,
-          {
-            code: DiagnosticCode.WrongArgumentCount,
-            label: "wrong number of payload patterns for this enum variant",
-          },
-        ),
-      );
-    }
-
-    const count = Math.min(payload.length, variant.payload.length);
-    for (let index = 0; index < count; index += 1) {
-      const payloadPattern = payload[index];
-      const payloadType = variant.payload[index];
-      if (
-        payloadPattern === undefined ||
-        payloadType === undefined ||
-        payloadPattern.kind === "WildcardPattern"
-      ) {
-        continue;
-      }
-
+    const result = checkEnumPayloadPattern(pattern, variant, enumType);
+    this.diagnostics.push(...result.diagnostics);
+    for (const binding of result.bindings) {
       this.declareName(
         armScope,
         {
-          name: payloadPattern.name,
-          type: payloadType,
-          span: payloadPattern.nameSpan,
-          definitionNodeId: payloadPattern.nodeId,
-          fullSpan: payloadPattern.span,
+          name: binding.pattern.name,
+          type: binding.type,
+          span: binding.pattern.nameSpan,
+          definitionNodeId: binding.pattern.nodeId,
+          fullSpan: binding.pattern.span,
           assignability: "immutable-binding",
         },
         "PatternBinding",
         {
-          duplicateMessage: `Duplicate pattern binding '${payloadPattern.name}'.`,
+          duplicateMessage: `Duplicate pattern binding '${binding.pattern.name}'.`,
           duplicateLabel: "this pattern binding is already defined in this pattern",
         },
       );
-      this.semantics.patternBindingTypes.set(payloadPattern.nodeId, payloadType);
+      this.semantics.patternBindingTypes.set(binding.pattern.nodeId, binding.type);
     }
   }
 
@@ -3337,13 +3254,6 @@ class Checker {
 
   private resolveShorthandEnumVariant(expression: EnumVariantExpression, enumName: string): void {
     (expression as { resolvedEnumName?: string }).resolvedEnumName = enumName;
-  }
-
-  private resolveShorthandMatchPattern(
-    pattern: Extract<MatchPattern, { readonly kind: "EnumVariantPattern" }>,
-    enumName: string,
-  ): void {
-    (pattern as { resolvedEnumName?: string }).resolvedEnumName = enumName;
   }
 
   private recordDefinition(
