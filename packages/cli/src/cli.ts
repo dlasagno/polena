@@ -21,7 +21,12 @@ export type CliIo = BuildIo & {
 type CommandKind = "build" | "init" | "run";
 
 type CliCommand =
-  | { readonly kind: "build"; readonly packageDir: string; readonly outDir?: string }
+  | {
+      readonly kind: "build";
+      readonly packageDir: string;
+      readonly outDir?: string;
+      readonly noEmit: boolean;
+    }
   | {
       readonly kind: "init";
       readonly targetDir: string;
@@ -56,6 +61,7 @@ export async function runCli(options: RunCliOptions): Promise<number> {
       const result = await buildPackage({
         packageRoot: command.packageDir,
         outDirOverride: command.outDir,
+        noEmit: command.noEmit,
         io: options.io,
       });
       if (!result.ok) {
@@ -108,10 +114,11 @@ export function formatHelp(command?: CommandKind): string {
     case "build":
       return [
         "Usage:",
-        "  polena build [path] [--out-dir <dir>]",
+        "  polena build [path] [--out-dir <dir>] [--no-emit]",
         "",
         "Options:",
         "  --out-dir <dir>  Override the manifest output directory",
+        "  --no-emit        Check the package without writing output files",
         "  -h, --help       Show this help message",
         "  -V, --version    Show the compiler version",
       ].join("\n");
@@ -140,7 +147,7 @@ export function formatHelp(command?: CommandKind): string {
         "Polena programming language tools",
         "",
         "Usage:",
-        "  polena build [path] [--out-dir <dir>]",
+        "  polena build [path] [--out-dir <dir>] [--no-emit]",
         "  polena init  [path] [--name <name>] [--yes]",
         "  polena run   [path]",
         "  polena help",
@@ -224,6 +231,7 @@ function parseSubcommand(command: CommandKind, args: readonly string[]): CliComm
 function parseBuildCommand(args: readonly string[]): CliCommand {
   let packageDir: string | undefined;
   let outDir: string | undefined;
+  let noEmit = false;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -234,6 +242,10 @@ function parseBuildCommand(args: readonly string[]): CliCommand {
       }
       outDir = value;
       index += 1;
+      continue;
+    }
+    if (arg === "--no-emit") {
+      noEmit = true;
       continue;
     }
     if (arg?.startsWith("-")) {
@@ -249,6 +261,7 @@ function parseBuildCommand(args: readonly string[]): CliCommand {
     kind: "build",
     packageDir: packageDir ?? ".",
     ...(outDir === undefined ? {} : { outDir }),
+    noEmit,
   };
 }
 

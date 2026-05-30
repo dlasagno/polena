@@ -254,6 +254,7 @@ export function resolveOutDir(input: {
 export async function buildPackage(input: {
   readonly packageRoot: string;
   readonly outDirOverride?: string;
+  readonly noEmit?: boolean;
   readonly io: BuildIo;
 }): Promise<BuildResult> {
   const packageRoot = normalize(input.packageRoot);
@@ -312,6 +313,16 @@ export async function buildPackage(input: {
     manifest: manifestResult.manifest,
     outDirOverride: input.outDirOverride,
   });
+
+  if (input.noEmit === true) {
+    return {
+      ok: true,
+      outDir,
+      manifest: manifestResult.manifest,
+      files: compileResult.files,
+      diagnostics: [],
+    };
+  }
 
   try {
     await input.io.mkdirp(outDir);

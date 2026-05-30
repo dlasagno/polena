@@ -99,12 +99,13 @@ target_escapes = true
 
 ## 5. The `build` operation
 
-`build` compiles a package into JavaScript modules written to its output directory.
+`build` compiles a package into JavaScript modules written to its output directory, unless no-emit mode is enabled.
 
 ### 5.1 Inputs
 
 - A package root directory.
 - An optional output-directory override.
+- An optional no-emit mode.
 
 ### 5.2 Behavior
 
@@ -114,7 +115,8 @@ target_escapes = true
 4. Read all `.plna` and `.polena` source files under `src/` recursively.
 5. Hand the manifest and sources to the compiler. The compiler produces emitted files and diagnostics. If any diagnostics are errors, fail.
 6. Resolve the output directory (see §7).
-7. Write each emitted file to the output directory, creating subdirectories as needed. Existing files at those paths are overwritten without warning.
+7. If no-emit mode is enabled, succeed without creating the output directory or writing emitted files.
+8. Write each emitted file to the output directory, creating subdirectories as needed. Existing files at those paths are overwritten without warning.
 
 ### 5.3 Output stability
 

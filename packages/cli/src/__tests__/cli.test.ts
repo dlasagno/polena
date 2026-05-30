@@ -18,7 +18,7 @@ describe("CLI commands", () => {
     expect(await runCli({ args: ["help"], version: "0.1.0", io: help.io })).toBe(0);
     expect(await runCli({ args: ["--version"], version: "0.1.0", io: version.io })).toBe(0);
 
-    expect(help.stdout.join("\n")).toContain("polena build [path] [--out-dir <dir>]");
+    expect(help.stdout.join("\n")).toContain("polena build [path] [--out-dir <dir>] [--no-emit]");
     expect(version.stdout).toEqual(["polena 0.1.0"]);
   });
 
@@ -32,7 +32,9 @@ describe("CLI commands", () => {
     });
 
     expect(exitCode).toBe(0);
-    expect(harness.stdout.join("\n")).toContain("polena build [path] [--out-dir <dir>]");
+    expect(harness.stdout.join("\n")).toContain(
+      "polena build [path] [--out-dir <dir>] [--no-emit]",
+    );
   });
 
   test("builds a package with default path and output directory", async () => {
@@ -68,6 +70,24 @@ describe("CLI commands", () => {
 
     expect(exitCode).toBe(0);
     expect(harness.writes.get("app/dist/index.js")).toContain("main();");
+  });
+
+  test("checks a package without emitting output", async () => {
+    const harness = createCliHarness(
+      new Map([
+        ["app/polena.toml", packageManifest()],
+        ["app/src/index.plna", "export fn main(): void {}"],
+      ]),
+    );
+
+    const exitCode = await runCli({
+      args: ["build", "app", "--no-emit"],
+      version: "0.1.0",
+      io: harness.io,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(harness.writes.size).toBe(0);
   });
 
   test("initializes a package with an explicit name", async () => {

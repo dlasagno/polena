@@ -180,6 +180,20 @@ describe("package operations", () => {
     expect(overrideHarness.writes.has("/app/custom/index.js")).toBe(true);
   });
 
+  test("checks without writing output when noEmit is set", async () => {
+    const harness = createHarness(
+      new Map([
+        ["/app/polena.toml", packageManifest()],
+        ["/app/src/index.plna", "export fn main(): void {}"],
+      ]),
+    );
+
+    const result = await buildPackage({ packageRoot: "/app", noEmit: true, io: harness.io });
+
+    expect(result.ok).toBe(true);
+    expect(harness.writes.size).toBe(0);
+  });
+
   test("accepts .polena modules and ignores files outside src", async () => {
     const harness = createHarness(
       new Map([

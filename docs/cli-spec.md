@@ -19,7 +19,7 @@ This document defines how Polena operations are surfaced to users on the command
 ## 2. Command surface
 
 ```
-polena build [path] [--out-dir <dir>]
+polena build [path] [--out-dir <dir>] [--no-emit]
 polena init  [path] [--name <name>] [--yes]
 polena run   [path]
 polena --version | -V | version
@@ -46,11 +46,12 @@ When a global flag is present, it takes precedence over the subcommand's normal 
 ## 4. `polena build`
 
 ```
-polena build [path] [--out-dir <dir>]
+polena build [path] [--out-dir <dir>] [--no-emit]
 ```
 
 - `path` — package directory containing `polena.toml`. Defaults to `.`.
 - `--out-dir <dir>` — overrides the manifest's `[build].out-dir`. See build spec §7.
+- `--no-emit` — checks the package without writing emitted JavaScript files.
 
 Runs the build operation defined in build spec §5.
 
