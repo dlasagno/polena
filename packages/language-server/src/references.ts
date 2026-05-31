@@ -502,12 +502,16 @@ function spanForTypeNode(typeNode: TypeNode, nodeId: NodeId): Span | undefined {
         findFirst(typeNode.params, (param) => spanForTypeNode(param, nodeId)) ??
         spanForTypeNode(typeNode.returnType, nodeId)
       );
+    case "NamedType":
+      return findFirst(typeNode.typeArguments, (typeArgument) =>
+        spanForTypeNode(typeArgument, nodeId),
+      );
     case "ObjectType":
       return findFirst(typeNode.fields, (field) => spanForObjectTypeField(field, nodeId));
     case "EnumType":
       return findFirst(typeNode.variants, (variant) => spanForEnumVariant(variant, nodeId));
     case "PrimitiveType":
-    case "NamedType":
+    case "NeverType":
     case "UnknownType":
     case "OpaqueType":
       return undefined;
@@ -597,6 +601,9 @@ function spanForExpression(expression: Expression, nodeId: NodeId): Span | undef
     case "CallExpression":
       return (
         spanForExpression(expression.callee, nodeId) ??
+        findFirst(expression.typeArguments, (typeArgument) =>
+          spanForTypeNode(typeArgument, nodeId),
+        ) ??
         findFirst(expression.args, (arg) => spanForExpression(arg, nodeId))
       );
     case "IndexExpression":

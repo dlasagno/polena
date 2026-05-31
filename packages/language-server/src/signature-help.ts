@@ -164,7 +164,8 @@ function activeParameter(
     return 0;
   }
 
-  const openParenOffset = call.callee.span.end.offset;
+  const lastTypeArgument = call.typeArguments[call.typeArguments.length - 1];
+  const openParenOffset = (lastTypeArgument ?? call.callee).span.end.offset;
   const beforeCursor = source.slice(openParenOffset + 1, offset);
   const commaCount = [...beforeCursor].filter((char) => char === ",").length;
   return Math.min(commaCount, parameterCount - 1);

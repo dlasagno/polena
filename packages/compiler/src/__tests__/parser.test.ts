@@ -338,6 +338,21 @@ describe("parser", () => {
     });
   });
 
+  test("parses explicit generic function call type arguments", () => {
+    const parseResult = parse(lex("const value = identity<number>(1);").tokens);
+
+    expect(parseResult.diagnostics).toHaveLength(0);
+    expect(parseResult.program.declarations[0]).toMatchObject({
+      kind: "VariableDeclaration",
+      initializer: {
+        kind: "CallExpression",
+        callee: { kind: "NameExpression", name: "identity" },
+        typeArguments: [{ kind: "PrimitiveType", name: "number" }],
+        args: [{ kind: "NumberLiteral" }],
+      },
+    });
+  });
+
   test("parses function type annotations", () => {
     const parseResult = parse(lex("const op: fn(number, number) -> number = add;").tokens);
 

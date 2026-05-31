@@ -1049,42 +1049,14 @@ class Parser {
     let expression = this.parsePrimaryExpression();
 
     while (true) {
-      if (this.match("LeftParen")) {
-        const leftParen = this.previous();
-        const args: Expression[] = [];
+      const typeArguments = this.tryParseCallTypeArguments();
+      if (typeArguments !== undefined) {
+        expression = this.parseCallExpression(expression, typeArguments);
+        continue;
+      }
 
-        if (!this.check("RightParen")) {
-          while (true) {
-            args.push(this.parseExpression());
-
-            if (!this.match("Comma")) {
-              break;
-            }
-
-            if (this.check("RightParen")) {
-              this.diagnostics.push(
-                error("Expected an expression.", this.current().span, {
-                  code: DiagnosticCode.ExpectedExpression,
-                  label: "expected an expression here",
-                }),
-              );
-              break;
-            }
-          }
-        }
-
-        const rightParen = this.expectClosingDelimiter(
-          "RightParen",
-          "Expected ')' after arguments.",
-        );
-        expression = this.node({
-          kind: "CallExpression",
-          callee: expression,
-          args,
-          span: mergeSpans(expression.span, rightParen.span),
-        });
-
-        void leftParen;
+      if (this.check("LeftParen")) {
+        expression = this.parseCallExpression(expression, []);
         continue;
       }
 
@@ -1119,6 +1091,61 @@ class Parser {
     }
 
     return expression;
+  }
+
+  private tryParseCallTypeArguments(): readonly TypeNode[] | undefined {
+    if (!this.check("Less")) {
+      return undefined;
+    }
+
+    const startIndex = this.index;
+    const startNodeId = this.nextNodeId;
+    const diagnosticCount = this.diagnostics.length;
+    const typeArguments = this.parseTypeArguments();
+
+    if (this.check("LeftParen")) {
+      return typeArguments;
+    }
+
+    this.index = startIndex;
+    this.nextNodeId = startNodeId;
+    this.diagnostics.length = diagnosticCount;
+    return undefined;
+  }
+
+  private parseCallExpression(callee: Expression, typeArguments: readonly TypeNode[]): Expression {
+    const leftParen = this.expect("LeftParen", "Expected '(' after call type arguments.");
+    const args: Expression[] = [];
+
+    if (!this.check("RightParen")) {
+      while (true) {
+        args.push(this.parseExpression());
+
+        if (!this.match("Comma")) {
+          break;
+        }
+
+        if (this.check("RightParen")) {
+          this.diagnostics.push(
+            error("Expected an expression.", this.current().span, {
+              code: DiagnosticCode.ExpectedExpression,
+              label: "expected an expression here",
+            }),
+          );
+          break;
+        }
+      }
+    }
+
+    const rightParen = this.expectClosingDelimiter("RightParen", "Expected ')' after arguments.");
+    void leftParen;
+    return this.node({
+      kind: "CallExpression",
+      callee,
+      typeArguments,
+      args,
+      span: mergeSpans(callee.span, rightParen.span),
+    });
   }
 
   private parsePrimaryExpression(): Expression {

@@ -101,7 +101,7 @@ Status values:
 | Explicit `return expr;` | Implemented | Checked against return type. |
 | Anonymous functions | Implemented | Closures may capture visible values. Parameter and return annotations may be omitted when an expected function type supplies enough context. |
 | Function type syntax | Implemented | Written as `fn(T1, T2) -> Return`; usable in annotations, aliases, parameters, and returns. |
-| Generic functions | Partially implemented | Declarations such as `fn id<T>(value: T): T` are supported with inferred type arguments at calls; explicit call type arguments are not implemented. |
+| Generic functions | Implemented | Declarations such as `fn id<T>(value: T): T` are supported with inferred or explicit type arguments at calls. Constraints are not implemented. |
 | Named function return type inference | Not implemented | Function declarations still require explicit return types. |
 
 ---
@@ -145,7 +145,7 @@ Status values:
 | `type Name = ...;` declarations | Partially implemented | Supports aliases to primitive, array, object, enum, named alias, and generic instantiation types. |
 | Type aliases | Implemented | Transparent aliases; recursive aliases are rejected. |
 | Separate type/value namespaces | Implemented | Type aliases and value bindings may use the same name. |
-| Generics | Partially implemented | Generic type declarations and instantiations are supported, including substitution in object fields, enum payloads, aliases over generic instantiations, and inferred generic function calls. Explicit function call type arguments and constraints are not implemented. |
+| Generics | Partially implemented | Generic type declarations and instantiations are supported, including substitution in object fields, enum payloads, aliases over generic instantiations, and inferred or explicit generic function calls. Constraints are not implemented. |
 | `unknown` source type | Implemented | Values may flow into `unknown`; values of type `unknown` cannot be inspected or implicitly converted to concrete types. |
 | Opaque type declarations | Partially implemented | Supports non-generic and generic nominal declarations with `type Name = opaque;` and `type Box<T> = opaque;`; generic opaque instantiations participate in type inference and equality. Visibility and cross-module opaque identity rules are still deferred. |
 

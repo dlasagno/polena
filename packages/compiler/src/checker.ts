@@ -2014,6 +2014,7 @@ class Checker {
             kind: "CallExpression",
             nodeId: right.nodeId,
             callee: right.callee,
+            typeArguments: right.typeArguments,
             args: right.args.map((arg) => (isPipePlaceholder(arg) ? left : arg)),
             span,
           },
@@ -2028,6 +2029,7 @@ class Checker {
         kind: "CallExpression",
         nodeId: left.nodeId,
         callee: right,
+        typeArguments: [],
         args: [left],
         span,
       },
@@ -2309,6 +2311,9 @@ class Checker {
     }
 
     if (calleeType.kind !== "function") {
+      for (const typeArgument of expression.typeArguments) {
+        this.typeFromNode(typeArgument, undefined, this.activeTypeEnvironment);
+      }
       this.diagnostics.push(
         error(`Cannot call value of type '${formatType(calleeType)}'.`, expression.callee.span, {
           code: DiagnosticCode.CannotCallNonFunction,
@@ -2320,6 +2325,23 @@ class Checker {
 
     if (calleeType.typeParameters.length > 0) {
       return this.inferGenericFunctionCall(expression, scope, options, calleeType);
+    }
+
+    if (expression.typeArguments.length > 0) {
+      for (const typeArgument of expression.typeArguments) {
+        this.typeFromNode(typeArgument, undefined, this.activeTypeEnvironment);
+      }
+      const firstTypeArgument = expression.typeArguments[0];
+      this.diagnostics.push(
+        error(
+          "This function does not take type arguments.",
+          firstTypeArgument?.span ?? expression.span,
+          {
+            code: DiagnosticCode.TypeMismatch,
+            label: "remove the type arguments",
+          },
+        ),
+      );
     }
 
     if (expression.args.length !== calleeType.params.length) {
@@ -2370,6 +2392,25 @@ class Checker {
     options: InferOptions,
     calleeType: Extract<Type, { readonly kind: "function" }>,
   ): Type {
+    const explicitTypeArguments = expression.typeArguments.map((typeArgument) =>
+      this.typeFromNode(typeArgument, undefined, this.activeTypeEnvironment),
+    );
+    if (
+      expression.typeArguments.length > 0 &&
+      expression.typeArguments.length !== calleeType.typeParameters.length
+    ) {
+      this.diagnostics.push(
+        error(
+          `Expected ${calleeType.typeParameters.length} type argument(s), got ${expression.typeArguments.length}.`,
+          expression.span,
+          {
+            code: DiagnosticCode.TypeMismatch,
+            label: "wrong number of type arguments in this call",
+          },
+        ),
+      );
+    }
+
     if (expression.args.length !== calleeType.params.length) {
       this.diagnostics.push(
         error(
@@ -2384,7 +2425,15 @@ class Checker {
     }
 
     const inferred = new Map<string, Type>();
-    if (options.expectedType !== undefined) {
+    if (explicitTypeArguments.length === calleeType.typeParameters.length) {
+      for (let index = 0; index < calleeType.typeParameters.length; index += 1) {
+        const parameter = calleeType.typeParameters[index];
+        const argument = explicitTypeArguments[index];
+        if (parameter !== undefined && argument !== undefined) {
+          inferred.set(parameter, argument);
+        }
+      }
+    } else if (options.expectedType !== undefined) {
       this.inferTypeArgumentsFromType(calleeType.returnType, options.expectedType, inferred);
     }
 
@@ -2418,6 +2467,7 @@ class Checker {
       calleeType.typeParameters,
       inferred,
       expression.callee,
+      explicitTypeArguments.length === calleeType.typeParameters.length,
     );
     if (substitution === undefined) {
       return unknownType();
@@ -2453,6 +2503,7 @@ class Checker {
     }
 
     const { enumType, variant, variantName, variantNameSpan } = resolved;
+    this.rejectEnumConstructorTypeArguments(expression);
     if (enumType.name === "<unknown>") {
       for (const arg of expression.args) {
         this.inferExpression(arg, scope, options);
@@ -2540,6 +2591,7 @@ class Checker {
     if (template === undefined) {
       return unknownType();
     }
+    this.rejectEnumConstructorTypeArguments(expression);
 
     const templateVariant = this.expectEnumVariant(
       template,
@@ -2620,6 +2672,28 @@ class Checker {
 
     this.recordEnumVariantReference(expression.callee.nodeId, enumType, expression.callee.name);
     return enumType;
+  }
+
+  private rejectEnumConstructorTypeArguments(
+    expression: Extract<Expression, { kind: "CallExpression" }>,
+  ): void {
+    if (expression.typeArguments.length === 0) {
+      return;
+    }
+
+    for (const typeArgument of expression.typeArguments) {
+      this.typeFromNode(typeArgument, undefined, this.activeTypeEnvironment);
+    }
+    this.diagnostics.push(
+      error(
+        "Enum variant constructors do not take explicit call type arguments.",
+        expression.typeArguments[0]?.span ?? expression.span,
+        {
+          code: DiagnosticCode.TypeMismatch,
+          label: "remove the type arguments",
+        },
+      ),
+    );
   }
 
   private inferIndexExpression(
@@ -3150,6 +3224,7 @@ class Checker {
     typeParameters: readonly string[],
     inferred: ReadonlyMap<string, Type>,
     callee: Expression,
+    allowTypeParameterArguments = false,
   ): ReadonlyMap<string, Type> | undefined {
     const substitution = new Map<string, Type>();
     const missing: string[] = [];
@@ -3159,7 +3234,7 @@ class Checker {
       if (
         typeArgument === undefined ||
         typeArgument.kind === "unknown" ||
-        typeContainsTypeParameter(typeArgument)
+        (!allowTypeParameterArguments && typeContainsTypeParameter(typeArgument))
       ) {
         missing.push(parameter);
         continue;

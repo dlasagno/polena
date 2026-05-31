@@ -512,6 +512,7 @@ export type CallExpression = {
   readonly kind: "CallExpression";
   readonly nodeId: NodeId;
   readonly callee: Expression;
+  readonly typeArguments: readonly TypeNode[];
   readonly args: readonly Expression[];
   readonly span: Span;
 };

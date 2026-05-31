@@ -323,6 +323,9 @@ function collectExpressionTokens(
       return;
     case "CallExpression":
       collectExpressionTokens(expression.callee, analysis, tokens);
+      for (const typeArgument of expression.typeArguments) {
+        collectTypeNodeTokens(typeArgument, analysis, tokens);
+      }
       for (const arg of expression.args) {
         collectExpressionTokens(arg, analysis, tokens);
       }

@@ -618,6 +618,10 @@ function findAstNodeInTypeNode(typeNode: TypeNode, nodeId: NodeId): AstNode | un
         findFirst(typeNode.params, (param) => findAstNodeInTypeNode(param, nodeId)) ??
         findAstNodeInTypeNode(typeNode.returnType, nodeId)
       );
+    case "NamedType":
+      return findFirst(typeNode.typeArguments, (typeArgument) =>
+        findAstNodeInTypeNode(typeArgument, nodeId),
+      );
     case "ObjectType":
       for (const field of typeNode.fields) {
         if (field.nodeId === nodeId) {
@@ -640,7 +644,6 @@ function findAstNodeInTypeNode(typeNode: TypeNode, nodeId: NodeId): AstNode | un
         );
       });
     case "PrimitiveType":
-    case "NamedType":
     case "NeverType":
     case "UnknownType":
     case "OpaqueType":
@@ -740,6 +743,9 @@ function findAstNodeInExpression(expression: Expression, nodeId: NodeId): AstNod
     case "CallExpression":
       return (
         findAstNodeInExpression(expression.callee, nodeId) ??
+        findFirst(expression.typeArguments, (typeArgument) =>
+          findAstNodeInTypeNode(typeArgument, nodeId),
+        ) ??
         findFirst(expression.args, (arg) => findAstNodeInExpression(arg, nodeId))
       );
     case "IndexExpression":

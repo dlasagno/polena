@@ -298,9 +298,16 @@ function findInTypeNode(typeNode: TypeNode, offset: number): HoverTarget | undef
       }
       return undefined;
     case "NamedType":
-      return contains(typeNode.nameSpan, offset)
-        ? target("TypeReference", typeNode.nodeId, typeNode.nameSpan)
-        : undefined;
+      if (contains(typeNode.nameSpan, offset)) {
+        return target("TypeReference", typeNode.nodeId, typeNode.nameSpan);
+      }
+      for (const typeArgument of typeNode.typeArguments) {
+        const found = findInTypeNode(typeArgument, offset);
+        if (found !== undefined) {
+          return found;
+        }
+      }
+      return undefined;
     case "PrimitiveType":
     case "NeverType":
     case "UnknownType":
@@ -403,6 +410,12 @@ function findInExpression(expression: Expression, offset: number): HoverTarget |
     case "MatchExpression":
       return findInMatchExpression(expression, offset);
     case "CallExpression":
+      for (const typeArgument of expression.typeArguments) {
+        const found = findInTypeNode(typeArgument, offset);
+        if (found !== undefined) {
+          return found;
+        }
+      }
       for (const arg of expression.args) {
         const found = findInExpression(arg, offset);
         if (found !== undefined) {

@@ -471,6 +471,36 @@ const value: Option<number> = none();
     expect(result.js).toContain('"Option.None"');
   });
 
+  test("supports explicit generic function call type arguments", () => {
+    const result = expectCompileOk(`
+${coreTypes}
+
+fn identity<T>(value: T): T {
+  value
+}
+
+fn none<T>(): Option<T> {
+  .None
+}
+
+fn forward<T>(value: T): T {
+  identity<T>(value)
+}
+
+const numberValue = identity<number>(41) + 1;
+const forwarded = forward<number>(numberValue);
+const empty = none<string>();
+const value = match empty {
+  .Some(_) => 0,
+  .None => forwarded,
+};
+`);
+
+    expect(executeValue(result.js)).toBe(42);
+    expect(result.js).toContain("identity(41)");
+    expect(result.js).toContain("none()");
+  });
+
   test("rejects invalid generic type argument usage", () => {
     const missing = compile(`
 type Box<T> = { value: T };
@@ -513,6 +543,30 @@ const value = make();
     expect(cannotInfer.ok).toBe(false);
     expect(cannotInfer.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
       "Cannot infer type argument(s) 'T' for 'make'.",
+    );
+
+    const wrongTypeArgumentCount = compile(`
+fn pair<A, B>(left: A, right: B): A {
+  left
+}
+
+const value = pair<number>(1, "two");
+`);
+    expect(wrongTypeArgumentCount.ok).toBe(false);
+    expect(wrongTypeArgumentCount.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Expected 2 type argument(s), got 1.",
+    );
+
+    const nonGenericTypeArguments = compile(`
+fn double(value: number): number {
+  value + value
+}
+
+const value = double<number>(1);
+`);
+    expect(nonGenericTypeArguments.ok).toBe(false);
+    expect(nonGenericTypeArguments.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "This function does not take type arguments.",
     );
 
     const mismatch = compile(`
