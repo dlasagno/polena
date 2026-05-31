@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { analyze, type Diagnostic as PolenaDiagnostic } from "@polena/compiler";
+import {
+  analyze,
+  analyzePackage,
+  type Diagnostic as PolenaDiagnostic,
+  type ModuleAnalysis,
+} from "@polena/compiler";
+import { DiagnosticSeverity, DiagnosticTag } from "vscode-languageserver/node";
 import { toLspDiagnostics } from "../diagnostics";
 
 describe("LSP diagnostics", () => {
@@ -104,4 +110,77 @@ describe("LSP diagnostics", () => {
       },
     });
   });
+
+  test("tags unused variables as unnecessary hint diagnostics", () => {
+    const result = analyze("fn main(): void { const unused = 1; const used = unused; }");
+    const diagnostics = toLspDiagnostics(result.diagnostics, "file:///example.plna", {
+      analysis: result,
+    });
+
+    expect(diagnostics).toContainEqual(
+      expect.objectContaining({
+        message: "Variable 'used' is never used.",
+        severity: DiagnosticSeverity.Hint,
+        tags: [DiagnosticTag.Unnecessary],
+        range: {
+          start: { line: 0, character: 42 },
+          end: { line: 0, character: 46 },
+        },
+      }),
+    );
+    expect(diagnostics.some((diagnostic) => diagnostic.message.includes("'unused'"))).toBe(false);
+  });
+
+  test("tags unused imports as unnecessary hint diagnostics", () => {
+    const indexSource = [
+      "import @/users.{type User, greeting, unusedValue as valueAlias} as users;",
+      "fn main(user: User): void {",
+      "  const message = greeting(user);",
+      "  users.greeting(user);",
+      "}",
+    ].join("\n");
+    const usersSource = [
+      "export type User = { name: string };",
+      "export fn greeting(user: User): string {",
+      '  "Hello"',
+      "}",
+      "export const unusedValue = 1;",
+    ].join("\n");
+    const packageResult = analyzePackage({
+      manifest: { name: "diagnostic-test", version: "0.1.0", target: "library" },
+      rootDir: "/app",
+      sourceDir: "/app/src",
+      files: [
+        { path: "/app/src/index.plna", source: indexSource },
+        { path: "/app/src/users.plna", source: usersSource },
+      ],
+    });
+    const current = moduleAnalysis(packageResult.analyses, "@/");
+    const diagnostics = toLspDiagnostics(
+      current.analysis.diagnostics,
+      "file:///app/src/index.plna",
+      {
+        analysis: current.analysis,
+      },
+    );
+
+    expect(diagnostics).toContainEqual(
+      expect.objectContaining({
+        message: "Imported value 'valueAlias' is never used.",
+        severity: DiagnosticSeverity.Hint,
+        tags: [DiagnosticTag.Unnecessary],
+      }),
+    );
+    expect(diagnostics.some((diagnostic) => diagnostic.message.includes("'User'"))).toBe(false);
+    expect(diagnostics.some((diagnostic) => diagnostic.message.includes("'greeting'"))).toBe(false);
+    expect(diagnostics.some((diagnostic) => diagnostic.message.includes("'users'"))).toBe(false);
+  });
 });
+
+function moduleAnalysis(analyses: readonly ModuleAnalysis[], moduleName: string): ModuleAnalysis {
+  const analysis = analyses.find((candidate) => candidate.moduleName === moduleName);
+  if (analysis === undefined) {
+    throw new Error(`expected analysis for ${moduleName}`);
+  }
+  return analysis;
+}

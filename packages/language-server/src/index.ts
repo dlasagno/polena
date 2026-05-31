@@ -364,9 +364,10 @@ async function publishDiagnostics(
 
     for (const [uri, diagnostics] of packageDiagnostics.diagnosticsByUri) {
       packageRootByUri.set(uri, packageDiagnostics.packageRoot);
+      const analysis = packageDiagnostics.analysesByUri.get(uri)?.analysis;
       connection.sendDiagnostics({
         uri,
-        diagnostics: toLspDiagnostics(diagnostics, uri),
+        diagnostics: toLspDiagnostics(diagnostics, uri, { analysis }),
       });
     }
 
@@ -396,7 +397,7 @@ async function publishDiagnostics(
   const analysis = getAnalysis(document);
   connection.sendDiagnostics({
     uri: document.uri,
-    diagnostics: toLspDiagnostics(analysis.diagnostics, document.uri),
+    diagnostics: toLspDiagnostics(analysis.diagnostics, document.uri, { analysis }),
   });
 }
 
