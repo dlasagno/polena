@@ -254,19 +254,22 @@ const double = fn (value: number): number {
 };
 ```
 
-Return type inference for anonymous functions is **TBD**. The current explicit
-form is:
+When an anonymous function has an expected function type from context, parameter
+types and the return type may be omitted:
 
 ```tsx
-const double = fn (value: number): number {
+const double: fn(number) -> number = fn (value) {
 	value * 2
 };
 ```
 
+Without an expected function type, parameter types must be written explicitly.
+Anonymous function return types may be inferred from a final expression.
+
 Anonymous functions may be passed directly:
 
 ```tsx
-const names = users.map(fn (user) {
+const names = array.map(users, fn (user) {
 	user.name
 });
 ```

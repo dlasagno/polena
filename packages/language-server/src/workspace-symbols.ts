@@ -134,9 +134,13 @@ function compareRanges(left: Range, right: Range): number {
 
 function formatFunctionDetail(declaration: FunctionDeclaration): string {
   const params = declaration.params
-    .map((param) => `${param.name}: ${formatTypeNode(param.type)}`)
+    .map((param) => `${param.name}: ${formatOptionalTypeNode(param.type)}`)
     .join(", ");
   return `(${params}): ${formatTypeNode(declaration.returnType)}`;
+}
+
+function formatOptionalTypeNode(typeNode: TypeNode | undefined): string {
+  return typeNode === undefined ? "unknown" : formatTypeNode(typeNode);
 }
 
 function formatVariableDetail(declaration: VariableDeclaration, analysis: AnalyzeResult): string {

@@ -338,7 +338,7 @@ function renderNodeHover(analysis: AnalyzeResult, nodeId: NodeId): string | unde
     case "TypeDeclaration":
       return renderCodeHover(`type ${node.name} = ${formatTypeNode(node.value)}`, node.doc);
     case "Parameter":
-      return renderCodeHover(`${node.name}: ${formatTypeNode(node.type)}`, undefined);
+      return renderCodeHover(`${node.name}: ${formatOptionalTypeNode(node.type)}`, undefined);
     case "BindingPattern": {
       const type = analysis.semantics.patternBindingTypes.get(node.nodeId);
       const code =
@@ -390,12 +390,16 @@ function renderVariableHover(analysis: AnalyzeResult, declaration: VariableDecla
 
 function renderFunctionHover(declaration: FunctionDeclaration): string {
   const params = declaration.params
-    .map((param) => `${param.name}: ${formatTypeNode(param.type)}`)
+    .map((param) => `${param.name}: ${formatOptionalTypeNode(param.type)}`)
     .join(", ");
   return renderCodeHover(
     `fn ${declaration.name}(${params}): ${formatTypeNode(declaration.returnType)}`,
     declaration.doc,
   );
+}
+
+function formatOptionalTypeNode(typeNode: TypeNode | undefined): string {
+  return typeNode === undefined ? "unknown" : formatTypeNode(typeNode);
 }
 
 function renderFieldHover(
@@ -515,7 +519,8 @@ function findAstNodeInTopLevelDeclaration(
         if (param.nodeId === nodeId) {
           return param;
         }
-        const paramType = findAstNodeInTypeNode(param.type, nodeId);
+        const paramType =
+          param.type === undefined ? undefined : findAstNodeInTypeNode(param.type, nodeId);
         if (paramType !== undefined) {
           return paramType;
         }
@@ -665,9 +670,15 @@ function findAstNodeInExpression(expression: Expression, nodeId: NodeId): AstNod
     case "AnonymousFunctionExpression":
       return (
         findFirst(expression.params, (param) =>
-          param.nodeId === nodeId ? param : findAstNodeInTypeNode(param.type, nodeId),
+          param.nodeId === nodeId
+            ? param
+            : param.type === undefined
+              ? undefined
+              : findAstNodeInTypeNode(param.type, nodeId),
         ) ??
-        findAstNodeInTypeNode(expression.returnType, nodeId) ??
+        (expression.returnType === undefined
+          ? undefined
+          : findAstNodeInTypeNode(expression.returnType, nodeId)) ??
         findAstNodeInBlock(expression.body, nodeId)
       );
     case "DirectiveExpression":

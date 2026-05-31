@@ -801,7 +801,7 @@ class Checker {
       declaration.typeParameters.map((param) => param.name),
     );
     const type = functionType(
-      declaration.params.map((param) => this.typeFromNode(param.type, undefined, environment)),
+      declaration.params.map((param) => this.typeFromParameterAnnotation(param, environment)),
       this.typeFromNode(declaration.returnType, undefined, environment),
       declaration.typeParameters.map((param) => param.name),
     );
@@ -936,11 +936,33 @@ class Checker {
   }
 
   private declareParameter(scope: Scope, param: Parameter, environment: TypeEnvironment): void {
+    this.declareParameterWithType(
+      scope,
+      param,
+      this.typeFromParameterAnnotation(param, environment),
+    );
+  }
+
+  private typeFromParameterAnnotation(param: Parameter, environment: TypeEnvironment): Type {
+    if (param.type !== undefined) {
+      return this.typeFromNode(param.type, undefined, environment);
+    }
+
+    this.diagnostics.push(
+      error(`Cannot infer type for parameter '${param.name}'.`, param.nameSpan, {
+        code: DiagnosticCode.ExpectedTypeSyntax,
+        label: "add a parameter type",
+      }),
+    );
+    return unknownType();
+  }
+
+  private declareParameterWithType(scope: Scope, param: Parameter, type: Type): void {
     this.declareName(
       scope,
       {
         name: param.name,
-        type: this.typeFromNode(param.type, undefined, environment),
+        type,
         span: param.nameSpan,
         definitionNodeId: param.nodeId,
         fullSpan: param.span,
@@ -1390,7 +1412,7 @@ class Checker {
       case "ObjectLiteral":
         return this.inferObjectLiteral(expression, scope, options);
       case "AnonymousFunctionExpression":
-        return this.inferAnonymousFunctionExpression(expression, scope);
+        return this.inferAnonymousFunctionExpression(expression, scope, options.expectedType);
       case "DirectiveExpression":
         return this.inferDirectiveExpression(expression, scope, options);
       case "EnumVariantExpression":
@@ -1467,57 +1489,93 @@ class Checker {
   private inferAnonymousFunctionExpression(
     expression: AnonymousFunctionExpression,
     parentScope: Scope,
+    expectedType: Type | undefined,
   ): Type {
     this.checkDuplicateTypeParameters(expression.typeParameters);
     const environment = new Map(this.activeTypeEnvironment);
     for (const param of expression.typeParameters) {
       environment.set(param.name, typeParameterType(param.name));
     }
+    const expectedFunctionType =
+      expectedType?.kind === "function" && expectedType.params.length === expression.params.length
+        ? expectedType
+        : undefined;
     const functionScope = new Scope(parentScope);
     const previousTypeEnvironment = this.activeTypeEnvironment;
     this.activeTypeEnvironment = environment;
-    const returnType = this.typeFromNode(expression.returnType, undefined, environment);
+    const returnType =
+      expression.returnType === undefined
+        ? concreteExpectedReturnType(expectedFunctionType)
+        : this.typeFromNode(expression.returnType, undefined, environment);
+    const checkReturnType = returnType ?? unknownType(false);
+    const paramTypes: Type[] = [];
 
-    for (const param of expression.params) {
-      this.declareParameter(functionScope, param, environment);
+    for (let index = 0; index < expression.params.length; index += 1) {
+      const param = expression.params[index];
+      if (param === undefined) {
+        continue;
+      }
+      const expectedParamType = expectedFunctionType?.params[index];
+      const paramType =
+        param.type === undefined
+          ? this.inferAnonymousFunctionParameterType(param, expectedParamType)
+          : this.typeFromNode(param.type, undefined, environment);
+      paramTypes.push(paramType);
+      this.declareParameterWithType(functionScope, param, paramType);
     }
 
-    const type = functionType(
-      expression.params.map((param) => this.typeFromNode(param.type, undefined, environment)),
-      returnType,
-      expression.typeParameters.map((param) => param.name),
-    );
+    let inferredReturnType = returnType;
 
     if (expression.body.isMissing === true) {
       this.activeTypeEnvironment = previousTypeEnvironment;
-      return type;
+      return functionType(
+        paramTypes,
+        inferredReturnType ?? unknownType(),
+        expression.typeParameters.map((param) => param.name),
+      );
     }
 
-    const bodyOutcome = this.checkBlock(expression.body, functionScope, returnType);
+    const bodyOutcome = this.checkBlock(expression.body, functionScope, checkReturnType);
     if (expression.body.finalExpression !== undefined) {
       const finalOutcome = this.expressionControlFlow(expression.body.finalExpression);
       if (!finalOutcome.canFallThrough) {
         this.inferExpression(expression.body.finalExpression, functionScope, {
           ifAsValue: false,
           whileAsValue: false,
-          returnType,
+          returnType: checkReturnType,
         });
         this.activeTypeEnvironment = previousTypeEnvironment;
-        return type;
+        return functionType(
+          paramTypes,
+          inferredReturnType ?? unknownType(),
+          expression.typeParameters.map((param) => param.name),
+        );
       }
 
       const finalType = this.inferExpression(expression.body.finalExpression, functionScope, {
-        ifAsValue: !sameType(returnType, primitiveType("void")),
-        whileAsValue: !sameType(returnType, primitiveType("void")),
-        returnType,
-        expectedType: returnType,
+        ifAsValue: returnType === undefined || !sameType(returnType, primitiveType("void")),
+        whileAsValue: returnType === undefined || !sameType(returnType, primitiveType("void")),
+        returnType: checkReturnType,
+        ...(returnType === undefined ? {} : { expectedType: returnType }),
       });
-      this.expectType(finalType, returnType, expression.body.finalExpression.span);
+      if (returnType === undefined) {
+        inferredReturnType = finalType;
+      } else {
+        this.expectType(finalType, returnType, expression.body.finalExpression.span);
+      }
       this.activeTypeEnvironment = previousTypeEnvironment;
-      return type;
+      return functionType(
+        paramTypes,
+        inferredReturnType ?? unknownType(),
+        expression.typeParameters.map((param) => param.name),
+      );
     }
 
-    if (!sameType(returnType, primitiveType("void")) && bodyOutcome.canFallThrough) {
+    if (
+      returnType !== undefined &&
+      !sameType(returnType, primitiveType("void")) &&
+      bodyOutcome.canFallThrough
+    ) {
       this.diagnostics.push(
         error(`Anonymous function must return '${formatType(returnType)}'.`, expression.span, {
           code: DiagnosticCode.MissingReturn,
@@ -1527,7 +1585,28 @@ class Checker {
     }
 
     this.activeTypeEnvironment = previousTypeEnvironment;
-    return type;
+    return functionType(
+      paramTypes,
+      inferredReturnType ?? primitiveType("void"),
+      expression.typeParameters.map((param) => param.name),
+    );
+  }
+
+  private inferAnonymousFunctionParameterType(
+    param: Parameter,
+    expectedType: Type | undefined,
+  ): Type {
+    if (expectedType !== undefined && !typeContainsTypeParameter(expectedType)) {
+      return expectedType;
+    }
+
+    this.diagnostics.push(
+      error(`Cannot infer type for anonymous function parameter '${param.name}'.`, param.nameSpan, {
+        code: DiagnosticCode.ExpectedTypeSyntax,
+        label: "add a parameter type or provide an expected function type",
+      }),
+    );
+    return unknownType();
   }
 
   private inferEnumVariantExpression(
@@ -2312,9 +2391,10 @@ class Checker {
         continue;
       }
 
+      const expectedParamType = contextualGenericParameterType(param, inferred);
       const actualType = this.inferExpression(arg, scope, {
         ...options,
-        expectedType: shouldUseGenericParameterContext(param) ? param : undefined,
+        ...(expectedParamType === undefined ? {} : { expectedType: expectedParamType }),
       });
       actualTypes.push(actualType);
       this.inferTypeArgumentsFromType(param, actualType, inferred);
@@ -3554,8 +3634,29 @@ function objectAssignabilityMismatch(
   return undefined;
 }
 
-function shouldUseGenericParameterContext(type: Type): boolean {
-  return type.kind === "enum" && typeContainsTypeParameter(type);
+function contextualGenericParameterType(
+  type: Type,
+  inferred: ReadonlyMap<string, Type>,
+): Type | undefined {
+  if (type.kind !== "enum" && type.kind !== "function") {
+    return undefined;
+  }
+
+  if (!typeContainsTypeParameter(type)) {
+    return type;
+  }
+
+  return substituteType(type, inferred);
+}
+
+function concreteExpectedReturnType(
+  expectedType: Extract<Type, { readonly kind: "function" }> | undefined,
+): Type | undefined {
+  if (expectedType === undefined || typeContainsTypeParameter(expectedType.returnType)) {
+    return undefined;
+  }
+
+  return expectedType.returnType;
 }
 
 function enumTypeMatchesSymbol(

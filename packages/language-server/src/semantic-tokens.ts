@@ -129,7 +129,9 @@ function collectTopLevelDeclarationTokens(
           type: "parameter",
           modifiers: ["declaration"],
         });
-        collectTypeNodeTokens(param.type, analysis, tokens);
+        if (param.type !== undefined) {
+          collectTypeNodeTokens(param.type, analysis, tokens);
+        }
       }
       collectTypeNodeTokens(declaration.returnType, analysis, tokens);
       collectBlockTokens(declaration.body, analysis, tokens);
@@ -361,9 +363,13 @@ function collectExpressionTokens(
     case "AnonymousFunctionExpression":
       for (const param of expression.params) {
         tokens.push({ span: param.nameSpan, type: "parameter", modifiers: ["declaration"] });
-        collectTypeNodeTokens(param.type, analysis, tokens);
+        if (param.type !== undefined) {
+          collectTypeNodeTokens(param.type, analysis, tokens);
+        }
       }
-      collectTypeNodeTokens(expression.returnType, analysis, tokens);
+      if (expression.returnType !== undefined) {
+        collectTypeNodeTokens(expression.returnType, analysis, tokens);
+      }
       collectBlockTokens(expression.body, analysis, tokens);
       return;
     case "IfExpression":

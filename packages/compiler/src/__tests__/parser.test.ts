@@ -342,6 +342,29 @@ describe("parser", () => {
     });
   });
 
+  test("parses anonymous function expressions with omitted contextual types", () => {
+    const parseResult = parse(lex("const double = fn (value) { value * 2 };").tokens);
+
+    expect(parseResult.diagnostics).toHaveLength(0);
+    expect(parseResult.program.declarations[0]).toMatchObject({
+      kind: "VariableDeclaration",
+      initializer: {
+        kind: "AnonymousFunctionExpression",
+        params: [{ name: "value" }],
+      },
+    });
+    const declaration = parseResult.program.declarations[0];
+    if (
+      declaration === undefined ||
+      declaration.kind !== "VariableDeclaration" ||
+      declaration.initializer.kind !== "AnonymousFunctionExpression"
+    ) {
+      throw new Error("expected anonymous function initializer");
+    }
+    expect(declaration.initializer.params[0]?.type).toBeUndefined();
+    expect(declaration.initializer.returnType).toBeUndefined();
+  });
+
   test("parses fieldless enum declarations", () => {
     const lexResult = lex("type Color = enum { Red, Green, Blue, };");
     const parseResult = parse(lexResult.tokens);

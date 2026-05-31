@@ -493,6 +493,27 @@ class Parser {
     });
   }
 
+  private parseAnonymousFunctionParameter(): Parameter {
+    const name = this.expect("Identifier", "Expected parameter name.");
+    if (!this.match("Colon")) {
+      return this.node({
+        kind: "Parameter",
+        name: name.text,
+        nameSpan: name.span,
+        span: name.span,
+      });
+    }
+
+    const type = this.parseType();
+    return this.node({
+      kind: "Parameter",
+      name: name.text,
+      nameSpan: name.span,
+      type,
+      span: mergeSpans(name.span, type.span),
+    });
+  }
+
   private parseBlock(context: string): Block {
     if (!this.check("LeftBrace")) {
       const token = this.current();
@@ -1225,20 +1246,19 @@ class Parser {
     const params: Parameter[] = [];
     if (!this.check("RightParen")) {
       do {
-        params.push(this.parseParameter());
+        params.push(this.parseAnonymousFunctionParameter());
       } while (this.match("Comma"));
     }
 
     this.expect("RightParen", "Expected ')' after anonymous function parameters.");
-    this.expect("Colon", "Expected ':' before anonymous function return type.");
-    const returnType = this.parseType();
+    const returnType = this.match("Colon") ? this.parseType() : undefined;
     const body = this.parseBlock("anonymous function body");
 
     return this.node({
       kind: "AnonymousFunctionExpression",
       typeParameters,
       params,
-      returnType,
+      ...(returnType === undefined ? {} : { returnType }),
       body,
       span: mergeSpans(fnToken.span, body.span),
     });

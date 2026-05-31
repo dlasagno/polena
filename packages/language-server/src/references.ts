@@ -428,7 +428,9 @@ function spanForTopLevelDeclaration(
       return spanForTypeNode(declaration.value, nodeId);
     case "FunctionDeclaration":
       return (
-        findFirst(declaration.params, (param) => spanForTypeNode(param.type, nodeId)) ??
+        findFirst(declaration.params, (param) =>
+          param.type === undefined ? undefined : spanForTypeNode(param.type, nodeId),
+        ) ??
         spanForTypeNode(declaration.returnType, nodeId) ??
         spanForBlock(declaration.body, nodeId)
       );
@@ -544,8 +546,12 @@ function spanForExpression(expression: Expression, nodeId: NodeId): Span | undef
       return findFirst(expression.fields, (field) => spanForObjectLiteralField(field, nodeId));
     case "AnonymousFunctionExpression":
       return (
-        findFirst(expression.params, (param) => spanForTypeNode(param.type, nodeId)) ??
-        spanForTypeNode(expression.returnType, nodeId) ??
+        findFirst(expression.params, (param) =>
+          param.type === undefined ? undefined : spanForTypeNode(param.type, nodeId),
+        ) ??
+        (expression.returnType === undefined
+          ? undefined
+          : spanForTypeNode(expression.returnType, nodeId)) ??
         spanForBlock(expression.body, nodeId)
       );
     case "DirectiveExpression":

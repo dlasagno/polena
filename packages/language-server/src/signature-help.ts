@@ -73,7 +73,7 @@ function signatureForCall(
       label:
         param === undefined
           ? `arg${index}: ${formatType(type)}`
-          : `${param.name}: ${formatTypeNode(param.type)}`,
+          : `${param.name}: ${formatOptionalTypeNode(param.type)}`,
     };
   });
 
@@ -84,6 +84,10 @@ function signatureForCall(
     parameters,
     documentation: declaration?.doc,
   };
+}
+
+function formatOptionalTypeNode(typeNode: TypeDeclaration["value"] | undefined): string {
+  return typeNode === undefined ? "unknown" : formatTypeNode(typeNode);
 }
 
 function functionDeclarationForCall(

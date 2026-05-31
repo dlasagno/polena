@@ -207,7 +207,7 @@ function findInParameter(
     return target("Parameter", param.nodeId, param.nameSpan);
   }
 
-  return findInTypeNode(param.type, offset);
+  return param.type === undefined ? undefined : findInTypeNode(param.type, offset);
 }
 
 function findInAssignmentStatement(
@@ -361,7 +361,11 @@ function findInExpression(expression: Expression, offset: number): HoverTarget |
           return found;
         }
       }
-      return findInTypeNode(expression.returnType, offset) ?? findInBlock(expression.body, offset);
+      return (
+        (expression.returnType === undefined
+          ? undefined
+          : findInTypeNode(expression.returnType, offset)) ?? findInBlock(expression.body, offset)
+      );
     case "DirectiveExpression":
       for (const operand of expression.operands) {
         const found =

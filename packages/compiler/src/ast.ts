@@ -173,7 +173,7 @@ export type Parameter = {
   readonly nodeId: NodeId;
   readonly name: string;
   readonly nameSpan: Span;
-  readonly type: TypeNode;
+  readonly type?: TypeNode;
   readonly span: Span;
 };
 
@@ -352,7 +352,7 @@ export type AnonymousFunctionExpression = {
   readonly nodeId: NodeId;
   readonly typeParameters: readonly TypeParameter[];
   readonly params: readonly Parameter[];
-  readonly returnType: TypeNode;
+  readonly returnType?: TypeNode;
   readonly body: Block;
   readonly span: Span;
 };

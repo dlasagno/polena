@@ -99,10 +99,10 @@ Status values:
 | Function calls | Implemented | Arity and argument types are checked. |
 | Final-expression returns | Implemented | Function body final expressions are checked against return type. |
 | Explicit `return expr;` | Implemented | Checked against return type. |
-| Anonymous functions | Implemented | Explicit parameter and return types are required; closures may capture visible values. |
+| Anonymous functions | Implemented | Closures may capture visible values. Parameter and return annotations may be omitted when an expected function type supplies enough context. |
 | Function type syntax | Implemented | Written as `fn(T1, T2) -> Return`; usable in annotations, aliases, parameters, and returns. |
 | Generic functions | Partially implemented | Declarations such as `fn id<T>(value: T): T` are supported with inferred type arguments at calls; explicit call type arguments are not implemented. |
-| Return type inference | Not implemented | Function return types are required. |
+| Named function return type inference | Not implemented | Function declarations still require explicit return types. |
 
 ---
 

@@ -651,11 +651,20 @@ const value = apply(1, stringify);
   });
 
   test("rejects anonymous functions with incompatible final expressions", () => {
-    const result = compile("const value = fn (input: number): string { input };");
+    const result = compile("const value: fn(number) -> string = fn (input) { input };");
 
     expect(result.ok).toBe(false);
     expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
       "Expected 'string', got 'number'.",
+    );
+  });
+
+  test("rejects anonymous function parameters without explicit or contextual types", () => {
+    const result = compile("const value = fn (input) { input };");
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Cannot infer type for anonymous function parameter 'input'.",
     );
   });
 

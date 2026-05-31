@@ -304,7 +304,7 @@ function localValueCompletions(program: Program, offset: number): CompletionItem
       completions.push({
         label: param.name,
         kind: CompletionItemKind.Variable,
-        detail: formatTypeNode(param.type),
+        detail: formatOptionalTypeNode(param.type),
       });
     }
     completions.push(...localCompletionsInBlock(declaration.body, offset));
@@ -417,7 +417,7 @@ function nestedLocalCompletionsInExpression(
         ...expression.params.map((param) => ({
           label: param.name,
           kind: CompletionItemKind.Variable,
-          detail: formatTypeNode(param.type),
+          detail: formatOptionalTypeNode(param.type),
         })),
         ...localCompletionsInBlock(expression.body, offset),
       ];
@@ -794,9 +794,13 @@ function containsOffset(
 
 function formatFunctionDetail(declaration: FunctionDeclaration): string {
   const params = declaration.params
-    .map((param) => `${param.name}: ${formatTypeNode(param.type)}`)
+    .map((param) => `${param.name}: ${formatOptionalTypeNode(param.type)}`)
     .join(", ");
   return `(${params}): ${formatTypeNode(declaration.returnType)}`;
+}
+
+function formatOptionalTypeNode(typeNode: TypeNode | undefined): string {
+  return typeNode === undefined ? "unknown" : formatTypeNode(typeNode);
 }
 
 function formatTypeNode(typeNode: TypeNode): string {
