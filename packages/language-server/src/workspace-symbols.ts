@@ -164,6 +164,10 @@ function formatTypeNode(typeNode: TypeNode): string {
       return `{ ${typeNode.fields
         .map((field) => `${field.name}: ${formatTypeNode(field.type)}`)
         .join(", ")} }`;
+    case "FunctionType":
+      return `fn${formatTypeParameters(typeNode.typeParameters)}(${typeNode.params
+        .map(formatTypeNode)
+        .join(", ")}) -> ${formatTypeNode(typeNode.returnType)}`;
     case "EnumType":
       return `enum { ${typeNode.variants
         .map((variant) =>
@@ -179,6 +183,14 @@ function formatTypeNode(typeNode: TypeNode): string {
     case "OpaqueType":
       return "opaque";
   }
+}
+
+function formatTypeParameters(typeParameters: readonly { readonly name: string }[]): string {
+  if (typeParameters.length === 0) {
+    return "";
+  }
+
+  return `<${typeParameters.map((param) => param.name).join(", ")}>`;
 }
 
 function spanToRange(span: Span): Location["range"] {

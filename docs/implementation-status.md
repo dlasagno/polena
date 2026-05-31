@@ -99,8 +99,8 @@ Status values:
 | Function calls | Implemented | Arity and argument types are checked. |
 | Final-expression returns | Implemented | Function body final expressions are checked against return type. |
 | Explicit `return expr;` | Implemented | Checked against return type. |
-| Anonymous functions | Not implemented | Spec includes likely syntax, but MVP does not parse it. |
-| Function type syntax | Not implemented | Function types exist internally but cannot be written in source. |
+| Anonymous functions | Implemented | Explicit parameter and return types are required; closures may capture visible values. |
+| Function type syntax | Implemented | Written as `fn(T1, T2) -> Return`; usable in annotations, aliases, parameters, and returns. |
 | Generic functions | Partially implemented | Declarations such as `fn id<T>(value: T): T` are supported with inferred type arguments at calls; explicit call type arguments are not implemented. |
 | Return type inference | Not implemented | Function return types are required. |
 

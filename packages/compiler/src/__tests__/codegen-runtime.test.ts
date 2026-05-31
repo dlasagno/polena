@@ -54,6 +54,53 @@ const value = identity("Ada");
     expect(executeValue(result.js)).toBe("Ada");
   });
 
+  test("supports function parameters and return values", () => {
+    const result = expectCompileOk(`
+fn apply(value: number, op: fn(number) -> number): number {
+  op(value)
+}
+
+fn inc(value: number): number {
+  value + 1
+}
+
+const value = apply(41, inc);
+`);
+
+    expect(executeValue(result.js)).toBe(42);
+  });
+
+  test("supports anonymous functions with captures", () => {
+    const result = expectCompileOk(`
+fn makeAdder(base: number): fn(number) -> number {
+  fn (value: number): number {
+    value + base
+  }
+}
+
+const addTwo = makeAdder(2);
+const value = addTwo(40);
+`);
+
+    expect(result.js).toContain("return function (value)");
+    expect(executeValue(result.js)).toBe(42);
+  });
+
+  test("supports anonymous functions inside generic functions", () => {
+    const result = expectCompileOk(`
+fn constant<T>(value: T): fn() -> T {
+  fn (): T {
+    value
+  }
+}
+
+const getValue = constant(42);
+const value = getValue();
+`);
+
+    expect(executeValue(result.js)).toBe(42);
+  });
+
   test("supports value-producing if expressions", () => {
     const result = expectCompileOk(`
 const enabled = true;

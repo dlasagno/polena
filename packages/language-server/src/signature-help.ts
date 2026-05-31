@@ -261,6 +261,8 @@ function callInExpression(
       return findFirst(expression.elements, (element) => callInExpression(element, offset));
     case "ObjectLiteral":
       return findFirst(expression.fields, (field) => callInExpression(field.value, offset));
+    case "AnonymousFunctionExpression":
+      return callInBlock(expression.body, offset);
     case "DirectiveExpression":
       return findFirst(expression.operands, (operand) =>
         operand.kind === "ExpressionOperand"
@@ -348,6 +350,10 @@ function formatTypeNode(typeNode: TypeDeclaration["value"]): string {
       return `{ ${typeNode.fields
         .map((field) => `${field.name}: ${formatTypeNode(field.type)}`)
         .join(", ")} }`;
+    case "FunctionType":
+      return `fn${formatTypeParameters(typeNode.typeParameters)}(${typeNode.params
+        .map(formatTypeNode)
+        .join(", ")}) -> ${formatTypeNode(typeNode.returnType)}`;
     case "EnumType":
       return `enum { ${typeNode.variants
         .map((variant) =>
@@ -363,6 +369,14 @@ function formatTypeNode(typeNode: TypeDeclaration["value"]): string {
     case "OpaqueType":
       return "opaque";
   }
+}
+
+function formatTypeParameters(typeParameters: readonly { readonly name: string }[]): string {
+  if (typeParameters.length === 0) {
+    return "";
+  }
+
+  return `<${typeParameters.map((param) => param.name).join(", ")}>`;
 }
 
 function findFirst<T, U>(

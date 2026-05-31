@@ -145,7 +145,10 @@ describe("semantic types", () => {
     expect(formatType(objectType([{ name: "id", type: primitiveType("string") }]))).toBe(
       "{ id: string }",
     );
-    expect(formatType(functionType([], primitiveType("void")))).toBe("function");
+    expect(formatType(functionType([], primitiveType("void")))).toBe("fn() -> void");
+    expect(formatType(functionType([primitiveType("number")], primitiveType("string")))).toBe(
+      "fn(number) -> string",
+    );
     expect(formatType(genericEnumType("Option", [primitiveType("number")], []))).toBe(
       "Option<number>",
     );

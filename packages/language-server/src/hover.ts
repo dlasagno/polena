@@ -438,6 +438,10 @@ function formatTypeNode(typeNode: TypeNode): string {
       return `{ ${typeNode.fields
         .map((field) => `${field.name}: ${formatTypeNode(field.type)}`)
         .join(", ")} }`;
+    case "FunctionType":
+      return `fn${formatTypeParameters(typeNode.typeParameters)}(${typeNode.params
+        .map(formatTypeNode)
+        .join(", ")}) -> ${formatTypeNode(typeNode.returnType)}`;
     case "EnumType":
       return `enum { ${typeNode.variants.map(formatEnumVariantTypeNode).join(", ")} }`;
     case "NeverType":
@@ -447,6 +451,14 @@ function formatTypeNode(typeNode: TypeNode): string {
     case "OpaqueType":
       return "opaque";
   }
+}
+
+function formatTypeParameters(typeParameters: readonly { readonly name: string }[]): string {
+  if (typeParameters.length === 0) {
+    return "";
+  }
+
+  return `<${typeParameters.map((param) => param.name).join(", ")}>`;
 }
 
 function formatEnumVariantTypeNode(variant: EnumVariantTypeNode): string {
@@ -591,6 +603,11 @@ function findAstNodeInTypeNode(typeNode: TypeNode, nodeId: NodeId): AstNode | un
   switch (typeNode.kind) {
     case "ArrayType":
       return findAstNodeInTypeNode(typeNode.element, nodeId);
+    case "FunctionType":
+      return (
+        findFirst(typeNode.params, (param) => findAstNodeInTypeNode(param, nodeId)) ??
+        findAstNodeInTypeNode(typeNode.returnType, nodeId)
+      );
     case "ObjectType":
       for (const field of typeNode.fields) {
         if (field.nodeId === nodeId) {
@@ -645,6 +662,14 @@ function findAstNodeInExpression(expression: Expression, nodeId: NodeId): AstNod
         }
         return findAstNodeInExpression(field.value, nodeId);
       });
+    case "AnonymousFunctionExpression":
+      return (
+        findFirst(expression.params, (param) =>
+          param.nodeId === nodeId ? param : findAstNodeInTypeNode(param.type, nodeId),
+        ) ??
+        findAstNodeInTypeNode(expression.returnType, nodeId) ??
+        findAstNodeInBlock(expression.body, nodeId)
+      );
     case "DirectiveExpression":
       return findFirst(expression.operands, (operand) =>
         operand.kind === "ExpressionOperand"

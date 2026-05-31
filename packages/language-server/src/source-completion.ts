@@ -409,6 +409,18 @@ function nestedLocalCompletionsInExpression(
       return expression.fields.flatMap((field) =>
         nestedLocalCompletionsInExpression(field.value, offset),
       );
+    case "AnonymousFunctionExpression":
+      if (!containsOffset(expression.body, offset)) {
+        return [];
+      }
+      return [
+        ...expression.params.map((param) => ({
+          label: param.name,
+          kind: CompletionItemKind.Variable,
+          detail: formatTypeNode(param.type),
+        })),
+        ...localCompletionsInBlock(expression.body, offset),
+      ];
     case "DirectiveExpression":
       return expression.operands.flatMap((operand) =>
         operand.kind === "ExpressionOperand"
@@ -600,6 +612,8 @@ function findExpressionInExpression<T>(
       return findFirst(expression.fields, (field) =>
         findExpressionInExpression(field.value, predicate),
       );
+    case "AnonymousFunctionExpression":
+      return findExpressionInBlock(expression.body, predicate);
     case "DirectiveExpression":
       return findFirst(expression.operands, (operand) =>
         operand.kind === "ExpressionOperand"
@@ -797,6 +811,10 @@ function formatTypeNode(typeNode: TypeNode): string {
       return `{ ${typeNode.fields
         .map((field) => `${field.name}: ${formatTypeNode(field.type)}`)
         .join(", ")} }`;
+    case "FunctionType":
+      return `fn${formatTypeParameters(typeNode.typeParameters)}(${typeNode.params
+        .map(formatTypeNode)
+        .join(", ")}) -> ${formatTypeNode(typeNode.returnType)}`;
     case "EnumType":
       return `enum { ${typeNode.variants.map(formatEnumVariantTypeNode).join(", ")} }`;
     case "NeverType":
@@ -806,6 +824,14 @@ function formatTypeNode(typeNode: TypeNode): string {
     case "OpaqueType":
       return "opaque";
   }
+}
+
+function formatTypeParameters(typeParameters: readonly { readonly name: string }[]): string {
+  if (typeParameters.length === 0) {
+    return "";
+  }
+
+  return `<${typeParameters.map((param) => param.name).join(", ")}>`;
 }
 
 function formatEnumVariantTypeNode(variant: EnumVariantTypeNode): string {

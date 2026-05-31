@@ -196,7 +196,9 @@ export function formatType(type: Type): string {
     case "typeParameter":
       return type.name;
     case "function":
-      return "function";
+      return `fn${formatFunctionTypeParameters(type.typeParameters)}(${type.params
+        .map(formatType)
+        .join(", ")}) -> ${formatType(type.returnType)}`;
     case "opaque":
       if (type.typeArguments.length === 0) {
         return type.name;
@@ -207,6 +209,14 @@ export function formatType(type: Type): string {
     case "unknown":
       return "unknown";
   }
+}
+
+function formatFunctionTypeParameters(typeParameters: readonly string[]): string {
+  if (typeParameters.length === 0) {
+    return "";
+  }
+
+  return `<${typeParameters.join(", ")}>`;
 }
 
 export function isNumericType(type: Type): type is Extract<Type, { readonly kind: "primitive" }> & {

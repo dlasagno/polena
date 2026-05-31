@@ -115,7 +115,10 @@ class Lexer {
         this.addToken(this.match("+") ? "PlusPlus" : this.match("=") ? "PlusEqual" : "Plus", start);
         return;
       case "-":
-        this.addToken(this.match("=") ? "MinusEqual" : "Minus", start);
+        this.addToken(
+          this.match(">") ? "ReturnArrow" : this.match("=") ? "MinusEqual" : "Minus",
+          start,
+        );
         return;
       case "*":
         this.addToken(this.match("=") ? "StarEqual" : "Star", start);

@@ -1,4 +1,5 @@
 import type {
+  AnonymousFunctionExpression,
   AssignmentStatement,
   BinaryOperator,
   Block,
@@ -513,6 +514,8 @@ class JavaScriptEmitter {
         return `{ ${expression.fields
           .map((field) => `${field.name}: ${this.emitExpression(field.value, indent, loopContext)}`)
           .join(", ")} }`;
+      case "AnonymousFunctionExpression":
+        return this.emitAnonymousFunctionExpression(expression, indent, loopContext);
       case "DirectiveExpression":
         return this.emitDirectiveExpression(expression, indent, loopContext);
       case "EnumVariantExpression":
@@ -600,6 +603,15 @@ class JavaScriptEmitter {
       default:
         throw new Error(`Cannot emit unresolved compiler directive '@${expression.name}'.`);
     }
+  }
+
+  private emitAnonymousFunctionExpression(
+    expression: AnonymousFunctionExpression,
+    indent: string,
+    loopContext?: LoopEmitContext,
+  ): string {
+    const params = expression.params.map((param) => emitIdentifier(param.name)).join(", ");
+    return `function (${params}) {\n${this.emitValueBlock(expression.body, `${indent}  `, loopContext).join("\n")}\n${indent}}`;
   }
 
   private emitTargetJsDirective(

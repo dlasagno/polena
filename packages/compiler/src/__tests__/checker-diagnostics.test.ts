@@ -268,7 +268,7 @@ const value = add != add;
 
     expect(result.ok).toBe(false);
     expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
-      "Operator '!=' cannot compare 'function' values.",
+      "Operator '!=' cannot compare 'fn(number, number) -> number' values.",
     );
   });
 
@@ -310,7 +310,7 @@ const value = add > add;
 
     expect(result.ok).toBe(false);
     expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
-      "Operator '>' cannot order 'function' values.",
+      "Operator '>' cannot order 'fn(number, number) -> number' values.",
     );
   });
 
@@ -628,6 +628,34 @@ const value = add(1);
     expect(result.ok).toBe(false);
     expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
       "Expected 2 argument(s), got 1.",
+    );
+  });
+
+  test("rejects incompatible higher-order function arguments", () => {
+    const result = compile(`
+fn apply(value: number, op: fn(number) -> number): number {
+  op(value)
+}
+
+fn stringify(value: number): string {
+  "${"$"}{value}"
+}
+
+const value = apply(1, stringify);
+`);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Expected 'fn(number) -> number', got 'fn(number) -> string'.",
+    );
+  });
+
+  test("rejects anonymous functions with incompatible final expressions", () => {
+    const result = compile("const value = fn (input: number): string { input };");
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+      "Expected 'string', got 'number'.",
     );
   });
 

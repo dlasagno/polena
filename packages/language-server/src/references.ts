@@ -493,6 +493,11 @@ function spanForTypeNode(typeNode: TypeNode, nodeId: NodeId): Span | undefined {
   switch (typeNode.kind) {
     case "ArrayType":
       return spanForTypeNode(typeNode.element, nodeId);
+    case "FunctionType":
+      return (
+        findFirst(typeNode.params, (param) => spanForTypeNode(param, nodeId)) ??
+        spanForTypeNode(typeNode.returnType, nodeId)
+      );
     case "ObjectType":
       return findFirst(typeNode.fields, (field) => spanForObjectTypeField(field, nodeId));
     case "EnumType":
@@ -537,6 +542,12 @@ function spanForExpression(expression: Expression, nodeId: NodeId): Span | undef
       return findFirst(expression.elements, (element) => spanForExpression(element, nodeId));
     case "ObjectLiteral":
       return findFirst(expression.fields, (field) => spanForObjectLiteralField(field, nodeId));
+    case "AnonymousFunctionExpression":
+      return (
+        findFirst(expression.params, (param) => spanForTypeNode(param.type, nodeId)) ??
+        spanForTypeNode(expression.returnType, nodeId) ??
+        spanForBlock(expression.body, nodeId)
+      );
     case "DirectiveExpression":
       return findFirst(expression.operands, (operand) =>
         operand.kind === "ExpressionOperand"
@@ -613,6 +624,7 @@ function spanForDirectExpression(expression: Expression): Span {
     case "RecoveryExpression":
     case "ArrayLiteral":
     case "ObjectLiteral":
+    case "AnonymousFunctionExpression":
     case "DirectiveExpression":
     case "PanicExpression":
     case "UnaryExpression":

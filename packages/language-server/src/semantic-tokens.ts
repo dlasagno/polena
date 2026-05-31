@@ -243,6 +243,12 @@ function collectTypeNodeTokens(
     case "ArrayType":
       collectTypeNodeTokens(typeNode.element, analysis, tokens);
       return;
+    case "FunctionType":
+      for (const param of typeNode.params) {
+        collectTypeNodeTokens(param, analysis, tokens);
+      }
+      collectTypeNodeTokens(typeNode.returnType, analysis, tokens);
+      return;
     case "ObjectType":
       for (const field of typeNode.fields) {
         tokens.push({
@@ -351,6 +357,14 @@ function collectExpressionTokens(
           collectTypeNodeTokens(operand.type, analysis, tokens);
         }
       }
+      return;
+    case "AnonymousFunctionExpression":
+      for (const param of expression.params) {
+        tokens.push({ span: param.nameSpan, type: "parameter", modifiers: ["declaration"] });
+        collectTypeNodeTokens(param.type, analysis, tokens);
+      }
+      collectTypeNodeTokens(expression.returnType, analysis, tokens);
+      collectBlockTokens(expression.body, analysis, tokens);
       return;
     case "IfExpression":
       collectExpressionTokens(expression.condition, analysis, tokens);

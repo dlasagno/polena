@@ -1,6 +1,7 @@
 import type {
   AssignmentOperator,
   AssignmentStatement,
+  AnonymousFunctionExpression,
   BinaryOperator,
   Block,
   BreakStatement,
@@ -666,6 +667,18 @@ class Checker {
         return arrayType(this.typeFromNode(typeNode.element, undefined, environment));
       case "ObjectType":
         return this.typeFromObjectTypeNode(typeNode, environment);
+      case "FunctionType": {
+        this.checkDuplicateTypeParameters(typeNode.typeParameters);
+        const functionEnvironment = new Map(environment);
+        for (const param of typeNode.typeParameters) {
+          functionEnvironment.set(param.name, typeParameterType(param.name));
+        }
+        return functionType(
+          typeNode.params.map((param) => this.typeFromNode(param, undefined, functionEnvironment)),
+          this.typeFromNode(typeNode.returnType, undefined, functionEnvironment),
+          typeNode.typeParameters.map((param) => param.name),
+        );
+      }
       case "EnumType":
         return this.typeFromEnumTypeNode(
           typeNode,
@@ -1376,6 +1389,8 @@ class Checker {
         return this.inferArrayLiteral(expression, scope, options);
       case "ObjectLiteral":
         return this.inferObjectLiteral(expression, scope, options);
+      case "AnonymousFunctionExpression":
+        return this.inferAnonymousFunctionExpression(expression, scope);
       case "DirectiveExpression":
         return this.inferDirectiveExpression(expression, scope, options);
       case "EnumVariantExpression":
@@ -1447,6 +1462,72 @@ class Checker {
     });
     this.expectType(messageType, primitiveType("string"), expression.message.span);
     return neverType();
+  }
+
+  private inferAnonymousFunctionExpression(
+    expression: AnonymousFunctionExpression,
+    parentScope: Scope,
+  ): Type {
+    this.checkDuplicateTypeParameters(expression.typeParameters);
+    const environment = new Map(this.activeTypeEnvironment);
+    for (const param of expression.typeParameters) {
+      environment.set(param.name, typeParameterType(param.name));
+    }
+    const functionScope = new Scope(parentScope);
+    const previousTypeEnvironment = this.activeTypeEnvironment;
+    this.activeTypeEnvironment = environment;
+    const returnType = this.typeFromNode(expression.returnType, undefined, environment);
+
+    for (const param of expression.params) {
+      this.declareParameter(functionScope, param, environment);
+    }
+
+    const type = functionType(
+      expression.params.map((param) => this.typeFromNode(param.type, undefined, environment)),
+      returnType,
+      expression.typeParameters.map((param) => param.name),
+    );
+
+    if (expression.body.isMissing === true) {
+      this.activeTypeEnvironment = previousTypeEnvironment;
+      return type;
+    }
+
+    const bodyOutcome = this.checkBlock(expression.body, functionScope, returnType);
+    if (expression.body.finalExpression !== undefined) {
+      const finalOutcome = this.expressionControlFlow(expression.body.finalExpression);
+      if (!finalOutcome.canFallThrough) {
+        this.inferExpression(expression.body.finalExpression, functionScope, {
+          ifAsValue: false,
+          whileAsValue: false,
+          returnType,
+        });
+        this.activeTypeEnvironment = previousTypeEnvironment;
+        return type;
+      }
+
+      const finalType = this.inferExpression(expression.body.finalExpression, functionScope, {
+        ifAsValue: !sameType(returnType, primitiveType("void")),
+        whileAsValue: !sameType(returnType, primitiveType("void")),
+        returnType,
+        expectedType: returnType,
+      });
+      this.expectType(finalType, returnType, expression.body.finalExpression.span);
+      this.activeTypeEnvironment = previousTypeEnvironment;
+      return type;
+    }
+
+    if (!sameType(returnType, primitiveType("void")) && bodyOutcome.canFallThrough) {
+      this.diagnostics.push(
+        error(`Anonymous function must return '${formatType(returnType)}'.`, expression.span, {
+          code: DiagnosticCode.MissingReturn,
+          label: "this function can finish without returning a value",
+        }),
+      );
+    }
+
+    this.activeTypeEnvironment = previousTypeEnvironment;
+    return type;
   }
 
   private inferEnumVariantExpression(
@@ -2095,6 +2176,7 @@ class Checker {
       case "RecoveryExpression":
       case "ArrayLiteral":
       case "ObjectLiteral":
+      case "AnonymousFunctionExpression":
       case "DirectiveExpression":
       case "EnumVariantExpression":
       case "NameExpression":

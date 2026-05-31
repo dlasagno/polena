@@ -273,6 +273,14 @@ function findInTypeNode(typeNode: TypeNode, offset: number): HoverTarget | undef
         }
       }
       return undefined;
+    case "FunctionType":
+      for (const param of typeNode.params) {
+        const found = findInTypeNode(param, offset);
+        if (found !== undefined) {
+          return found;
+        }
+      }
+      return findInTypeNode(typeNode.returnType, offset);
     case "EnumType":
       for (const variant of typeNode.variants) {
         if (contains(variant.nameSpan, offset)) {
@@ -346,6 +354,14 @@ function findInExpression(expression: Expression, offset: number): HoverTarget |
         }
       }
       return undefined;
+    case "AnonymousFunctionExpression":
+      for (const param of expression.params) {
+        const found = findInParameter(param, offset);
+        if (found !== undefined) {
+          return found;
+        }
+      }
+      return findInTypeNode(expression.returnType, offset) ?? findInBlock(expression.body, offset);
     case "DirectiveExpression":
       for (const operand of expression.operands) {
         const found =

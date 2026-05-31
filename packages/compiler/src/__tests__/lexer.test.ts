@@ -52,6 +52,22 @@ describe("lexer", () => {
     ]);
   });
 
+  test("tokenizes function type return arrows separately from match arrows", () => {
+    const result = lex("fn(number) -> number =>");
+
+    expect(result.diagnostics).toHaveLength(0);
+    expect(result.tokens.map((token) => token.kind)).toEqual([
+      "Fn",
+      "LeftParen",
+      "NumberType",
+      "RightParen",
+      "ReturnArrow",
+      "NumberType",
+      "Arrow",
+      "Eof",
+    ]);
+  });
+
   test("tokenizes supported number literal forms", () => {
     const result = lex("0xff 0o70 0b1100 1e9 1.5e-3 0xffn");
 

@@ -32,6 +32,14 @@ export type TypeNode =
       readonly span: Span;
     }
   | {
+      readonly kind: "FunctionType";
+      readonly nodeId: NodeId;
+      readonly typeParameters: readonly TypeParameter[];
+      readonly params: readonly TypeNode[];
+      readonly returnType: TypeNode;
+      readonly span: Span;
+    }
+  | {
       readonly kind: "EnumType";
       readonly nodeId: NodeId;
       readonly variants: readonly EnumVariantTypeNode[];
@@ -244,6 +252,7 @@ export type Expression =
   | LiteralExpression
   | ArrayLiteralExpression
   | ObjectLiteralExpression
+  | AnonymousFunctionExpression
   | DirectiveExpression
   | NameExpression
   | PanicExpression
@@ -335,6 +344,16 @@ export type ObjectLiteralField = {
   readonly name: string;
   readonly nameSpan: Span;
   readonly value: Expression;
+  readonly span: Span;
+};
+
+export type AnonymousFunctionExpression = {
+  readonly kind: "AnonymousFunctionExpression";
+  readonly nodeId: NodeId;
+  readonly typeParameters: readonly TypeParameter[];
+  readonly params: readonly Parameter[];
+  readonly returnType: TypeNode;
+  readonly body: Block;
   readonly span: Span;
 };
 

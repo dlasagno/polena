@@ -309,6 +309,39 @@ describe("parser", () => {
     });
   });
 
+  test("parses function type annotations", () => {
+    const parseResult = parse(lex("const op: fn(number, number) -> number = add;").tokens);
+
+    expect(parseResult.diagnostics).toHaveLength(0);
+    expect(parseResult.program.declarations[0]).toMatchObject({
+      kind: "VariableDeclaration",
+      typeAnnotation: {
+        kind: "FunctionType",
+        params: [
+          { kind: "PrimitiveType", name: "number" },
+          { kind: "PrimitiveType", name: "number" },
+        ],
+        returnType: { kind: "PrimitiveType", name: "number" },
+      },
+    });
+  });
+
+  test("parses anonymous function expressions", () => {
+    const parseResult = parse(
+      lex("const double = fn (value: number): number { value * 2 };").tokens,
+    );
+
+    expect(parseResult.diagnostics).toHaveLength(0);
+    expect(parseResult.program.declarations[0]).toMatchObject({
+      kind: "VariableDeclaration",
+      initializer: {
+        kind: "AnonymousFunctionExpression",
+        params: [{ name: "value", type: { kind: "PrimitiveType", name: "number" } }],
+        returnType: { kind: "PrimitiveType", name: "number" },
+      },
+    });
+  });
+
   test("parses fieldless enum declarations", () => {
     const lexResult = lex("type Color = enum { Red, Green, Blue, };");
     const parseResult = parse(lexResult.tokens);

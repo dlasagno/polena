@@ -641,6 +641,7 @@ function isModuleConstExpression(expression: Expression): boolean {
     case "NameExpression":
     case "DirectiveExpression":
     case "EnumVariantExpression":
+    case "AnonymousFunctionExpression":
       return true;
     case "ArrayLiteral":
       return expression.elements.every(isModuleConstExpression);

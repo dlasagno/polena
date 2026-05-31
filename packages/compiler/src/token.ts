@@ -49,6 +49,7 @@ export type TokenKind =
   | "Semicolon"
   | "Equal"
   | "Arrow"
+  | "ReturnArrow"
   | "Plus"
   | "PlusPlus"
   | "PlusEqual"

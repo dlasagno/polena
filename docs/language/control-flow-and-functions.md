@@ -254,10 +254,11 @@ const double = fn (value: number): number {
 };
 ```
 
-Return types may be inferred:
+Return type inference for anonymous functions is **TBD**. The current explicit
+form is:
 
 ```tsx
-const double = fn (value: number) {
+const double = fn (value: number): number {
 	value * 2
 };
 ```
@@ -276,19 +277,19 @@ Arrow functions are not part of the language.
 
 ### 23.4 Function Types
 
-Function type syntax is **TBD**.
-
-Possible syntax:
+Function type syntax uses `fn`, parameter types, `->`, and the return type.
 
 ```tsx
-fn(number, number): number
+fn(number, number) -> number
 ```
 
 Example:
 
 ```tsx
-const op: fn(number, number): number = fn (a, b) {
+const op: fn(number, number) -> number = fn (a: number, b: number): number {
 	a + b
 };
 ```
 
+Function type return syntax intentionally uses `->`; function declarations and
+anonymous function expressions continue to use `:` before their return type.

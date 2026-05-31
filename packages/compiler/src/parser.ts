@@ -784,6 +784,10 @@ class Parser {
       return this.parseEnumType();
     }
 
+    if (this.check("Fn")) {
+      return this.parseFunctionType();
+    }
+
     const token = this.current();
     if (token.kind === "NeverType") {
       this.advance();
@@ -837,6 +841,31 @@ class Parser {
 
     this.advance();
     return this.node({ kind: "PrimitiveType", name: type, span: token.span });
+  }
+
+  private parseFunctionType(): TypeNode {
+    const fnToken = this.expect("Fn", "Expected 'fn'.");
+    const typeParameters = this.parseTypeParameters();
+    this.expect("LeftParen", "Expected '(' after 'fn' in function type.");
+
+    const params: TypeNode[] = [];
+    if (!this.check("RightParen")) {
+      do {
+        params.push(this.parseType());
+      } while (this.match("Comma"));
+    }
+
+    this.expect("RightParen", "Expected ')' after function type parameters.");
+    this.expect("ReturnArrow", "Expected '->' before function return type.");
+    const returnType = this.parseType();
+
+    return this.node({
+      kind: "FunctionType",
+      typeParameters,
+      params,
+      returnType,
+      span: mergeSpans(fnToken.span, returnType.span),
+    });
   }
 
   private parseTypeArguments(): readonly TypeNode[] {
@@ -1078,6 +1107,10 @@ class Parser {
       return this.parseMatchExpression();
     }
 
+    if (this.check("Fn")) {
+      return this.parseAnonymousFunctionExpression();
+    }
+
     if (this.match("Number")) {
       const token = this.previous();
       return this.node({
@@ -1182,6 +1215,33 @@ class Parser {
       this.advance();
     }
     return this.recoveryExpression(token.span);
+  }
+
+  private parseAnonymousFunctionExpression(): Expression {
+    const fnToken = this.expect("Fn", "Expected 'fn'.");
+    const typeParameters = this.parseTypeParameters();
+    this.expect("LeftParen", "Expected '(' after 'fn'.");
+
+    const params: Parameter[] = [];
+    if (!this.check("RightParen")) {
+      do {
+        params.push(this.parseParameter());
+      } while (this.match("Comma"));
+    }
+
+    this.expect("RightParen", "Expected ')' after anonymous function parameters.");
+    this.expect("Colon", "Expected ':' before anonymous function return type.");
+    const returnType = this.parseType();
+    const body = this.parseBlock("anonymous function body");
+
+    return this.node({
+      kind: "AnonymousFunctionExpression",
+      typeParameters,
+      params,
+      returnType,
+      body,
+      span: mergeSpans(fnToken.span, body.span),
+    });
   }
 
   private parsePanicExpression(): Expression {
