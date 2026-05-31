@@ -1,0 +1,42 @@
+import @std/array;
+import @std/collections/map.{type Map};
+import @std/collections/set.{type Set};
+import @std/core.{type Option};
+import @std/io;
+import @std/string as strings;
+
+fn count_words(text: string): number {
+  const words = strings.split(strings.trim(text), " ");
+  let counts: Map<string, number> = map.new();
+  let unique: Set<string> = set.new();
+  let i = 0;
+
+  while i < words.length : (i += 1) {
+    const word = words[i];
+    if !strings.is_empty(word) {
+      set.add(unique, word);
+      const current = map.get(counts, word);
+      const next = match current {
+        .Some(count) => count + 1,
+        .None => 1,
+      };
+      map.insert(counts, word, next);
+    }
+  }
+
+  const total = array.fold(words, 0, fn (acc: number, word: string): number {
+    if strings.is_empty(word) {
+      acc
+    } else {
+      acc + 1
+    }
+  });
+
+  io.println("words=${total} unique=${set.len(unique)} entries=${map.len(counts)}");
+  map.len(counts)
+}
+
+export fn main(): void {
+  const distinct = count_words("polena polena language compiler");
+  io.println("distinct=${distinct}");
+}

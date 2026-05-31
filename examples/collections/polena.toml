@@ -1,0 +1,4 @@
+name = "collections"
+version = "0.1.0"
+target = "executable"
+runtime = "bun"

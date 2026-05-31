@@ -1,0 +1,27 @@
+import @std/io;
+
+fn double(value: number): number {
+  value * 2
+}
+
+fn stringify(value: number): string {
+  "value=${value}"
+}
+
+fn between(min: number, value: number, max: number): boolean {
+  value >= min and value <= max
+}
+
+export fn main(): void {
+  const label = 21 |> double |> stringify;
+  const in_range = 5 |> between(1, _, 10);
+  const mapped = [1, 2, 3] |> fn (items: []number): number {
+    items[0] + items[1] + items[2]
+  };
+
+  if in_range {
+    io.println("${label} sum=${mapped}");
+  } else {
+    io.println("out of range");
+  }
+}

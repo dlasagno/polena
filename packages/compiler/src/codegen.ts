@@ -467,7 +467,7 @@ class JavaScriptEmitter {
       case "NameExpression":
         return emitIdentifier(target.name);
       case "MemberExpression":
-        return `${this.emitExpression(target.target, indent, loopContext)}.${target.name}`;
+        return `${this.emitExpression(target.target, indent, loopContext)}.${emitIdentifier(target.name)}`;
       case "IndexExpression":
         this.usesIndexHelper = true;
         return `__polenaIndex(${this.emitExpression(
@@ -581,7 +581,7 @@ class JavaScriptEmitter {
             return JSON.stringify(`${variant.emittedEnumName}.${expression.name}`);
           }
         }
-        return `${this.emitExpression(expression.target, indent, loopContext)}.${expression.name}`;
+        return `${this.emitExpression(expression.target, indent, loopContext)}.${emitIdentifier(expression.name)}`;
     }
   }
 

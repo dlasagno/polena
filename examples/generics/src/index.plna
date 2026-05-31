@@ -1,0 +1,28 @@
+import @std/collections/map.{type Map};
+import @std/core.{type Option};
+import @std/io;
+
+fn identity<T>(value: T): T {
+  value
+}
+
+fn first<T>(items: []T): Option<T> {
+  items.get(0)
+}
+
+export fn main(): void {
+  const same = identity(42);
+  const head = first([same, 100]);
+  let cache: Map<string, number> = map.new();
+  map.insert(cache, "answer", same);
+
+  const cached = match map.get(cache, "answer") {
+    .Some(value) => value,
+    .None => 0,
+  };
+  const first_value = match head {
+    .Some(value) => value,
+    .None => 0,
+  };
+  io.println("cached=${cached} first=${first_value}");
+}

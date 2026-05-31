@@ -1,0 +1,48 @@
+import @std/core.{type Option, type Result};
+import @std/io;
+
+type Status = enum {
+  Pending,
+  Done,
+};
+
+type User = {
+  name: string,
+  nickname: ?string,
+};
+
+fn label(status: Status): string {
+  match status {
+    .Pending => "pending",
+    .Done => "done",
+  }
+}
+
+fn display_name(user: User): string {
+  match user.nickname {
+    .Some(name) => name,
+    .None => user.name,
+  }
+}
+
+fn parse_score(input: string): Result<number, string> {
+  if input == "42" {
+    .Ok(42)
+  } else {
+    .Err("invalid score")
+  }
+}
+
+export fn main(): void {
+  const user: User = { name: "Ada", nickname: .Some("Ad") };
+  const values = [10, 20, 30];
+  const first = match values.get(0) {
+    .Some(value) => value,
+    .None => 0,
+  };
+  const score = match parse_score("42") {
+    .Ok(value) => value,
+    .Err(_) => 0,
+  };
+  io.println("${display_name(user)} ${label(Status.Done)} first=${first} score=${score}");
+}

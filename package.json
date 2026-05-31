@@ -18,6 +18,7 @@
     "install:local": "bun run build:binary && bun run ./scripts/install-local-bin.ts",
     "check": "bun run typecheck && bun run lint && bun run format:check && bun run test",
     "build:example": "bun run ./packages/cli/src/index.ts build",
+    "build:examples": "bun run ./scripts/build-examples.ts",
     "cursor:install": "bun run --cwd packages/vscode-extension install:vsix:cursor",
     "format": "biome format --write .",
     "format:check": "biome format .",

@@ -1,0 +1,157 @@
+import @std/parse;
+import @std/array;
+import @std/option;
+import @std/result;
+import @std/core.{type Option, type Result};
+import @/error.{type RpnError};
+
+fn pop_operand(stack: []number): Result<number, RpnError> {
+  match array.pop(stack) {
+    .None => .Err(RpnError.StackUnderflow),
+    .Some(value) => .Ok(value),
+  }
+}
+
+fn apply_add(stack: []number): Option<RpnError> {
+  const right_result = pop_operand(stack);
+  if result.is_err(right_result) {
+    return match right_result {
+      .Err(err) => .Some(err),
+      .Ok(_) => .None,
+    };
+  }
+  const right = result.unwrap(right_result);
+  const left_result = pop_operand(stack);
+  if result.is_err(left_result) {
+    return match left_result {
+      .Err(err) => .Some(err),
+      .Ok(_) => .None,
+    };
+  }
+  const left = result.unwrap(left_result);
+  array.push(stack, left + right);
+  .None
+}
+
+fn apply_sub(stack: []number): Option<RpnError> {
+  const right_result = pop_operand(stack);
+  if result.is_err(right_result) {
+    return match right_result {
+      .Err(err) => .Some(err),
+      .Ok(_) => .None,
+    };
+  }
+  const right = result.unwrap(right_result);
+  const left_result = pop_operand(stack);
+  if result.is_err(left_result) {
+    return match left_result {
+      .Err(err) => .Some(err),
+      .Ok(_) => .None,
+    };
+  }
+  const left = result.unwrap(left_result);
+  array.push(stack, left - right);
+  .None
+}
+
+fn apply_mul(stack: []number): Option<RpnError> {
+  const right_result = pop_operand(stack);
+  if result.is_err(right_result) {
+    return match right_result {
+      .Err(err) => .Some(err),
+      .Ok(_) => .None,
+    };
+  }
+  const right = result.unwrap(right_result);
+  const left_result = pop_operand(stack);
+  if result.is_err(left_result) {
+    return match left_result {
+      .Err(err) => .Some(err),
+      .Ok(_) => .None,
+    };
+  }
+  const left = result.unwrap(left_result);
+  array.push(stack, left * right);
+  .None
+}
+
+fn apply_div(stack: []number): Option<RpnError> {
+  const right_result = pop_operand(stack);
+  if result.is_err(right_result) {
+    return match right_result {
+      .Err(err) => .Some(err),
+      .Ok(_) => .None,
+    };
+  }
+  const right = result.unwrap(right_result);
+  const left_result = pop_operand(stack);
+  if result.is_err(left_result) {
+    return match left_result {
+      .Err(err) => .Some(err),
+      .Ok(_) => .None,
+    };
+  }
+  const left = result.unwrap(left_result);
+  if right == 0.0 {
+    return .Some(RpnError.DivisionByZero);
+  }
+  array.push(stack, left / right);
+  .None
+}
+
+fn push_number(stack: []number, value: number): Option<RpnError> {
+  array.push(stack, value);
+  .None
+}
+
+fn process_operator(stack: []number, token: string): Option<RpnError> {
+  if token == "+" {
+    apply_add(stack)
+  } else {
+    if token == "-" {
+      apply_sub(stack)
+    } else {
+      if token == "*" {
+        apply_mul(stack)
+      } else {
+        if token == "/" {
+          apply_div(stack)
+        } else {
+          .Some(RpnError.InvalidToken)
+        }
+      }
+    }
+  }
+}
+
+fn process_token(stack: []number, token: string): Option<RpnError> {
+  const parsed = parse.parse_float(token);
+  match parsed {
+    .Ok(value) => push_number(stack, value),
+    .Err(_) => process_operator(stack, token),
+  }
+}
+
+export fn evaluate(tokens: []string): Result<number, RpnError> {
+  let stack: []number = [];
+  let i = 0;
+  while i < tokens.length : (i += 1) {
+    const token = tokens[i];
+    const step_error = process_token(stack, token);
+    if option.is_some(step_error) {
+      return match step_error {
+        .Some(err) => .Err(err),
+        .None => .Err(RpnError.InvalidToken),
+      };
+    }
+  }
+
+  if array.len(stack) != 1 {
+    return .Err(RpnError.StackUnderflow);
+  }
+
+  match array.pop(stack) {
+    .Some(value) => .Ok(value),
+    .None => .Err(RpnError.StackUnderflow),
+  }
+}

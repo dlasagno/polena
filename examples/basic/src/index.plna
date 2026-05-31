@@ -1,0 +1,8 @@
+import @/users.{type User, greeting} as users;
+import @std/io;
+
+export fn main(): void {
+  const user: User = { name: "Ada" };
+  const message = users.greeting(user);
+  io.println(message);
+}

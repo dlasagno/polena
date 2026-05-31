@@ -529,6 +529,9 @@ const value = fromOption + fromResult;
     expect(
       result.files.find((file) => file.path === "__polena_std/collections/set.js")?.contents,
     ).toContain("new Set()");
+    expect(result.files.find((file) => file.path === "index.js")?.contents).toContain(
+      "map.$polena$new()",
+    );
   });
 
   test("supports generic type parameters in JavaScript target escape directives", () => {

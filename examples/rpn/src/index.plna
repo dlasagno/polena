@@ -1,0 +1,27 @@
+import @std/io;
+import @std/core.{type Result};
+import @/eval.{evaluate};
+import @/error.{type RpnError};
+
+fn error_message(err: RpnError): string {
+  match err {
+    .InvalidToken => "invalid token",
+    .StackUnderflow => "stack underflow",
+    .DivisionByZero => "division by zero",
+  }
+}
+
+fn print_result(result: Result<number, RpnError>): void {
+  match result {
+    .Ok(value) => io.println("= ${value}"),
+    .Err(err) => io.eprintln("error: ${error_message(err)}"),
+  }
+}
+
+export fn main(args: []string): void {
+  if args.length == 0 {
+    io.println("usage: rpn <tokens...>");
+  } else {
+    print_result(evaluate(args));
+  }
+}

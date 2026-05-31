@@ -1,0 +1,7 @@
+export type User = {
+  name: string,
+};
+
+export fn greeting(user: User): string {
+  "Hello ${user.name}"
+}
