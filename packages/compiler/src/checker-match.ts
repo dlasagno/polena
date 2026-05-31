@@ -175,10 +175,3 @@ export function checkEnumPayloadPattern(
 
   return { diagnostics, bindings };
 }
-
-export function resolveShorthandMatchPattern(
-  pattern: Extract<MatchPattern, { readonly kind: "EnumVariantPattern" }>,
-  enumName: string,
-): void {
-  (pattern as { resolvedEnumName?: string }).resolvedEnumName = enumName;
-}

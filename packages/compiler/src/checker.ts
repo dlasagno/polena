@@ -29,7 +29,6 @@ import {
   checkMatchExhaustiveness,
   createMatchCoverageState,
   recordCoveredVariant,
-  resolveShorthandMatchPattern,
 } from "./checker-match";
 import { error, type Diagnostic } from "./diagnostic";
 import { DiagnosticCode } from "./diagnostic-codes";
@@ -1501,7 +1500,7 @@ class Checker {
         ),
       );
     }
-    this.resolveShorthandEnumVariant(expression, expectedType.name);
+    this.resolveShorthandEnumName(expression.nodeId, expectedType.name);
     this.recordEnumVariantReference(expression.nodeId, expectedType, expression.variantName);
     return expectedType;
   }
@@ -1673,6 +1672,9 @@ class Checker {
       inferExpression: (operand, operandScope) => this.inferExpression(operand, operandScope),
       resolveNamedType: (name, span, typeArguments) =>
         this.resolveNamedType(name, span, typeArguments),
+      recordDirectiveExpansion: (directiveExpression, expansion) => {
+        this.semantics.directiveExpansions.set(directiveExpression.nodeId, expansion);
+      },
     });
   }
 
@@ -2731,7 +2733,7 @@ class Checker {
         continue;
       }
 
-      resolveShorthandMatchPattern(arm.pattern, scrutineeType.name);
+      this.resolveShorthandEnumName(arm.pattern.nodeId, scrutineeType.name);
       this.recordEnumVariantReference(arm.pattern.nodeId, scrutineeType, arm.pattern.variantName);
       this.checkEnumPayloadPatternBindings(arm.pattern, variant, scrutineeType, armScope);
 
@@ -3248,12 +3250,12 @@ class Checker {
 
   private resolveEnumConstructorCalleeNode(callee: Expression, enumName: string): void {
     if (callee.kind === "EnumVariantExpression" && callee.enumName === undefined) {
-      this.resolveShorthandEnumVariant(callee, enumName);
+      this.resolveShorthandEnumName(callee.nodeId, enumName);
     }
   }
 
-  private resolveShorthandEnumVariant(expression: EnumVariantExpression, enumName: string): void {
-    (expression as { resolvedEnumName?: string }).resolvedEnumName = enumName;
+  private resolveShorthandEnumName(nodeId: number, enumName: string): void {
+    this.semantics.resolvedEnumNames.set(nodeId, enumName);
   }
 
   private recordDefinition(

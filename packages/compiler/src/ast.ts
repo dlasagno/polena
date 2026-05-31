@@ -344,7 +344,6 @@ export type DirectiveExpression = {
   readonly name: string;
   readonly nameSpan: Span;
   readonly operands: readonly DirectiveOperand[];
-  readonly expansion?: DirectiveExpansion;
   readonly span: Span;
 };
 
@@ -462,7 +461,6 @@ export type MatchPattern =
       readonly variantNameSpan: Span;
       readonly payload?: readonly EnumPayloadPattern[];
       readonly payloadSpan?: Span;
-      readonly resolvedEnumName?: string;
       readonly span: Span;
     }
   | {
@@ -517,6 +515,5 @@ export type EnumVariantExpression = {
   readonly enumNameSpan?: Span;
   readonly variantName: string;
   readonly variantNameSpan: Span;
-  readonly resolvedEnumName?: string;
   readonly span: Span;
 };

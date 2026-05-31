@@ -6,7 +6,6 @@ import {
   checkMatchExhaustiveness,
   createMatchCoverageState,
   recordCoveredVariant,
-  resolveShorthandMatchPattern,
 } from "../checker-match";
 import type { Diagnostic } from "../diagnostic";
 import { DiagnosticCode } from "../diagnostic-codes";
@@ -142,14 +141,6 @@ describe("checker match helpers", () => {
       },
     ]);
     expect(wrongArity.bindings.map((binding) => binding.pattern.name)).toEqual(["x"]);
-  });
-
-  test("records resolved enum names on shorthand match patterns", () => {
-    const pattern = variantPattern("Red");
-
-    resolveShorthandMatchPattern(pattern, "Color");
-
-    expect(pattern.resolvedEnumName).toBe("Color");
   });
 });
 

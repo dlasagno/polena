@@ -1,4 +1,4 @@
-import type { NodeId } from "./ast";
+import type { DirectiveExpansion, NodeId } from "./ast";
 import type { Span } from "./span";
 import type { Type } from "./types";
 
@@ -77,6 +77,8 @@ export type Semantics = {
   readonly expressionTypes: Map<NodeId, Type>;
   readonly patternBindingTypes: Map<NodeId, Type>;
   readonly references: Map<NodeId, ReferenceTarget>;
+  readonly directiveExpansions: Map<NodeId, DirectiveExpansion>;
+  readonly resolvedEnumNames: Map<NodeId, string>;
   readonly definitions: Definition[];
 };
 
@@ -85,6 +87,8 @@ export function emptySemantics(): Semantics {
     expressionTypes: new Map(),
     patternBindingTypes: new Map(),
     references: new Map(),
+    directiveExpansions: new Map(),
+    resolvedEnumNames: new Map(),
     definitions: [],
   };
 }

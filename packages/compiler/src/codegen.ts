@@ -2,6 +2,7 @@ import type {
   AssignmentStatement,
   BinaryOperator,
   Block,
+  DirectiveExpansion,
   Expression,
   FunctionDeclaration,
   IfExpression,
@@ -19,8 +20,8 @@ import type { ModuleFile, ModuleGraph, PackageProgram } from "./modules";
 import { relativeJsImportPath } from "./modules";
 import type { ReferenceTarget, Semantics } from "./semantics";
 
-export function generateJavaScript(program: Program): string {
-  return new JavaScriptEmitter().emitProgram(program);
+export function generateJavaScript(program: Program, semantics?: Semantics): string {
+  return new JavaScriptEmitter().emitProgram(program, semantics);
 }
 
 export function generateJavaScriptModule(input: {
@@ -62,8 +63,9 @@ class JavaScriptEmitter {
   private currentModuleName?: string;
   private currentSemantics?: Semantics;
 
-  public emitProgram(program: Program): string {
+  public emitProgram(program: Program, semantics?: Semantics): string {
     const lines: string[] = [];
+    this.currentSemantics = semantics;
     this.registerEnumTypes(program);
 
     for (const declaration of program.declarations) {
@@ -563,7 +565,7 @@ class JavaScriptEmitter {
       case "EnumVariantExpression":
         return this.emitEnumVariantValue(
           expression.nodeId,
-          expression.enumName ?? expression.resolvedEnumName,
+          expression.enumName ?? this.resolvedEnumNameForNode(expression.nodeId),
           expression.variantName,
         );
       case "NameExpression":
@@ -632,7 +634,7 @@ class JavaScriptEmitter {
     indent: string,
     loopContext?: LoopEmitContext,
   ): string {
-    const expansion = expression.expansion;
+    const expansion = this.currentSemantics?.directiveExpansions.get(expression.nodeId);
     switch (expansion?.kind) {
       case "StringArray":
         return `[${expansion.values.map((value) => JSON.stringify(value)).join(", ")}]`;
@@ -649,7 +651,7 @@ class JavaScriptEmitter {
 
   private emitTargetJsDirective(
     expression: Extract<Expression, { readonly kind: "DirectiveExpression" }>,
-    expansion: NonNullable<Extract<typeof expression.expansion, { readonly kind: "TargetJs" }>>,
+    expansion: Extract<DirectiveExpansion, { readonly kind: "TargetJs" }>,
     indent: string,
     loopContext?: LoopEmitContext,
   ): string {
@@ -796,7 +798,7 @@ class JavaScriptEmitter {
     }
 
     if (callee.kind === "EnumVariantExpression") {
-      const enumName = callee.enumName ?? callee.resolvedEnumName;
+      const enumName = callee.enumName ?? this.resolvedEnumNameForNode(callee.nodeId);
       if (enumName === undefined) {
         return undefined;
       }
@@ -1035,7 +1037,7 @@ class JavaScriptEmitter {
       return variant.payloadArity;
     }
 
-    const enumName = pattern.enumName ?? pattern.resolvedEnumName;
+    const enumName = pattern.enumName ?? this.resolvedEnumNameForNode(pattern.nodeId);
     if (enumName === undefined) {
       return 0;
     }
@@ -1048,7 +1050,7 @@ class JavaScriptEmitter {
   ): string {
     return this.emitEnumVariantValue(
       pattern.nodeId,
-      pattern.enumName ?? pattern.resolvedEnumName,
+      pattern.enumName ?? this.resolvedEnumNameForNode(pattern.nodeId),
       pattern.variantName,
     );
   }
@@ -1074,6 +1076,10 @@ class JavaScriptEmitter {
     return this.enumVariantsByDefinition.get(
       enumVariantKey(moduleName, reference.definitionNodeId),
     );
+  }
+
+  private resolvedEnumNameForNode(nodeId: number): string | undefined {
+    return this.currentSemantics?.resolvedEnumNames.get(nodeId);
   }
 
   private nextTemp(prefix: string): string {

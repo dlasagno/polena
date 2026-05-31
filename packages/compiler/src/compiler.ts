@@ -157,7 +157,7 @@ export function compile(source: string): CompileResult {
 
   return {
     ok: true,
-    js: generateJavaScript(analysis.program),
+    js: generateJavaScript(analysis.program, analysis.semantics),
     diagnostics: analysis.diagnostics,
   };
 }

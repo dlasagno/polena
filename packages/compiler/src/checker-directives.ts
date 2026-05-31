@@ -1,4 +1,4 @@
-import type { DirectiveExpression, Expression, TypeNode } from "./ast";
+import type { DirectiveExpansion, DirectiveExpression, Expression, TypeNode } from "./ast";
 import { error, type Diagnostic } from "./diagnostic";
 import { DiagnosticCode } from "./diagnostic-codes";
 import type { Scope } from "./symbols";
@@ -19,6 +19,10 @@ export type DirectiveCheckContext = {
   readonly typeFromNodeInActiveEnvironment: (typeNode: TypeNode) => Type;
   readonly inferExpression: (expression: Expression, scope: Scope) => Type;
   readonly resolveNamedType: (name: string, span: Span, typeArguments: readonly Type[]) => Type;
+  readonly recordDirectiveExpansion: (
+    expression: DirectiveExpression,
+    expansion: DirectiveExpansion,
+  ) => void;
 };
 
 export function inferCompilerDirectiveExpression(
@@ -69,7 +73,7 @@ function inferEnumVariantNamesDirective(
     return arrayType(primitiveType("string"));
   }
 
-  setDirectiveExpansion(expression, {
+  context.recordDirectiveExpansion(expression, {
     kind: "StringArray",
     values: type.variants.map((variant) => variant.name),
   });
@@ -110,7 +114,7 @@ function inferEnumValuesDirective(
     return arrayType(type);
   }
 
-  setDirectiveExpansion(expression, {
+  context.recordDirectiveExpansion(expression, {
     kind: "EnumValueArray",
     enumName: type.name,
     variantNames: type.variants.map((variant) => variant.name),
@@ -137,7 +141,7 @@ function inferObjectFieldNamesDirective(
     return arrayType(primitiveType("string"));
   }
 
-  setDirectiveExpansion(expression, {
+  context.recordDirectiveExpansion(expression, {
     kind: "StringArray",
     values: type.fields.map((field) => field.name),
   });
@@ -209,7 +213,7 @@ function inferTargetJsDirective(
 
   if (template !== undefined) {
     validateTargetJsTemplate(expression, context, template, runtimeOperandStart);
-    setDirectiveExpansion(expression, {
+    context.recordDirectiveExpansion(expression, {
       kind: "TargetJs",
       mode,
       template,
@@ -388,14 +392,6 @@ function directiveSingleTypeOperand(
   }
 
   return context.typeFromNode(operand.type);
-}
-
-function setDirectiveExpansion(
-  expression: DirectiveExpression,
-  expansion: NonNullable<DirectiveExpression["expansion"]>,
-): void {
-  (expression as { expansion?: NonNullable<DirectiveExpression["expansion"]> }).expansion =
-    expansion;
 }
 
 function isAsciiDigit(value: string | undefined): boolean {

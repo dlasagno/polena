@@ -70,6 +70,7 @@ describe("semantics", () => {
     expect(result.semantics.references.get(shorthand.nodeId)).toEqual(
       result.semantics.references.get(qualified.nodeId),
     );
+    expect(result.semantics.resolvedEnumNames.get(shorthand.nodeId)).toBe("Color");
   });
 
   test("records enum variant references and pattern binding types for payload enums", () => {
@@ -104,6 +105,7 @@ const label = match message {
       enumName: "Message",
       variantName: "Move",
     });
+    expect(result.semantics.resolvedEnumNames.get(movePattern.nodeId)).toBe("Message");
     expect(xPattern).toMatchObject({ kind: "BindingPattern", name: "x" });
     expect(result.semantics.patternBindingTypes.get(xPattern?.nodeId ?? -1)).toEqual(
       primitiveType("number"),
@@ -141,6 +143,19 @@ const label = match message {
       kind: "Field",
       definitionNodeId: fieldDefinition?.nodeId,
       nameSpan: fieldDefinition?.nameSpan,
+    });
+  });
+
+  test("records directive expansions", () => {
+    const result = analyze(
+      "type Color = enum { Red, Green }; const names = @enumVariantNames(Color);",
+    );
+    const directive = findExpression(result.program, "DirectiveExpression");
+
+    expect(result.diagnostics).toHaveLength(0);
+    expect(result.semantics.directiveExpansions.get(directive.nodeId)).toEqual({
+      kind: "StringArray",
+      values: ["Red", "Green"],
     });
   });
 });
