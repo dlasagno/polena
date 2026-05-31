@@ -101,6 +101,20 @@ const value = getValue();
     expect(executeValue(result.js)).toBe(42);
   });
 
+  test("infers generic function arguments through function parameter types", () => {
+    const result = expectCompileOk(`
+fn apply<T, U>(value: T, transform: fn(T) -> U): U {
+  transform(value)
+}
+
+const value = apply(41, fn (input: number): string {
+  "value ${"$"}{input + 1}"
+});
+`);
+
+    expect(executeValue(result.js)).toBe("value 42");
+  });
+
   test("supports value-producing if expressions", () => {
     const result = expectCompileOk(`
 const enabled = true;

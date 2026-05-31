@@ -659,6 +659,43 @@ const value = match result {
     expect(parseJs).toContain("parseInt");
   });
 
+  test("compiles standard-library array higher-order helpers", () => {
+    const result = compilePackage({
+      manifest: { name: "app", version: "0.1.0", target: "executable" },
+      rootDir: "app",
+      sourceDir: "app/src",
+      files: [
+        {
+          path: "app/src/index.plna",
+          source: [
+            "import @std/array;",
+            "",
+            "export fn main(): void {",
+            "  const doubled = array.map([1, 2, 3], fn (value: number): number {",
+            "    value * 2",
+            "  });",
+            "  const evens = array.filter(doubled, fn (value: number): boolean {",
+            "    value > 2",
+            "  });",
+            "  const total = array.fold(evens, 0, fn (acc: number, value: number): number {",
+            "    acc + value",
+            "  });",
+            "}",
+          ].join("\n"),
+        },
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    const arrayJs = result.files.find((file) => file.path === "__polena_std/array.js")?.contents;
+    expect(arrayJs).toContain("items.map(transform)");
+    expect(arrayJs).toContain("items.filter(predicate)");
+    expect(arrayJs).toContain("items.reduce((acc, item) => combine(acc, item), initial)");
+  });
+
   test("compiles parse_int through the standard library", () => {
     const result = compilePackage({
       manifest: { name: "app", version: "0.1.0", target: "executable" },

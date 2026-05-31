@@ -74,7 +74,7 @@ const trimmed = strings.trim(" Ada ");
 ```
 
 - `@std/array` exports `len`, `is_empty`, `get`, `last`, `slice`, `concat`,
-  `push`, and `pop`.
+  `map`, `filter`, `fold`, `push`, and `pop`.
 - `@std/collections/map` exports an opaque `Map<K, V>` type plus `new`, `len`, `get`,
   `insert`, `contains_key`, and `remove`. These are backed by the JavaScript
   `Map` object.

@@ -3145,6 +3145,19 @@ class Checker {
       return;
     }
 
+    if (pattern.kind === "function" && actual.kind === "function") {
+      const count = Math.min(pattern.params.length, actual.params.length);
+      for (let index = 0; index < count; index += 1) {
+        const patternParam = pattern.params[index];
+        const actualParam = actual.params[index];
+        if (patternParam !== undefined && actualParam !== undefined) {
+          this.inferTypeArgumentsFromType(patternParam, actualParam, inferred);
+        }
+      }
+      this.inferTypeArgumentsFromType(pattern.returnType, actual.returnType, inferred);
+      return;
+    }
+
     if (pattern.kind === "opaque" && actual.kind === "opaque" && pattern.name === actual.name) {
       const count = Math.min(pattern.typeArguments.length, actual.typeArguments.length);
       for (let index = 0; index < count; index += 1) {

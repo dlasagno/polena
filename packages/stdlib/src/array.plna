@@ -43,6 +43,21 @@ export fn concat<T>(left: []T, right: []T): []T {
   @target.js("$0.concat($1)", []T, left, right)
 }
 
+/// Returns a new array containing the result of calling `transform` on each element.
+export fn map<T, U>(items: []T, transform: fn(T) -> U): []U {
+  @target.js("$0.map($1)", []U, items, transform)
+}
+
+/// Returns a new array containing the elements for which `predicate` returns `true`.
+export fn filter<T>(items: []T, predicate: fn(T) -> boolean): []T {
+  @target.js("$0.filter($1)", []T, items, predicate)
+}
+
+/// Reduces `items` from left to right, starting with `initial`.
+export fn fold<T, U>(items: []T, initial: U, combine: fn(U, T) -> U): U {
+  @target.js("$0.reduce((acc, item) => $2(acc, item), $1)", U, items, initial, combine)
+}
+
 /// Appends `value` to the end of `items`.
 export fn push<T>(items: []T, value: T): void {
   @target.js("$0.push($1)", void, items, value)
