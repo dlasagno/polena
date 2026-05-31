@@ -15,6 +15,7 @@
   "scripts": {
     "build": "bun run --filter '*' build",
     "build:binary": "bun build ./packages/cli/src/index.ts --compile --outfile ./dist/polena",
+    "install:local": "bun run build:binary && bun run ./scripts/install-local-bin.ts",
     "check": "bun run typecheck && bun run lint && bun run format:check && bun run test",
     "build:example": "bun run ./packages/cli/src/index.ts build",
     "cursor:install": "bun run --cwd packages/vscode-extension install:vsix:cursor",

@@ -155,6 +155,15 @@ bun run build:binary
 That writes the compiler to `dist/polena` on Unix-like systems and
 `dist/polena.exe` on Windows.
 
+Build and install the executable into your user-local bin directory:
+
+```sh
+bun run install:local
+```
+
+By default this installs to `$BUN_INSTALL/bin` when `BUN_INSTALL` is set, or
+`~/.bun/bin` otherwise. Set `POLENA_INSTALL_BIN` to install somewhere else.
+
 The CLI also supports explicit commands and standard help/version flags:
 
 ```sh
