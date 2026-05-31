@@ -68,7 +68,11 @@ Transparent aliases to existing types are supported:
 ```tsx
 type Score = number;
 type Scores = []Score;
+type MaybeScore = ?Score;
 ```
+
+Optional type syntax `?T` is shorthand for `Option<T>`. See
+[Optional Values](algebraic-data-and-errors.md#18-optional-values).
 
 ## 25. Generics
 

@@ -97,6 +97,24 @@ describe("lexer", () => {
     ]);
   });
 
+  test("tokenizes optional type punctuation", () => {
+    const result = lex("const value: ?number = .None;");
+
+    expect(result.diagnostics).toHaveLength(0);
+    expect(result.tokens.map((token) => token.kind)).toEqual([
+      "Const",
+      "Identifier",
+      "Colon",
+      "Question",
+      "NumberType",
+      "Equal",
+      "Dot",
+      "Identifier",
+      "Semicolon",
+      "Eof",
+    ]);
+  });
+
   test("tokenizes enums, match arrows, and wildcard patterns", () => {
     const result = lex("type Color = enum { Red, }; const label = match color { .Red => _, };");
 

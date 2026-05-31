@@ -348,6 +348,8 @@ function formatTypeNode(typeNode: TypeDeclaration["value"]): string {
       return typeNode.name;
     case "ArrayType":
       return `[]${formatTypeNode(typeNode.element)}`;
+    case "OptionalType":
+      return `?${formatTypeNode(typeNode.value)}`;
     case "NamedType":
       return typeNode.name;
     case "ObjectType":

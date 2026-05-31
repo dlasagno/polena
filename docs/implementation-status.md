@@ -161,6 +161,7 @@ Status values:
 | Match expressions | Partially implemented | Supports expression arms over enum values with `.Variant`, `Enum.Variant`, payload patterns, and `_` patterns. Guards are not implemented. |
 | Exhaustiveness checking | Implemented | Enum matches must cover every variant unless a wildcard arm is present. Duplicate and unreachable arms are rejected. |
 | `Option<T>` | Implemented | Provided by `@std/core` as a generic enum with `.Some(T)` and `.None`; import it explicitly where used. |
+| Optional type syntax `?T` | Implemented | Parsed and checked as shorthand for `Option<T>`; `Option` must be available in type scope. |
 | `Result<T, E>` | Implemented | Provided by `@std/core` as a generic enum with `.Ok(T)` and `.Err(E)`; import it explicitly where used. |
 | `unwrap` / `expect` on `Option` and `Result` | Implemented | Provided by `@std/option` and `@std/result`; panic on `.None` / `.Err` via `panic`. `unwrap` uses a fixed message; `expect` takes a custom message. Error payloads are not formatted into panic text. |
 | `try` operator | Not implemented | Depends on `Result`. |

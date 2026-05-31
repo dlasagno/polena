@@ -355,6 +355,7 @@ function renderNodeHover(analysis: AnalyzeResult, nodeId: NodeId): string | unde
     case "PrimitiveType":
     case "NamedType":
     case "ArrayType":
+    case "OptionalType":
     case "ObjectType":
     case "EnumType":
     case "UnknownType":
@@ -436,6 +437,8 @@ function formatTypeNode(typeNode: TypeNode): string {
       return typeNode.name;
     case "ArrayType":
       return `[]${formatTypeNode(typeNode.element)}`;
+    case "OptionalType":
+      return `?${formatTypeNode(typeNode.value)}`;
     case "NamedType":
       return typeNode.name;
     case "ObjectType":
@@ -608,6 +611,8 @@ function findAstNodeInTypeNode(typeNode: TypeNode, nodeId: NodeId): AstNode | un
   switch (typeNode.kind) {
     case "ArrayType":
       return findAstNodeInTypeNode(typeNode.element, nodeId);
+    case "OptionalType":
+      return findAstNodeInTypeNode(typeNode.value, nodeId);
     case "FunctionType":
       return (
         findFirst(typeNode.params, (param) => findAstNodeInTypeNode(param, nodeId)) ??
@@ -636,6 +641,7 @@ function findAstNodeInTypeNode(typeNode: TypeNode, nodeId: NodeId): AstNode | un
       });
     case "PrimitiveType":
     case "NamedType":
+    case "NeverType":
     case "UnknownType":
     case "OpaqueType":
       return undefined;

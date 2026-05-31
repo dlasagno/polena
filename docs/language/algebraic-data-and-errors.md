@@ -27,8 +27,27 @@ It is considered a fundamental standard-library type provided by `@std/core`.
 It follows the normal enum construction and match rules and must be imported
 explicitly where used.
 
-A shorthand surface syntax for optional types, such as `string?` for
-`Option<string>`, is **TBD**. See
+Optional type syntax is written with a prefix `?`:
+
+```tsx
+const value: ?string = .Some("Ada");
+```
+
+`?T` is exactly shorthand for `Option<T>`. It does not introduce `null`,
+`undefined`, implicit truthiness, absent fields, or a different runtime
+representation. Values still use the normal `Option` enum variants and must be
+handled with `match` or `Option` helper functions.
+
+`Option` must be available in the current type scope for `?T` to resolve.
+Equivalently:
+
+```tsx
+const value: Option<string> = .Some("Ada");
+const same: ?string = .Some("Ada");
+```
+
+Prefix syntax is used so the optional nature is visible before long type
+expressions, matching array type syntax such as `[]T`. See
 [Optional Object Fields](#182-optional-object-fields).
 
 ---
@@ -63,7 +82,7 @@ Possible syntax:
 type User = {
 	id: string,
 	name: string,
-	email: string?,
+	email: ?string,
 };
 ```
 

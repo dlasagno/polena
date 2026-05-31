@@ -325,6 +325,32 @@ const value = match nested {
     expect(executeValue(result.js)).toBe(1);
   });
 
+  test("supports optional type syntax as Option shorthand", () => {
+    const result = expectCompileOk(`
+${coreTypes}
+
+type User = {
+  nickname: ?string,
+  scores: []?number,
+};
+
+const user: User = {
+  nickname: .Some("Ada"),
+  scores: [.Some(1), .None],
+};
+
+const fallback: ??number = .Some(.None);
+const value = match user.nickname {
+  .Some(name) => name,
+  .None => "Anonymous",
+};
+`);
+
+    expect(executeValue(result.js)).toBe("Ada");
+    expect(result.js).toContain('"Option.Some"');
+    expect(result.js).toContain('"Option.None"');
+  });
+
   test("supports locally defined Option and Result types", () => {
     const result = expectCompileOk(`
 ${coreTypes}

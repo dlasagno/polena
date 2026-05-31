@@ -245,6 +245,9 @@ function collectTypeNodeTokens(
     case "ArrayType":
       collectTypeNodeTokens(typeNode.element, analysis, tokens);
       return;
+    case "OptionalType":
+      collectTypeNodeTokens(typeNode.value, analysis, tokens);
+      return;
     case "FunctionType":
       for (const param of typeNode.params) {
         collectTypeNodeTokens(param, analysis, tokens);

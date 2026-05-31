@@ -665,6 +665,13 @@ class Checker {
         return primitiveType(typeNode.name);
       case "ArrayType":
         return arrayType(this.typeFromNode(typeNode.element, undefined, environment));
+      case "OptionalType":
+        return this.resolveNamedType(
+          "Option",
+          typeNode.span,
+          [this.typeFromNode(typeNode.value, undefined, environment)],
+          typeNode.nodeId,
+        );
       case "ObjectType":
         return this.typeFromObjectTypeNode(typeNode, environment);
       case "FunctionType": {

@@ -495,6 +495,8 @@ function spanForTypeNode(typeNode: TypeNode, nodeId: NodeId): Span | undefined {
   switch (typeNode.kind) {
     case "ArrayType":
       return spanForTypeNode(typeNode.element, nodeId);
+    case "OptionalType":
+      return spanForTypeNode(typeNode.value, nodeId);
     case "FunctionType":
       return (
         findFirst(typeNode.params, (param) => spanForTypeNode(param, nodeId)) ??

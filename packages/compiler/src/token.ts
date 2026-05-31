@@ -47,6 +47,7 @@ export type TokenKind =
   | "Comma"
   | "Colon"
   | "Semicolon"
+  | "Question"
   | "Equal"
   | "Arrow"
   | "ReturnArrow"

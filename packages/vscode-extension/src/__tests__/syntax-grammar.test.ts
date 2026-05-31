@@ -89,6 +89,7 @@ describe("Polena syntax grammar", () => {
     expect(matches(operator, "+=")).toBe(true);
     expect(matches(operator, "=>")).toBe(true);
     expect(matches(operator, "->")).toBe(true);
+    expect(matches(operator, "?")).toBe(true);
     expect(begins(functionDeclaration, "fn identity<T>(value: T): T")).toBe(true);
   });
 

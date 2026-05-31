@@ -18,6 +18,12 @@ export type TypeNode =
       readonly span: Span;
     }
   | {
+      readonly kind: "OptionalType";
+      readonly nodeId: NodeId;
+      readonly value: TypeNode;
+      readonly span: Span;
+    }
+  | {
       readonly kind: "NamedType";
       readonly nodeId: NodeId;
       readonly name: string;

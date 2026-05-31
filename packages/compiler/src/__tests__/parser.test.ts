@@ -296,6 +296,35 @@ describe("parser", () => {
     });
   });
 
+  test("parses optional type syntax", () => {
+    const parseResult = parse(
+      lex("type MaybeScores = ?[]?number; const value: ??string = .None;").tokens,
+    );
+
+    expect(parseResult.diagnostics).toHaveLength(0);
+    expect(parseResult.program.declarations).toMatchObject([
+      {
+        kind: "TypeDeclaration",
+        name: "MaybeScores",
+        value: {
+          kind: "OptionalType",
+          value: {
+            kind: "ArrayType",
+            element: { kind: "OptionalType", value: { kind: "PrimitiveType", name: "number" } },
+          },
+        },
+      },
+      {
+        kind: "VariableDeclaration",
+        name: "value",
+        typeAnnotation: {
+          kind: "OptionalType",
+          value: { kind: "OptionalType", value: { kind: "PrimitiveType", name: "string" } },
+        },
+      },
+    ]);
+  });
+
   test("parses generic function declarations", () => {
     const parseResult = parse(lex("fn identity<T>(value: T): T { value }").tokens);
 

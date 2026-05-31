@@ -265,6 +265,8 @@ function findInTypeNode(typeNode: TypeNode, offset: number): HoverTarget | undef
   switch (typeNode.kind) {
     case "ArrayType":
       return findInTypeNode(typeNode.element, offset);
+    case "OptionalType":
+      return findInTypeNode(typeNode.value, offset);
     case "ObjectType":
       for (const field of typeNode.fields) {
         const found = findInObjectTypeField(field, offset);

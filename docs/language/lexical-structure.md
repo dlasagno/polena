@@ -129,5 +129,5 @@ The lexer recognizes the following multi-character operator tokens:
 Single-character operator and punctuation tokens include:
 
 ```tsx
-( ) { } [ ] @ . , : ; = < > + - * / % !
+( ) { } [ ] @ . , : ; ? = < > + - * / % !
 ```

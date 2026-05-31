@@ -732,6 +732,16 @@ class Parser {
   }
 
   private parseType(): TypeNode {
+    if (this.match("Question")) {
+      const question = this.previous();
+      const value = this.parseType();
+      return this.node({
+        kind: "OptionalType",
+        value,
+        span: mergeSpans(question.span, value.span),
+      });
+    }
+
     if (this.match("LeftBracket")) {
       const leftBracket = this.previous();
       this.expect("RightBracket", "Expected ']' in array type.");
