@@ -157,7 +157,7 @@ export function compile(source: string): CompileResult {
 
   return {
     ok: true,
-    js: generateJavaScript(analysis.program, analysis.semantics),
+    js: generateJavaScript({ program: analysis.program, semantics: analysis.semantics }),
     diagnostics: analysis.diagnostics,
   };
 }
@@ -215,10 +215,21 @@ export function compilePackage(input: {
           packageProgram: analysis.packageProgram,
           moduleGraph: analysis.graph,
           isEntry: moduleFile.id === analysis.packageProgram.entryModuleId,
-          semantics: analysesByPath.get(moduleFile.path)?.semantics,
+          semantics: analysisForPath(moduleFile.path, analysesByPath).semantics,
         }),
       })),
   };
+}
+
+function analysisForPath(
+  path: string,
+  analysesByPath: ReadonlyMap<string, AnalyzeResult>,
+): AnalyzeResult {
+  const analysis = analysesByPath.get(path);
+  if (analysis === undefined) {
+    throw new Error(`Cannot emit unchecked module '${path}'.`);
+  }
+  return analysis;
 }
 
 function withStandardLibrary(input: PackageCompileInput): NormalizedPackageCompileInput {

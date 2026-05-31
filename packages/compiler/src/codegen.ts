@@ -20,17 +20,24 @@ import type { ModuleFile, ModuleGraph, PackageProgram } from "./modules";
 import { relativeJsImportPath } from "./modules";
 import type { ReferenceTarget, Semantics } from "./semantics";
 
-export function generateJavaScript(program: Program, semantics?: Semantics): string {
-  return new JavaScriptEmitter().emitProgram(program, semantics);
-}
+export type CheckedProgram = {
+  readonly program: Program;
+  readonly semantics: Semantics;
+};
 
-export function generateJavaScriptModule(input: {
+export type CheckedModule = {
   readonly module: ModuleFile;
   readonly packageProgram: PackageProgram;
   readonly moduleGraph: ModuleGraph;
   readonly isEntry: boolean;
-  readonly semantics?: Semantics;
-}): string {
+  readonly semantics: Semantics;
+};
+
+export function generateJavaScript(input: CheckedProgram): string {
+  return new JavaScriptEmitter().emitProgram(input);
+}
+
+export function generateJavaScriptModule(input: CheckedModule): string {
   return new JavaScriptEmitter().emitModule(input);
 }
 
@@ -63,12 +70,12 @@ class JavaScriptEmitter {
   private currentModuleName?: string;
   private currentSemantics?: Semantics;
 
-  public emitProgram(program: Program, semantics?: Semantics): string {
+  public emitProgram(input: CheckedProgram): string {
     const lines: string[] = [];
-    this.currentSemantics = semantics;
-    this.registerEnumTypes(program);
+    this.currentSemantics = input.semantics;
+    this.registerEnumTypes(input.program);
 
-    for (const declaration of program.declarations) {
+    for (const declaration of input.program.declarations) {
       lines.push(...this.emitTopLevelDeclaration(declaration));
     }
 
@@ -76,21 +83,11 @@ class JavaScriptEmitter {
     return `${lines.join("\n")}\n`;
   }
 
-  public emitModule(input: {
-    readonly module: ModuleFile;
-    readonly packageProgram: PackageProgram;
-    readonly moduleGraph: ModuleGraph;
-    readonly isEntry: boolean;
-    readonly semantics?: Semantics;
-  }): string {
+  public emitModule(input: CheckedModule): string {
     const lines: string[] = [];
     this.currentModuleName = input.module.name;
     this.currentSemantics = input.semantics;
     this.registerPackageEnumRuntimeInfo(input.packageProgram);
-    if (input.semantics === undefined) {
-      this.registerPackageEnumTypes(input.packageProgram);
-      this.registerImportedEnumAliases(input.module, input.moduleGraph, input.packageProgram);
-    }
 
     lines.push(
       ...this.emitImportDeclarations(input.module, input.moduleGraph, input.packageProgram),
@@ -138,12 +135,6 @@ class JavaScriptEmitter {
     );
   }
 
-  private registerPackageEnumTypes(packageProgram: PackageProgram): void {
-    for (const moduleFile of packageProgram.modules) {
-      this.registerEnumTypes(moduleFile.program);
-    }
-  }
-
   private registerPackageEnumRuntimeInfo(packageProgram: PackageProgram): void {
     for (const moduleFile of packageProgram.modules) {
       for (const declaration of moduleFile.program.declarations) {
@@ -155,44 +146,6 @@ class JavaScriptEmitter {
             emittedEnumName: declaration.name,
             payloadArity: variant.payload.length,
           });
-        }
-      }
-    }
-  }
-
-  private registerImportedEnumAliases(
-    moduleFile: ModuleFile,
-    graph: ModuleGraph,
-    packageProgram: PackageProgram,
-  ): void {
-    const resolvedImports = graph.importsByModule.get(moduleFile.id) ?? [];
-    for (const importDeclaration of moduleFile.program.imports) {
-      const resolved = resolvedImports.find(
-        (candidate) => candidate.declaration.nodeId === importDeclaration.nodeId,
-      );
-      if (resolved === undefined) {
-        continue;
-      }
-      const importedModule = packageProgram.modules[resolved.moduleId];
-      if (importedModule === undefined) {
-        continue;
-      }
-      for (const item of importDeclaration.items) {
-        if (item.namespace !== "type") {
-          continue;
-        }
-        const declaration = importedModule.program.declarations.find(
-          (
-            candidate,
-          ): candidate is Extract<TopLevelDeclaration, { readonly kind: "TypeDeclaration" }> =>
-            candidate.kind === "TypeDeclaration" && candidate.name === item.name,
-        );
-        if (declaration?.value.kind === "EnumType") {
-          this.registerEnumType(
-            item.alias?.name ?? item.name,
-            item.name,
-            declaration.value.variants,
-          );
         }
       }
     }

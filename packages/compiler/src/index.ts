@@ -32,6 +32,7 @@ export type {
   SourceFile,
 } from "./compiler";
 export type { RenderDiagnosticOptions } from "./diagnostic-renderer";
+export type { CheckedModule, CheckedProgram } from "./codegen";
 export type { Definition, ReferenceTarget, Semantics } from "./semantics";
 export type { HoverTarget, HoverTargetKind } from "./query";
 export type { Span, SourceLocation } from "./span";
